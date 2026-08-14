@@ -4,6 +4,7 @@ import cors from 'cors';
 import express from 'express';
 import { loadEnv } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { adminMetaRouter } from './routes/adminMeta';
 import { adminProductsRouter } from './routes/adminProducts';
 import { adminUsersRouter } from './routes/adminUsers';
 import { authRouter } from './routes/auth';
@@ -43,6 +44,7 @@ app.use('/api/products', productsRouter(env));
 app.use('/api/meta', metaRouter(env));
 app.use('/api/admin/users', adminUsersRouter(env));
 app.use('/api/admin/products', adminProductsRouter(env));
+app.use('/api/admin/meta', adminMetaRouter(env));
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, buildQuery } from './client';
 import type {
+  AdminGroup,
   AdminUser,
   AuthUser,
   BugDetailResponse,
@@ -181,6 +182,26 @@ export function useUpdateProduct(id: number) {
   return useMutation({
     mutationFn: (input: UpdateProductInput) => api.patch<{ product: Product }>(`/admin/products/${id}`, input),
     onSuccess: () => invalidateProductLists(qc),
+  });
+}
+
+// ---- Admin: read-only metadata (parameters, groups) ----
+
+export function useAdminParameters() {
+  return useQuery({
+    queryKey: ['admin', 'parameters'],
+    queryFn: () => api.get<{ parameters: Record<string, unknown> }>('/admin/meta/parameters'),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
+export function useAdminGroups() {
+  return useQuery({
+    queryKey: ['admin', 'groups'],
+    queryFn: () => api.get<{ groups: AdminGroup[] }>('/admin/meta/groups'),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 }
 

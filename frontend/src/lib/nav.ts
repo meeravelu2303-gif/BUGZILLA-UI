@@ -69,50 +69,15 @@ export const NAV_SECTIONS: NavSection[] = [
     adminOnly: true,
     items: [
       { to: '/admin/users', label: 'Users', icon: UsersIcon, permission: 'canManageUsers', description: 'Create, search and enable/disable accounts' },
-      { to: '/admin/products', label: 'Products', icon: ShieldCheck, permission: 'canManageProducts', description: 'Manage products and their components' },
-      { to: '/admin/native/editproducts', label: 'Products (full)', icon: Boxes, description: 'Full product/component/version/milestone editing' },
-      { to: '/admin/native/editvalues', label: 'Field Values', icon: Tags, description: 'Edit status, resolution, severity and priority values' },
-      { to: '/admin/native/editworkflow', label: 'Status Workflow', icon: Workflow, description: 'Configure allowed status transitions' },
-      { to: '/admin/native/editgroups', label: 'Groups & Permissions', icon: ShieldCheck, description: 'Group definitions and membership' },
-      { to: '/admin/native/editparams', label: 'Parameters', icon: SlidersHorizontal, description: 'Instance-wide configuration parameters' },
-      { to: '/admin/native/sanitycheck', label: 'Sanity Check', icon: Stethoscope, description: 'Run Bugzilla database consistency checks' },
+      { to: '/admin/products', label: 'Products', icon: Boxes, permission: 'canManageProducts', description: 'Manage products and their components' },
+      { to: '/admin/field-values', label: 'Field Values', icon: Tags, description: 'Allowed values for status, severity, priority and more' },
+      { to: '/admin/workflow', label: 'Status Workflow', icon: Workflow, description: 'The allowed status transitions, visualized' },
+      { to: '/admin/groups', label: 'Groups & Permissions', icon: ShieldCheck, description: 'Group memberships for your account' },
+      { to: '/admin/parameters', label: 'Parameters', icon: SlidersHorizontal, description: 'Instance-wide configuration parameters' },
+      { to: '/admin/sanity-check', label: 'Sanity Check', icon: Stethoscope, description: 'Run Bugzilla database consistency checks' },
     ],
   },
 ];
-
-/** Maps `/admin/native/:page` slugs to the real Bugzilla .cgi page + a title. */
-export const NATIVE_ADMIN_PAGES: Record<string, { cgi: string; title: string; blurb: string }> = {
-  editproducts: {
-    cgi: 'editproducts.cgi',
-    title: 'Products (full editing)',
-    blurb: 'Rename products, edit components, versions and milestones — surfaces Bugzilla REST cannot expose.',
-  },
-  editvalues: {
-    cgi: 'editvalues.cgi',
-    title: 'Field Values',
-    blurb: 'Add or edit the allowed values for status, resolution, severity, priority and platform fields.',
-  },
-  editworkflow: {
-    cgi: 'editworkflow.cgi',
-    title: 'Status Workflow',
-    blurb: 'Define which status transitions are legal, and which require a comment.',
-  },
-  editgroups: {
-    cgi: 'editgroups.cgi',
-    title: 'Groups & Permissions',
-    blurb: 'Security-critical group definitions and membership. Kept native by design to avoid permission-bug risk.',
-  },
-  editparams: {
-    cgi: 'editparams.cgi',
-    title: 'Parameters',
-    blurb: 'Instance-wide configuration for the whole Bugzilla installation.',
-  },
-  sanitycheck: {
-    cgi: 'sanitycheck.cgi',
-    title: 'Sanity Check',
-    blurb: 'Run Bugzilla’s built-in database consistency checks and repairs.',
-  },
-};
 
 /** Preference sub-pages that live in Bugzilla proper, embedded in the app shell. */
 export const PREFERENCE_TABS: { tab: string; title: string; blurb: string }[] = [

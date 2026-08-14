@@ -11,10 +11,14 @@ import { MyBugs } from './pages/MyBugs';
 import { Preferences } from './pages/Preferences';
 import { Reports } from './pages/Reports';
 import { CreateUser } from './pages/admin/CreateUser';
-import { NativeAdmin } from './pages/admin/NativeAdmin';
+import { FieldValues } from './pages/admin/FieldValues';
+import { Groups } from './pages/admin/Groups';
+import { Parameters } from './pages/admin/Parameters';
 import { Products } from './pages/admin/Products';
+import { SanityCheck } from './pages/admin/SanityCheck';
 import { UserDetail } from './pages/admin/UserDetail';
 import { Users } from './pages/admin/Users';
+import { Workflow } from './pages/admin/Workflow';
 
 /** Wraps an element in the authenticated app shell. */
 function Protected({ children }: { children: React.ReactNode }) {
@@ -75,7 +79,11 @@ export function App() {
           </Protected>
         }
       />
-      <Route path="/admin/native/:page" element={<Protected><NativeAdmin /></Protected>} />
+      <Route path="/admin/field-values" element={<Protected><FieldValues /></Protected>} />
+      <Route path="/admin/workflow" element={<Protected><Workflow /></Protected>} />
+      <Route path="/admin/groups" element={<Protected><Groups /></Protected>} />
+      <Route path="/admin/parameters" element={<Protected><Parameters /></Protected>} />
+      <Route path="/admin/sanity-check" element={<Protected><SanityCheck /></Protected>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

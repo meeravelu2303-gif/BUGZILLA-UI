@@ -69,6 +69,12 @@ export interface Product {
   milestones: string[];
 }
 
+export interface WorkflowTransition {
+  status: string;
+  isOpen: boolean;
+  canChangeTo: string[];
+}
+
 export interface BugMeta {
   statuses: string[];
   resolutions: string[];
@@ -76,8 +82,14 @@ export interface BugMeta {
   priorities: string[];
   opSystems: string[];
   platforms: string[];
+  workflow: WorkflowTransition[];
   currentUser: string;
   bugzillaWebUrl: string;
+}
+
+export interface AdminGroup {
+  name: string;
+  description: string;
 }
 
 export interface PageInfo {

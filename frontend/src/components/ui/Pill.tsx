@@ -54,7 +54,7 @@ export function SeverityPill({ severity }: { severity: string }) {
   return <Pill tone={SEVERITY_TONE[severity] ?? 'slate'}>{severity}</Pill>;
 }
 
-const PRIORITY_TONE: Record<string, Tone> = {
+export const PRIORITY_TONE_MAP: Record<string, Tone> = {
   Highest: 'rose',
   High: 'orange',
   Normal: 'blue',
@@ -64,5 +64,5 @@ const PRIORITY_TONE: Record<string, Tone> = {
 };
 
 export function PriorityPill({ priority }: { priority: string }) {
-  return <Pill tone={PRIORITY_TONE[priority] ?? 'slate'}>{priority}</Pill>;
+  return <Pill tone={PRIORITY_TONE_MAP[priority] ?? 'slate'}>{priority}</Pill>;
 }
