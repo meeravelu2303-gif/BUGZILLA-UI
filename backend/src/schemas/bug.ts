@@ -199,6 +199,8 @@ export const listBugsQuerySchema = z.object({
   severity: z.string().optional(),
   priority: z.string().optional(),
   assignedTo: z.string().optional(),
+  creator: z.string().optional(),
+  cc: z.string().optional(),
   search: z.string().optional(),
   sortBy: z.string().default('last_change_time'),
   sortDir: z.enum(['asc', 'desc']).default('desc'),

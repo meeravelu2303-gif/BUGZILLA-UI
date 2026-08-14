@@ -175,6 +175,8 @@ export interface ListBugsParams {
   severity?: string;
   priority?: string;
   assignedTo?: string;
+  creator?: string;
+  cc?: string;
   search?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';

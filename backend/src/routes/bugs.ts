@@ -68,6 +68,8 @@ export function bugsRouter(env: Env): Router {
       if (query.severity) params.severity = query.severity;
       if (query.priority) params.priority = query.priority;
       if (query.assignedTo) params.assigned_to = query.assignedTo;
+      if (query.creator) params.creator = query.creator;
+      if (query.cc) params.cc = query.cc;
       if (query.search) params.summary = query.search;
 
       const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);

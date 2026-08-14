@@ -25,6 +25,12 @@ export function BugList() {
     priority: params.get('priority') ?? '',
   };
 
+  // These come from Advanced Search via the URL; they have no FilterBar control
+  // but are still applied to the query so a saved/linked search stays accurate.
+  const component = params.get('component') ?? '';
+  const assignedTo = params.get('assignedTo') ?? '';
+  const creator = params.get('creator') ?? '';
+
   const sortBy = params.get('sortBy') ?? 'last_change_time';
   const sortDir = (params.get('sortDir') as 'asc' | 'desc') ?? 'desc';
   const offset = Number(params.get('offset') ?? 0);
@@ -60,14 +66,17 @@ export function BugList() {
       limit: LIMIT,
       offset,
       product: filters.product || undefined,
+      component: component || undefined,
       status: filters.status || undefined,
       severity: filters.severity || undefined,
       priority: filters.priority || undefined,
+      assignedTo: assignedTo || undefined,
+      creator: creator || undefined,
       search: filters.search || undefined,
       sortBy,
       sortDir,
     }),
-    [offset, filters.product, filters.status, filters.severity, filters.priority, filters.search, sortBy, sortDir]
+    [offset, filters.product, component, filters.status, filters.severity, filters.priority, assignedTo, creator, filters.search, sortBy, sortDir]
   );
 
   const { data, isLoading, isFetching } = useBugs(query);
@@ -80,6 +89,29 @@ export function BugList() {
           <p className="mt-1 text-sm text-slate-600">Browse, filter, and triage every bug across your products.</p>
         </div>
       </div>
+
+      {(component || assignedTo || creator) && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">Active filters:</span>
+          {([
+            ['component', 'Component', component],
+            ['assignedTo', 'Assignee', assignedTo],
+            ['creator', 'Reporter', creator],
+          ] as const)
+            .filter(([, , value]) => value)
+            .map(([key, label, value]) => (
+              <button
+                key={key}
+                onClick={() => updateParams({ [key]: '', offset: 0 })}
+                className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-800 ring-1 ring-inset ring-brand-500/20 hover:bg-brand-100"
+              >
+                {label}: <span className="font-semibold">{value}</span>
+                <span aria-hidden>×</span>
+                <span className="sr-only">Remove {label} filter</span>
+              </button>
+            ))}
+        </div>
+      )}
 
       <Card>
         <FilterBar

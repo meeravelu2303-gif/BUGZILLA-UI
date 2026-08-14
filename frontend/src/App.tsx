@@ -1,92 +1,82 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PermissionGate } from './components/layout/PermissionGate';
 import { RequireAuth } from './components/layout/RequireAuth';
+import { AdvancedSearch } from './pages/AdvancedSearch';
 import { BugDetail } from './pages/BugDetail';
 import { BugList } from './pages/BugList';
 import { CreateBug } from './pages/CreateBug';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
+import { MyBugs } from './pages/MyBugs';
+import { Preferences } from './pages/Preferences';
+import { Reports } from './pages/Reports';
 import { CreateUser } from './pages/admin/CreateUser';
+import { NativeAdmin } from './pages/admin/NativeAdmin';
 import { Products } from './pages/admin/Products';
 import { UserDetail } from './pages/admin/UserDetail';
 import { Users } from './pages/admin/Users';
+
+/** Wraps an element in the authenticated app shell. */
+function Protected({ children }: { children: React.ReactNode }) {
+  return <RequireAuth>{children}</RequireAuth>;
+}
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <Dashboard />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/bugs"
-        element={
-          <RequireAuth>
-            <BugList />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/bugs/new"
-        element={
-          <RequireAuth>
-            <CreateBug />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/bugs/:id"
-        element={
-          <RequireAuth>
-            <BugDetail />
-          </RequireAuth>
-        }
-      />
+
+      <Route path="/" element={<Protected><Dashboard /></Protected>} />
+      <Route path="/my-bugs" element={<Protected><MyBugs /></Protected>} />
+      <Route path="/bugs" element={<Protected><BugList /></Protected>} />
+      <Route path="/bugs/new" element={<Protected><CreateBug /></Protected>} />
+      <Route path="/bugs/:id" element={<Protected><BugDetail /></Protected>} />
+      <Route path="/search" element={<Protected><AdvancedSearch /></Protected>} />
+      <Route path="/reports" element={<Protected><Reports /></Protected>} />
+      <Route path="/preferences" element={<Protected><Preferences /></Protected>} />
+
       <Route
         path="/admin/users"
         element={
-          <RequireAuth>
+          <Protected>
             <PermissionGate permission="canManageUsers">
               <Users />
             </PermissionGate>
-          </RequireAuth>
+          </Protected>
         }
       />
       <Route
         path="/admin/users/new"
         element={
-          <RequireAuth>
+          <Protected>
             <PermissionGate permission="canManageUsers">
               <CreateUser />
             </PermissionGate>
-          </RequireAuth>
+          </Protected>
         }
       />
       <Route
         path="/admin/users/:id"
         element={
-          <RequireAuth>
+          <Protected>
             <PermissionGate permission="canManageUsers">
               <UserDetail />
             </PermissionGate>
-          </RequireAuth>
+          </Protected>
         }
       />
       <Route
         path="/admin/products"
         element={
-          <RequireAuth>
+          <Protected>
             <PermissionGate permission="canManageProducts">
               <Products />
             </PermissionGate>
-          </RequireAuth>
+          </Protected>
         }
       />
+      <Route path="/admin/native/:page" element={<Protected><NativeAdmin /></Protected>} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
