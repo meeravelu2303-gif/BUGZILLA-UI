@@ -32,26 +32,34 @@ export function Users() {
       </div>
 
       <Card>
-        <div className="border-b border-white/30 px-5 py-4">
-          <div className="relative max-w-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/30 px-5 py-4">
+          <div className="relative w-full max-w-md">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by name or email…"
+              placeholder="Filter by name or email…"
               aria-label="Search users"
               autoFocus
               className="focus-ring w-full rounded-xl border border-white/60 bg-white/80 py-2 pl-9 pr-3 text-sm placeholder:text-slate-500 backdrop-blur-sm"
             />
           </div>
+          {!isLoading && (
+            <p className="text-xs text-slate-500">
+              {users.length} {users.length === 1 ? 'account' : 'accounts'}
+              {search.trim() ? ' matched' : ''}
+            </p>
+          )}
         </div>
 
-        {!search.trim() ? (
-          <EmptyState icon={Search} title="Search for a user" description="Type a name or email above to find Bugzilla accounts." />
-        ) : isLoading ? (
-          <TableSkeleton rows={4} />
+        {isLoading ? (
+          <TableSkeleton rows={6} />
         ) : users.length === 0 ? (
-          <EmptyState icon={UsersIcon} title="No users found" description={`No accounts matched "${search}".`} />
+          <EmptyState
+            icon={UsersIcon}
+            title={search.trim() ? 'No users found' : 'No accounts yet'}
+            description={search.trim() ? `No accounts matched "${search}".` : 'Create the first account with “New user”.'}
+          />
         ) : (
           <ul className={`divide-y divide-white/30 ${isFetching ? 'opacity-60 transition-opacity' : ''}`}>
             {users.map((u) => (

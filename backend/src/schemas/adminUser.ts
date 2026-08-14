@@ -34,7 +34,8 @@ export function normalizeAdminUser(raw: RawAdminUser): AdminUser {
 }
 
 export const listUsersQuerySchema = z.object({
-  search: z.string().min(1, 'Enter a name or email to search for'),
+  // Optional: an empty search means "list everyone" (see adminUsers route).
+  search: z.string().optional(),
 });
 
 export const createUserSchema = z.object({

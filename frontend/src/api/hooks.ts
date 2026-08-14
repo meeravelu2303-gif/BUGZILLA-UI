@@ -121,8 +121,10 @@ export function useAddComment(id: number) {
 export function useAdminUsers(search: string) {
   return useQuery({
     queryKey: ['admin', 'users', search],
+    // No search term lists everyone; a term narrows it. Always enabled so the
+    // page shows the full list on open.
     queryFn: () => api.get<{ users: AdminUser[] }>(`/admin/users${buildQuery({ search })}`),
-    enabled: search.trim().length > 0,
+    placeholderData: (prev) => prev,
   });
 }
 

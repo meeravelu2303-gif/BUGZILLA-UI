@@ -12,11 +12,22 @@ export function adminUsersRouter(env: Env): Router {
   const gate = [requireAuth(env), requirePermission('canManageUsers')];
 
   // GET /api/admin/users?search=
+  // Bugzilla's User.get requires a match term — it has no "list everyone" call.
+  // With no search we match on "@", which every email-based login contains, to
+  // approximate the full list; a real search term narrows it. include_disabled
+  // is set so the admin can see (and re-enable) disabled accounts too.
   router.get('/', ...gate, async (req, res, next) => {
     try {
       const { search } = parseInput(listUsersQuerySchema, req.query);
-      const resp = await req.bugzilla!.get<{ users: unknown[] }>('/user', { match: search });
-      const users = resp.users.map((u) => normalizeAdminUser(rawAdminUserSchema.parse(u)));
+      const term = search?.trim() ? search.trim() : '@';
+      const resp = await req.bugzilla!.get<{ users: unknown[] }>('/user', {
+        match: term,
+        include_disabled: 1,
+        limit: 500,
+      });
+      const users = resp.users
+        .map((u) => normalizeAdminUser(rawAdminUserSchema.parse(u)))
+        .sort((a, b) => (a.fullName || a.email).localeCompare(b.fullName || b.email));
       res.json({ users });
     } catch (err) {
       next(err);
