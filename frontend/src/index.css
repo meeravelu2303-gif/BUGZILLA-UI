@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+  body {
+    @apply text-slate-900 antialiased;
+    /* UEducate brand-teal mesh (#3AB2CC / #5BC9ED / #2B9FB7 at low alpha) - see BRANDING.md */
+    background-color: #eef4f7;
+    background-image: radial-gradient(at 12% 8%, rgba(58, 178, 204, 0.18) 0px, transparent 45%),
+      radial-gradient(at 88% 12%, rgba(91, 201, 237, 0.16) 0px, transparent 48%),
+      radial-gradient(at 50% 92%, rgba(43, 159, 183, 0.13) 0px, transparent 50%),
+      radial-gradient(at 95% 80%, rgba(148, 163, 184, 0.14) 0px, transparent 45%),
+      radial-gradient(at 5% 60%, rgba(180, 228, 238, 0.2) 0px, transparent 45%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
+  ::selection {
+    @apply bg-brand-200 text-brand-900;
+  }
+}
+
+@layer utilities {
+  /* brand-600 (3.26:1 vs white) rather than brand-500 (2.49:1): WCAG requires a
+     3:1 minimum for non-text focus indicators. */
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+  }
+  .glass-surface {
+    @apply border border-white/40 bg-white/70 shadow-glass backdrop-blur-lg;
+  }
+  .skeleton {
+    @apply relative overflow-hidden bg-slate-200/70 rounded-md;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer;
+  }
+}

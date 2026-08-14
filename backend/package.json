@@ -1,0 +1,29 @@
+{
+  "name": "bugzilla-ui-bff",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend-for-Frontend proxying Bugzilla 5.2 REST API. No database drivers.",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "cookie-session": "^2.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cookie-session": "^2.0.49",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  }
+}
