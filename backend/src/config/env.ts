@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** Shared by the session middleware (index.ts) and logout's clearCookie (routes/auth.ts). */
+export const SESSION_COOKIE_NAME = 'bzui_session';
+
 const envSchema = z.object({
   BUGZILLA_URL: z.string().url(),
   BUGZILLA_API_KEY: z.string().min(1, 'BUGZILLA_API_KEY must be set'),

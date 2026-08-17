@@ -2,7 +2,6 @@ import type { NextFunction, Request, Response } from 'express';
 import { BugzillaClient } from '../lib/bugzillaClient';
 import { AppError } from '../lib/errors';
 import type { Permissions } from '../schemas/common';
-import type { SessionUser } from '../types/express';
 import type { Env } from '../config/env';
 
 /**
@@ -13,7 +12,7 @@ import type { Env } from '../config/env';
  */
 export function requireAuth(env: Env) {
   return (req: Request, _res: Response, next: NextFunction): void => {
-    const session = req.session as (Partial<SessionUser> & Record<string, unknown>) | null | undefined;
+    const session = req.session;
 
     if (!session || !session.bzToken || !session.bzUserId) {
       next(new AppError(401, 'UNAUTHENTICATED', 'Please log in to continue.'));
@@ -25,7 +24,7 @@ export function requireAuth(env: Env) {
       bzToken: session.bzToken,
       email: String(session.email ?? ''),
       realName: String(session.realName ?? ''),
-      // Defensive default for sessions issued before permissions existed on the cookie.
+      // Defensive default for sessions issued before permissions existed on the session.
       permissions: session.permissions ?? { canManageUsers: false, canManageProducts: false },
     };
     req.bugzilla = new BugzillaClient(env.BUGZILLA_URL, { kind: 'token', token: session.bzToken });

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useBugs, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
-import { FilterBar, type Filters } from '../components/bugs/FilterBar';
+import { FilterBar, isComponentInProduct, type Filters } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
 import { Card } from '../components/ui/Card';
 import { useDebounce } from '../lib/useDebounce';
@@ -20,6 +20,7 @@ export function BugList() {
   const filters: Filters = {
     search: debouncedSearch,
     product: params.get('product') ?? '',
+    component: params.get('component') ?? '',
     status: params.get('status') ?? '',
     severity: params.get('severity') ?? '',
     priority: params.get('priority') ?? '',
@@ -27,7 +28,6 @@ export function BugList() {
 
   // These come from Advanced Search via the URL; they have no FilterBar control
   // but are still applied to the query so a saved/linked search stays accurate.
-  const component = params.get('component') ?? '';
   const assignedTo = params.get('assignedTo') ?? '';
   const creator = params.get('creator') ?? '';
 
@@ -49,6 +49,15 @@ export function BugList() {
       setSearchInput(patch.search ?? '');
       return;
     }
+    if ('product' in patch) {
+      // Components are product-scoped, so a switch can strand the current
+      // component on a product that doesn't have it - drop it rather than
+      // leave an invalid filter silently applied.
+      const nextProduct = patch.product ?? '';
+      const keepComponent = isComponentInProduct(productsData?.products, filters.component, nextProduct);
+      updateParams({ ...patch, component: keepComponent ? filters.component : '', offset: 0 });
+      return;
+    }
     updateParams({ ...patch, offset: 0 });
   }
 
@@ -66,7 +75,7 @@ export function BugList() {
       limit: LIMIT,
       offset,
       product: filters.product || undefined,
-      component: component || undefined,
+      component: filters.component || undefined,
       status: filters.status || undefined,
       severity: filters.severity || undefined,
       priority: filters.priority || undefined,
@@ -76,7 +85,7 @@ export function BugList() {
       sortBy,
       sortDir,
     }),
-    [offset, filters.product, component, filters.status, filters.severity, filters.priority, assignedTo, creator, filters.search, sortBy, sortDir]
+    [offset, filters.product, filters.component, filters.status, filters.severity, filters.priority, assignedTo, creator, filters.search, sortBy, sortDir]
   );
 
   const { data, isLoading, isFetching } = useBugs(query);
@@ -90,11 +99,10 @@ export function BugList() {
         </div>
       </div>
 
-      {(component || assignedTo || creator) && (
+      {(assignedTo || creator) && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-slate-500">Active filters:</span>
           {([
-            ['component', 'Component', component],
             ['assignedTo', 'Assignee', assignedTo],
             ['creator', 'Reporter', creator],
           ] as const)

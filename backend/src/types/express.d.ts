@@ -1,3 +1,4 @@
+import 'express-session';
 import type { BugzillaClient } from '../lib/bugzillaClient';
 import type { Permissions } from '../schemas/common';
 
@@ -7,6 +8,14 @@ export interface SessionUser {
   email: string;
   realName: string;
   permissions: Permissions;
+}
+
+declare module 'express-session' {
+  /**
+   * The server-side session record. Held in memory by express-session's
+   * MemoryStore - only the signed session id reaches the browser.
+   */
+  interface SessionData extends Partial<SessionUser> {}
 }
 
 declare global {

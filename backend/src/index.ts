@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import cookieSession from 'cookie-session';
 import cors from 'cors';
 import express from 'express';
-import { loadEnv } from './config/env';
+import session from 'express-session';
+import { loadEnv, SESSION_COOKIE_NAME } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { adminMetaRouter } from './routes/adminMeta';
 import { adminProductsRouter } from './routes/adminProducts';
@@ -16,6 +16,12 @@ const env = loadEnv();
 const app = express();
 
 app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  next();
+});
 app.use(
   cors({
     origin: env.CORS_ORIGIN.split(',').map((o) => o.trim()),
@@ -23,14 +29,22 @@ app.use(
   })
 );
 app.use(express.json());
+// Sessions live server-side in the default in-memory MemoryStore, so the cookie
+// carries only an opaque signed session id - never the user's Bugzilla token.
+// This BFF is single-instance by design (no database drivers); a restart just
+// means users log in again.
 app.use(
-  cookieSession({
-    name: 'bzui_session',
+  session({
+    name: SESSION_COOKIE_NAME,
     secret: env.SESSION_SECRET,
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: env.COOKIE_SECURE,
-    maxAge: 8 * 60 * 60 * 1000, // 8 hours
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: env.COOKIE_SECURE,
+      maxAge: 8 * 60 * 60 * 1000, // 8 hours
+    },
   })
 );
 
