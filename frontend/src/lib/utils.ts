@@ -29,6 +29,18 @@ export function timeAgo(iso: string): string {
   return formatDate(iso);
 }
 
+/**
+ * How a bug is labelled in the UI: its Bugzilla alias (e.g. KPA-001) when it has
+ * one, falling back to #<bug id>. Bugzilla 5.x returns `alias` as an array, and a
+ * bug can legitimately have none - the automation reporter files without an alias
+ * rather than dropping a ticket when every candidate number is taken.
+ *
+ * Links and sorting deliberately keep using the numeric id; only the label changes.
+ */
+export function bugDisplayId(bug: { id: number; alias?: string[] }): string {
+  return bug.alias?.[0] ?? `#${bug.id}`;
+}
+
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();

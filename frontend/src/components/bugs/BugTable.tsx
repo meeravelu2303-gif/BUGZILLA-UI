@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Bug as BugIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Bug } from '../../types';
-import { cn, timeAgo } from '../../lib/utils';
+import { bugDisplayId, cn, timeAgo } from '../../lib/utils';
 import { Avatar } from '../ui/Avatar';
 import { EmptyState } from '../ui/EmptyState';
 import { PriorityPill, SeverityPill, StatusPill } from '../ui/Pill';
@@ -80,8 +80,8 @@ export function BugTable({
             bugs.map((bug) => (
               <tr key={bug.id} className="border-b border-white/30 transition-colors last:border-0 hover:bg-white/50">
                 <td className="px-5 py-3.5 font-mono text-xs text-slate-600">
-                  <Link to={`/bugs/${bug.id}`} className="focus-ring rounded text-brand-700 hover:underline">
-                    #{bug.id}
+                  <Link to={`/bugs/${bug.id}`} className="focus-ring rounded text-brand-700 hover:underline" title={`Bug #${bug.id}`}>
+                    {bugDisplayId(bug)}
                   </Link>
                 </td>
                 <td className="max-w-[8rem] truncate px-5 py-3.5 text-slate-600" title={bug.product}>

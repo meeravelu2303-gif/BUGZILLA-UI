@@ -235,6 +235,7 @@ export const bugCountRowSchema = z
   .object({
     id: z.number(),
     is_open: z.boolean(),
+    status: z.string(),
     severity: z.string(),
   })
   .passthrough();
@@ -244,6 +245,9 @@ export interface BugCounts {
   open: number;
   resolved: number;
   blockerCritical: number;
+  /** Full-population breakdowns for the dashboard charts - every bug, not a page. */
+  byStatus: Record<string, number>;
+  bySeverity: Record<string, number>;
 }
 
 /** Severities the "Blocker / Critical" stat card counts, per Bugzilla's own field values. */
@@ -252,11 +256,17 @@ const HIGH_SEVERITIES = new Set(['blocker', 'critical']);
 export function tallyBugCounts(rows: z.infer<typeof bugCountRowSchema>[]): BugCounts {
   let open = 0;
   let blockerCritical = 0;
+  const byStatus: Record<string, number> = {};
+  const bySeverity: Record<string, number> = {};
+
   for (const row of rows) {
     if (row.is_open) open += 1;
     if (HIGH_SEVERITIES.has(row.severity)) blockerCritical += 1;
+    byStatus[row.status] = (byStatus[row.status] ?? 0) + 1;
+    bySeverity[row.severity] = (bySeverity[row.severity] ?? 0) + 1;
   }
-  return { total: rows.length, open, resolved: rows.length - open, blockerCritical };
+
+  return { total: rows.length, open, resolved: rows.length - open, blockerCritical, byStatus, bySeverity };
 }
 
 export const createBugSchema = z.object({

@@ -10,6 +10,7 @@ import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { PriorityPill, SeverityPill, StatusPill } from '../components/ui/Pill';
 import { Skeleton } from '../components/ui/Skeleton';
+import { bugDisplayId } from '../lib/utils';
 
 export function BugDetail() {
   const { id } = useParams<{ id: string }>();
@@ -51,8 +52,8 @@ export function BugDetail() {
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="font-mono text-sm text-slate-600">
-            #{bug.id} · {bug.product} / {bug.component}
+          <p className="font-mono text-sm text-slate-600" title={`Bug #${bug.id}`}>
+            {bugDisplayId(bug)} · {bug.product} / {bug.component}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{bug.summary}</h1>
         </div>

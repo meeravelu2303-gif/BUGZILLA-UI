@@ -188,6 +188,9 @@ export interface BugCounts {
   open: number;
   resolved: number;
   blockerCritical: number;
+  /** Full-population chart data - keyed by Bugzilla's own status/severity values. */
+  byStatus: Record<string, number>;
+  bySeverity: Record<string, number>;
 }
 
 /** Same filters as ListBugsParams, minus pagination and sorting. */

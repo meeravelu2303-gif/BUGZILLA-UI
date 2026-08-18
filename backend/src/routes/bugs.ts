@@ -106,15 +106,16 @@ export function bugsRouter(env: Env): Router {
   // Registered before '/:id' so the literal path wins the match. Exists because the
   // list endpoint caps `limit` at 200: counting the bugs it returns silently stops
   // being the real total the moment a product outgrows one page. This asks Bugzilla
-  // for every matching bug with `limit=0` ("no limit") but only three fields, so the
-  // number is genuine without pulling full bug records.
+  // for every matching bug with `limit=0` ("no limit") but only four fields, so the
+  // totals and the per-status/per-severity breakdowns are genuine without pulling
+  // full bug records - one upstream call serves every number on the dashboard.
   router.get('/count', auth, async (req, res, next) => {
     try {
       const query = parseInput(countBugsQuerySchema, req.query);
 
       const params: Record<string, string | number> = {
         limit: 0,
-        include_fields: 'id,is_open,severity',
+        include_fields: 'id,is_open,status,severity',
       };
       applyBugFilters(params, query);
 

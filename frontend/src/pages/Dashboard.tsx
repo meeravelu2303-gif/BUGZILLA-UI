@@ -6,39 +6,28 @@ import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
 import { StatusPill, SeverityPill, STATUS_TONE, SEVERITY_TONE } from '../components/ui/Pill';
 import { Skeleton } from '../components/ui/Skeleton';
-import { timeAgo } from '../lib/utils';
+import { bugDisplayId, timeAgo } from '../lib/utils';
 
 /**
- * The charts and "Recently changed" list are deliberately sample-based - they
- * show shape and recency, not exact totals. The stat cards are not: they come
- * from /api/bugs/count, which is unaffected by this cap.
+ * "Recently changed" is the only thing on this page that needs bug records, and
+ * it shows six rows. Every number and both charts come from /api/bugs/count,
+ * which tallies the full population server-side rather than a page of it.
  */
-const DASHBOARD_SAMPLE_SIZE = 200;
-
-function countBy<T extends string>(values: T[]): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const v of values) counts[v] = (counts[v] ?? 0) + 1;
-  return counts;
-}
+const RECENT_LIMIT = 6;
 
 export function Dashboard() {
-  const { data, isLoading } = useBugs({ limit: DASHBOARD_SAMPLE_SIZE, offset: 0, sortBy: 'last_change_time', sortDir: 'desc' });
+  const { data, isLoading } = useBugs({ limit: RECENT_LIMIT, offset: 0, sortBy: 'last_change_time', sortDir: 'desc' });
   const { data: countsData, isLoading: countsLoading } = useBugCounts();
-  const bugs = data?.bugs ?? [];
+  const recent = data?.bugs ?? [];
   const counts = countsData?.counts;
 
-  const statusCounts = countBy(bugs.map((b) => b.status));
-  const severityCounts = countBy(bugs.map((b) => b.severity));
-
-  const statusItems: BarListItem[] = Object.entries(statusCounts)
+  const statusItems: BarListItem[] = Object.entries(counts?.byStatus ?? {})
     .sort((a, b) => b[1] - a[1])
     .map(([label, value]) => ({ label: label.replace('_', ' '), value, tone: STATUS_TONE[label] ?? 'slate' }));
 
-  const severityItems: BarListItem[] = Object.entries(severityCounts)
+  const severityItems: BarListItem[] = Object.entries(counts?.bySeverity ?? {})
     .sort((a, b) => b[1] - a[1])
     .map(([label, value]) => ({ label, value, tone: SEVERITY_TONE[label] ?? 'slate' }));
-
-  const recent = bugs.slice(0, 6);
 
   return (
     <div className="mx-auto max-w-[1400px] px-8 py-8">
@@ -68,7 +57,7 @@ export function Dashboard() {
             <CardTitle>By status</CardTitle>
           </CardHeader>
           <CardBody>
-            {isLoading ? (
+            {countsLoading ? (
               <div className="flex flex-col gap-3">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <Skeleton key={i} className="h-2 w-full" />
@@ -85,7 +74,7 @@ export function Dashboard() {
             <CardTitle>By severity</CardTitle>
           </CardHeader>
           <CardBody>
-            {isLoading ? (
+            {countsLoading ? (
               <div className="flex flex-col gap-3">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <Skeleton key={i} className="h-2 w-full" />
@@ -119,7 +108,9 @@ export function Dashboard() {
                 to={`/bugs/${bug.id}`}
                 className="focus-ring flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50"
               >
-                <span className="w-14 shrink-0 font-mono text-xs text-slate-600">#{bug.id}</span>
+                <span className="w-20 shrink-0 font-mono text-xs text-slate-600" title={`Bug #${bug.id}`}>
+                  {bugDisplayId(bug)}
+                </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">{bug.summary}</span>
                 <StatusPill status={bug.status} />
                 <SeverityPill severity={bug.severity} />
