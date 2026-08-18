@@ -208,6 +208,57 @@ export const listBugsQuerySchema = z.object({
 
 export type ListBugsQuery = z.infer<typeof listBugsQuerySchema>;
 
+/**
+ * Same filters as the list endpoint, minus pagination and sorting - a count has
+ * no page and no order. Derived from listBugsQuerySchema so the two can't drift.
+ */
+export const countBugsQuerySchema = listBugsQuerySchema.pick({
+  product: true,
+  component: true,
+  status: true,
+  severity: true,
+  priority: true,
+  assignedTo: true,
+  creator: true,
+  cc: true,
+  search: true,
+});
+
+export type CountBugsQuery = z.infer<typeof countBugsQuerySchema>;
+
+/**
+ * The only three fields the dashboard tallies need. Kept deliberately narrow:
+ * the count endpoint asks Bugzilla for these alone via include_fields, so a
+ * count over thousands of bugs never pulls descriptions, users, cc or keywords.
+ */
+export const bugCountRowSchema = z
+  .object({
+    id: z.number(),
+    is_open: z.boolean(),
+    severity: z.string(),
+  })
+  .passthrough();
+
+export interface BugCounts {
+  total: number;
+  open: number;
+  resolved: number;
+  blockerCritical: number;
+}
+
+/** Severities the "Blocker / Critical" stat card counts, per Bugzilla's own field values. */
+const HIGH_SEVERITIES = new Set(['blocker', 'critical']);
+
+export function tallyBugCounts(rows: z.infer<typeof bugCountRowSchema>[]): BugCounts {
+  let open = 0;
+  let blockerCritical = 0;
+  for (const row of rows) {
+    if (row.is_open) open += 1;
+    if (HIGH_SEVERITIES.has(row.severity)) blockerCritical += 1;
+  }
+  return { total: rows.length, open, resolved: rows.length - open, blockerCritical };
+}
+
 export const createBugSchema = z.object({
   product: z.string().min(1, 'Product is required'),
   component: z.string().min(1, 'Component is required'),

@@ -6,6 +6,8 @@ import { AppError } from '../lib/errors';
 import { parseInput } from '../lib/validate';
 import {
   addCommentSchema,
+  bugCountRowSchema,
+  countBugsQuerySchema,
   createBugSchema,
   listBugsQuerySchema,
   normalizeAttachment,
@@ -14,6 +16,7 @@ import {
   rawAttachmentSchema,
   rawBugSchema,
   rawCommentSchema,
+  tallyBugCounts,
   updateBugSchema,
 } from '../schemas/bug';
 
@@ -47,6 +50,27 @@ const CAMEL_TO_BUGZILLA_UPDATE: Record<string, string> = {
   whiteboard: 'whiteboard',
 };
 
+/**
+ * Translates this BFF's camelCase filter names into Bugzilla's own search
+ * parameters. Shared by the list and count endpoints so the two always agree on
+ * what a given filter means - a count that filtered differently from the list
+ * it sits above would be worse than no count at all.
+ */
+function applyBugFilters(
+  params: Record<string, string | number>,
+  query: Partial<Record<'product' | 'component' | 'status' | 'severity' | 'priority' | 'assignedTo' | 'creator' | 'cc' | 'search', string>>
+): void {
+  if (query.product) params.product = query.product;
+  if (query.component) params.component = query.component;
+  if (query.status) params.bug_status = query.status;
+  if (query.severity) params.severity = query.severity;
+  if (query.priority) params.priority = query.priority;
+  if (query.assignedTo) params.assigned_to = query.assignedTo;
+  if (query.creator) params.creator = query.creator;
+  if (query.cc) params.cc = query.cc;
+  if (query.search) params.summary = query.search;
+}
+
 export function bugsRouter(env: Env): Router {
   const router = Router();
   const auth = requireAuth(env);
@@ -62,15 +86,7 @@ export function bugsRouter(env: Env): Router {
         offset: query.offset,
         order: query.sortDir === 'desc' ? `${sortField} DESC` : sortField,
       };
-      if (query.product) params.product = query.product;
-      if (query.component) params.component = query.component;
-      if (query.status) params.bug_status = query.status;
-      if (query.severity) params.severity = query.severity;
-      if (query.priority) params.priority = query.priority;
-      if (query.assignedTo) params.assigned_to = query.assignedTo;
-      if (query.creator) params.creator = query.creator;
-      if (query.cc) params.cc = query.cc;
-      if (query.search) params.summary = query.search;
+      applyBugFilters(params, query);
 
       const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
       const hasMore = raw.bugs.length > query.limit;
@@ -80,6 +96,32 @@ export function bugsRouter(env: Env): Router {
         bugs: page,
         pageInfo: { limit: query.limit, offset: query.offset, hasMore },
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/bugs/count
+  //
+  // Registered before '/:id' so the literal path wins the match. Exists because the
+  // list endpoint caps `limit` at 200: counting the bugs it returns silently stops
+  // being the real total the moment a product outgrows one page. This asks Bugzilla
+  // for every matching bug with `limit=0` ("no limit") but only three fields, so the
+  // number is genuine without pulling full bug records.
+  router.get('/count', auth, async (req, res, next) => {
+    try {
+      const query = parseInput(countBugsQuerySchema, req.query);
+
+      const params: Record<string, string | number> = {
+        limit: 0,
+        include_fields: 'id,is_open,severity',
+      };
+      applyBugFilters(params, query);
+
+      const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
+      const rows = raw.bugs.map((b) => bugCountRowSchema.parse(b));
+
+      res.json({ counts: tallyBugCounts(rows) });
     } catch (err) {
       next(err);
     }

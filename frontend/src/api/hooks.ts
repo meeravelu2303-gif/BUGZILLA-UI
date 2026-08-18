@@ -4,9 +4,11 @@ import type {
   AdminGroup,
   AdminUser,
   AuthUser,
+  BugCounts,
   BugDetailResponse,
   BugListResponse,
   BugMeta,
+  CountBugsParams,
   CreateBugInput,
   CreateComponentInput,
   CreateProductInput,
@@ -73,6 +75,19 @@ export function useBugs(params: ListBugsParams) {
     queryKey: ['bugs', params],
     queryFn: () => api.get<BugListResponse>(`/bugs${buildQuery(params as Record<string, string | number | undefined>)}`),
     placeholderData: (prev) => prev,
+  });
+}
+
+/**
+ * Genuine totals for the dashboard stat cards. Separate from useBugs because
+ * useBugs is capped at 200 server-side - counting its results understates the
+ * real number as soon as there are more bugs than one page.
+ */
+export function useBugCounts(params: CountBugsParams = {}) {
+  return useQuery({
+    queryKey: ['bugs', 'count', params],
+    queryFn: () => api.get<{ counts: BugCounts }>(`/bugs/count${buildQuery(params as Record<string, string | number | undefined>)}`),
+    staleTime: 30 * 1000,
   });
 }
 

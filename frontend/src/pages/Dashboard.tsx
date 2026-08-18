@@ -1,6 +1,6 @@
 import { AlertTriangle, Bug as BugIcon, CheckCircle2, CircleDot, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useBugs } from '../api/hooks';
+import { useBugCounts, useBugs } from '../api/hooks';
 import { BarListChart, type BarListItem } from '../components/dashboard/BarListChart';
 import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
 import { StatCard } from '../components/ui/StatCard';
@@ -8,6 +8,11 @@ import { StatusPill, SeverityPill, STATUS_TONE, SEVERITY_TONE } from '../compone
 import { Skeleton } from '../components/ui/Skeleton';
 import { timeAgo } from '../lib/utils';
 
+/**
+ * The charts and "Recently changed" list are deliberately sample-based - they
+ * show shape and recency, not exact totals. The stat cards are not: they come
+ * from /api/bugs/count, which is unaffected by this cap.
+ */
 const DASHBOARD_SAMPLE_SIZE = 200;
 
 function countBy<T extends string>(values: T[]): Record<string, number> {
@@ -18,12 +23,9 @@ function countBy<T extends string>(values: T[]): Record<string, number> {
 
 export function Dashboard() {
   const { data, isLoading } = useBugs({ limit: DASHBOARD_SAMPLE_SIZE, offset: 0, sortBy: 'last_change_time', sortDir: 'desc' });
+  const { data: countsData, isLoading: countsLoading } = useBugCounts();
   const bugs = data?.bugs ?? [];
-
-  const total = bugs.length;
-  const open = bugs.filter((b) => b.isOpen).length;
-  const resolved = total - open;
-  const highPriority = bugs.filter((b) => b.severity === 'blocker' || b.severity === 'critical').length;
+  const counts = countsData?.counts;
 
   const statusCounts = countBy(bugs.map((b) => b.status));
   const severityCounts = countBy(bugs.map((b) => b.severity));
@@ -45,7 +47,7 @@ export function Dashboard() {
         <p className="mt-1 text-sm text-slate-600">An overview of bug activity across your products.</p>
       </div>
 
-      {isLoading ? (
+      {countsLoading || !counts ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-[84px] rounded-xl" />
@@ -53,10 +55,10 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard icon={BugIcon} label="Total bugs" value={total} tone="brand" />
-          <StatCard icon={CircleDot} label="Open" value={open} tone="amber" />
-          <StatCard icon={CheckCircle2} label="Resolved" value={resolved} tone="emerald" />
-          <StatCard icon={AlertTriangle} label="Blocker / Critical" value={highPriority} tone="rose" />
+          <StatCard icon={BugIcon} label="Total bugs" value={counts.total} tone="brand" />
+          <StatCard icon={CircleDot} label="Open" value={counts.open} tone="amber" />
+          <StatCard icon={CheckCircle2} label="Resolved" value={counts.resolved} tone="emerald" />
+          <StatCard icon={AlertTriangle} label="Blocker / Critical" value={counts.blockerCritical} tone="rose" />
         </div>
       )}
 

@@ -179,6 +179,20 @@ export interface ApiErrorBody {
   upstream?: { code: number; message: string };
 }
 
+/**
+ * Real totals from GET /api/bugs/count - not derived from a capped page, so
+ * these stay correct past the list endpoint's 200-item limit.
+ */
+export interface BugCounts {
+  total: number;
+  open: number;
+  resolved: number;
+  blockerCritical: number;
+}
+
+/** Same filters as ListBugsParams, minus pagination and sorting. */
+export type CountBugsParams = Omit<ListBugsParams, 'limit' | 'offset' | 'sortBy' | 'sortDir'>;
+
 export interface ListBugsParams {
   limit?: number;
   offset?: number;
