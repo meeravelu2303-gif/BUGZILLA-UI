@@ -24,6 +24,7 @@ export function BugList() {
     status: params.get('status') ?? '',
     severity: params.get('severity') ?? '',
     priority: params.get('priority') ?? '',
+    tier: params.get('tier') ?? '',
   };
 
   // These come from Advanced Search via the URL; they have no FilterBar control
@@ -31,8 +32,12 @@ export function BugList() {
   const assignedTo = params.get('assignedTo') ?? '';
   const creator = params.get('creator') ?? '';
 
-  const sortBy = params.get('sortBy') ?? 'last_change_time';
-  const sortDir = (params.get('sortDir') as 'asc' | 'desc') ?? 'desc';
+  // Triage order by default: tier first (tier 1 is "product broken or data
+  // exposed"), then severity, then priority, so the most important work surfaces
+  // without anyone having to sort for it. The backend appends a newest-first
+  // tiebreaker, so bugs of equal importance still read most-recent-first.
+  const sortBy = params.get('sortBy') ?? 'importance';
+  const sortDir = (params.get('sortDir') as 'asc' | 'desc') ?? 'asc';
   const offset = Number(params.get('offset') ?? 0);
 
   function updateParams(patch: Record<string, string | number>) {
@@ -79,13 +84,16 @@ export function BugList() {
       status: filters.status || undefined,
       severity: filters.severity || undefined,
       priority: filters.priority || undefined,
+      // Tier has no Bugzilla field of its own - it lives in the Status Whiteboard
+      // as `[tier1]`, and Bugzilla matches that param as a substring.
+      whiteboard: filters.tier ? `tier${filters.tier}` : undefined,
       assignedTo: assignedTo || undefined,
       creator: creator || undefined,
       search: filters.search || undefined,
       sortBy,
       sortDir,
     }),
-    [offset, filters.product, filters.component, filters.status, filters.severity, filters.priority, assignedTo, creator, filters.search, sortBy, sortDir]
+    [offset, filters.product, filters.component, filters.status, filters.severity, filters.priority, filters.tier, assignedTo, creator, filters.search, sortBy, sortDir]
   );
 
   const { data, isLoading, isFetching } = useBugs(query);

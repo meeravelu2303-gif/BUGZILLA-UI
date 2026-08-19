@@ -10,7 +10,16 @@ export interface Filters {
   status: string;
   severity: string;
   priority: string;
+  /** Business tier ("1".."3"), matched against the Status Whiteboard. */
+  tier: string;
 }
+
+/** Tiers the bench assigns; see tierOf() for where the value is stored. */
+const TIERS = [
+  { value: '1', label: 'Tier 1' },
+  { value: '2', label: 'Tier 2' },
+  { value: '3', label: 'Tier 3' },
+];
 
 const MULTI_PRODUCT_GROUP = 'In multiple products';
 
@@ -173,6 +182,20 @@ export function FilterBar({
         {meta?.priorities.map((p) => (
           <option key={p} value={p}>
             {p}
+          </option>
+        ))}
+      </Select>
+
+      <Select
+        aria-label="Filter by tier"
+        placeholder="All tiers"
+        value={filters.tier}
+        onChange={(e) => onChange({ tier: e.target.value })}
+        className="w-32"
+      >
+        {TIERS.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label}
           </option>
         ))}
       </Select>

@@ -19,8 +19,11 @@ export function MyBugs() {
   const { data: me } = useMe();
   const email = me?.user.email ?? '';
   const [tab, setTab] = useState<TabId>('assigned');
-  const [sortBy, setSortBy] = useState('last_change_time');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  // Opens in triage order - tier (component criticality), then severity, then
+  // priority - so the work that matters most is at the top without sorting for it.
+  // Any column header still switches to a plain single-column sort.
+  const [sortBy, setSortBy] = useState('importance');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const base: ListBugsParams = { limit: 100, offset: 0, sortBy, sortDir };
   const query: ListBugsParams =

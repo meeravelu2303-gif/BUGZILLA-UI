@@ -66,3 +66,16 @@ export const PRIORITY_TONE_MAP: Record<string, Tone> = {
 export function PriorityPill({ priority }: { priority: string }) {
   return <Pill tone={PRIORITY_TONE_MAP[priority] ?? 'slate'}>{priority}</Pill>;
 }
+
+/** Tier 1 is the most severe, so it carries the same weight as a blocker severity. */
+export const TIER_TONE: Record<number, Tone> = {
+  1: 'rose',
+  2: 'orange',
+  3: 'sky',
+};
+
+/** Renders nothing when the bug carries no `[tierN]` marker - see tierOf(). */
+export function TierPill({ tier }: { tier: number | null }) {
+  if (tier === null) return null;
+  return <Pill tone={TIER_TONE[tier] ?? 'slate'}>Tier {tier}</Pill>;
+}

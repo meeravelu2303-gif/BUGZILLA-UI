@@ -41,6 +41,18 @@ export function bugDisplayId(bug: { id: number; alias?: string[] }): string {
   return bug.alias?.[0] ?? `#${bug.id}`;
 }
 
+/**
+ * Business tier of the affected module, which the test bench writes into
+ * Bugzilla's Status Whiteboard as `[tier1]`..`[tier3]` - Bugzilla has no tier
+ * field of its own. Tier 1 is the most severe (product broken, or accounts and
+ * personal data exposed). Returns null when the whiteboard carries anything else,
+ * so a hand-filed bug simply shows no tier rather than a broken badge.
+ */
+export function tierOf(bug: { whiteboard?: string }): number | null {
+  const match = /\[tier([1-9]\d*)\]/i.exec(bug.whiteboard ?? '');
+  return match ? Number(match[1]) : null;
+}
+
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();

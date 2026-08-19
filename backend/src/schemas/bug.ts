@@ -202,6 +202,12 @@ export const listBugsQuerySchema = z.object({
   creator: z.string().optional(),
   cc: z.string().optional(),
   search: z.string().optional(),
+  /**
+   * Substring match against Bugzilla's Status Whiteboard. The bench writes each
+   * module's business tier there as `[tier1]`..`[tier3]`, so `whiteboard=tier1`
+   * is how the UI filters by tier - Bugzilla has no dedicated tier field.
+   */
+  whiteboard: z.string().optional(),
   sortBy: z.string().default('last_change_time'),
   sortDir: z.enum(['asc', 'desc']).default('desc'),
 });
@@ -222,6 +228,7 @@ export const countBugsQuerySchema = listBugsQuerySchema.pick({
   creator: true,
   cc: true,
   search: true,
+  whiteboard: true,
 });
 
 export type CountBugsQuery = z.infer<typeof countBugsQuerySchema>;

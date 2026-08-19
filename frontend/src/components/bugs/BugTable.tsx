@@ -1,10 +1,10 @@
 import { ArrowDown, ArrowUp, ArrowUpDown, Bug as BugIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Bug } from '../../types';
-import { bugDisplayId, cn, timeAgo } from '../../lib/utils';
+import { bugDisplayId, cn, tierOf, timeAgo } from '../../lib/utils';
 import { Avatar } from '../ui/Avatar';
 import { EmptyState } from '../ui/EmptyState';
-import { PriorityPill, SeverityPill, StatusPill } from '../ui/Pill';
+import { PriorityPill, SeverityPill, StatusPill, TierPill } from '../ui/Pill';
 import { TableSkeleton } from '../ui/Skeleton';
 
 interface Column {
@@ -23,6 +23,7 @@ const COLUMNS: Column[] = [
   { key: 'status', label: 'Status', sortable: true, className: 'w-32' },
   { key: 'severity', label: 'Severity', sortable: true, className: 'w-28' },
   { key: 'priority', label: 'Priority', sortable: true, className: 'w-24' },
+  { key: 'status_whiteboard', label: 'Tier', sortable: true, className: 'w-24' },
   { key: 'last_change_time', label: 'Changed', sortable: true, className: 'w-24' },
 ];
 
@@ -109,6 +110,9 @@ export function BugTable({
                 </td>
                 <td className="px-5 py-3.5">
                   <PriorityPill priority={bug.priority} />
+                </td>
+                <td className="px-5 py-3.5">
+                  <TierPill tier={tierOf(bug)} />
                 </td>
                 <td className="whitespace-nowrap px-5 py-3.5 text-slate-600">{timeAgo(bug.lastChangeTime)}</td>
               </tr>

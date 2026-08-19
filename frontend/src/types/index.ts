@@ -208,6 +208,8 @@ export interface ListBugsParams {
   creator?: string;
   cc?: string;
   search?: string;
+  /** Substring match on the Status Whiteboard, e.g. "tier1" for the tier filter. */
+  whiteboard?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
 }

@@ -22,18 +22,60 @@ import {
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-const SORTABLE_FIELDS = new Set([
-  'id',
-  'priority',
-  'severity',
-  'status',
-  'product',
-  'component',
-  'assigned_to',
-  'last_change_time',
-  'creation_time',
-  'summary',
-]);
+/**
+ * Maps the sort keys this API exposes onto the column names Bugzilla's `order`
+ * parameter actually accepts.
+ *
+ * These are NOT the same vocabulary: `order` takes Bugzilla's internal buglist
+ * column names, while the rest of the REST API speaks its output field names.
+ * Passing an output name (`summary`, `last_change_time`, `id`, ...) is not an
+ * error - Bugzilla silently discards the whole order clause and falls back to
+ * bug_id ascending, so a sort appears to work while doing nothing. Verified
+ * field by field against the live instance; only the names on the right are
+ * honoured.
+ */
+const SORT_FIELDS: Record<string, string> = {
+  id: 'bug_id',
+  priority: 'priority',
+  severity: 'bug_severity',
+  status: 'bug_status',
+  product: 'product',
+  component: 'component',
+  assigned_to: 'assigned_to',
+  last_change_time: 'changeddate',
+  creation_time: 'opendate',
+  summary: 'short_desc',
+  // Business tier lives in the Status Whiteboard as `[tier1]`..`[tier3]`, so an
+  // alphabetical sort on it is a true tier sort (tier1 < tier2 < tier3).
+  status_whiteboard: 'status_whiteboard',
+  /**
+   * Triage order: how important is this bug to fix next.
+   *
+   * Tier first (the business criticality of the affected module - tier 1 means
+   * the product is broken or data is exposed), then severity, then priority.
+   * Severity and priority sort by Bugzilla's per-value `sortkey`, not
+   * alphabetically, so ascending genuinely means blocker->trivial and
+   * Highest->Lowest rather than an alphabetical jumble.
+   */
+  importance: 'status_whiteboard,bug_severity,priority',
+};
+
+const DEFAULT_SORT = 'last_change_time';
+
+/**
+ * Appended after whatever sort the caller asked for, so equal-ranked bugs read
+ * newest-first and, ultimately, in a fully determined order.
+ *
+ * bug_id last is not decorative. Bugs filed in the same second share a
+ * changeddate (55 such pairs in the current data), and without a unique final
+ * key their relative order is undefined. That is not merely untidy: each page of
+ * an offset query is ordered separately, so an undefined order lets the same bug
+ * appear on two pages, or vanish between them.
+ */
+const TIEBREAKERS = [
+  { field: SORT_FIELDS[DEFAULT_SORT], clause: `${SORT_FIELDS[DEFAULT_SORT]} DESC` },
+  { field: 'bug_id', clause: 'bug_id DESC' },
+];
 
 const CAMEL_TO_BUGZILLA_UPDATE: Record<string, string> = {
   summary: 'summary',
@@ -58,7 +100,12 @@ const CAMEL_TO_BUGZILLA_UPDATE: Record<string, string> = {
  */
 function applyBugFilters(
   params: Record<string, string | number>,
-  query: Partial<Record<'product' | 'component' | 'status' | 'severity' | 'priority' | 'assignedTo' | 'creator' | 'cc' | 'search', string>>
+  query: Partial<
+    Record<
+      'product' | 'component' | 'status' | 'severity' | 'priority' | 'assignedTo' | 'creator' | 'cc' | 'search' | 'whiteboard',
+      string
+    >
+  >
 ): void {
   if (query.product) params.product = query.product;
   if (query.component) params.component = query.component;
@@ -69,6 +116,7 @@ function applyBugFilters(
   if (query.creator) params.creator = query.creator;
   if (query.cc) params.cc = query.cc;
   if (query.search) params.summary = query.search;
+  if (query.whiteboard) params.whiteboard = query.whiteboard;
 }
 
 export function bugsRouter(env: Env): Router {
@@ -79,12 +127,27 @@ export function bugsRouter(env: Env): Router {
   router.get('/', auth, async (req, res, next) => {
     try {
       const query = parseInput(listBugsQuerySchema, req.query);
-      const sortField = SORTABLE_FIELDS.has(query.sortBy) ? query.sortBy : 'last_change_time';
+      const sortField = SORT_FIELDS[query.sortBy] ?? SORT_FIELDS[DEFAULT_SORT];
+      // A composite sort is several columns, so reversing it has to reverse every
+      // one of them - appending a single DESC would only flip the last column.
+      const primary =
+        query.sortDir === 'desc'
+          ? sortField
+              .split(',')
+              .map((f) => `${f} DESC`)
+              .join(',')
+          : sortField;
+      // Tier only has three distinct values, so without tiebreakers 700+ bugs in
+      // one tier come back in an arbitrary order that shifts between pages. Each
+      // tiebreaker is skipped when the chosen sort already contains that column,
+      // so a column is never named twice in one order clause.
+      const chosen = sortField.split(',');
+      const order = [primary, ...TIEBREAKERS.filter((t) => !chosen.includes(t.field)).map((t) => t.clause)].join(',');
 
       const params: Record<string, string | number> = {
         limit: query.limit + 1, // fetch one extra to detect a next page
         offset: query.offset,
-        order: query.sortDir === 'desc' ? `${sortField} DESC` : sortField,
+        order,
       };
       applyBugFilters(params, query);
 

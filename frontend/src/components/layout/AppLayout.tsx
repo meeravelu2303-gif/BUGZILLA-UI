@@ -6,6 +6,7 @@ import { NAV_SECTIONS, type NavSection } from '../../lib/nav';
 import { cn, initials } from '../../lib/utils';
 import { UEducateLogo } from '../brand/UEducateLogo';
 import { CommandPalette } from './CommandPalette';
+import { ErrorBoundary } from './ErrorBoundary';
 
 function navLinkClasses({ isActive }: { isActive: boolean }): string {
   return cn(
@@ -195,7 +196,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main>{children}</main>
+        <main>
+          {/* Keyed by route so navigating away from a crashed page clears the error. */}
+          <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>
+        </main>
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

@@ -8,9 +8,9 @@ import { CommentThread } from '../components/bugs/CommentThread';
 import { MetadataSidebar } from '../components/bugs/MetadataSidebar';
 import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
-import { PriorityPill, SeverityPill, StatusPill } from '../components/ui/Pill';
+import { PriorityPill, SeverityPill, StatusPill, TierPill } from '../components/ui/Pill';
 import { Skeleton } from '../components/ui/Skeleton';
-import { bugDisplayId } from '../lib/utils';
+import { bugDisplayId, tierOf } from '../lib/utils';
 
 export function BugDetail() {
   const { id } = useParams<{ id: string }>();
@@ -61,6 +61,7 @@ export function BugDetail() {
           <StatusPill status={bug.status} />
           <SeverityPill severity={bug.severity} />
           <PriorityPill priority={bug.priority} />
+          <TierPill tier={tierOf(bug)} />
         </div>
       </div>
 
