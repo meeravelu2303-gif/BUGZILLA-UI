@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CATEGORIES, PRIORITIES, SEVERITIES } from '../lib/classification';
 import { normalizeUser, userDetailSchema } from './common';
 
 /**
@@ -190,24 +191,44 @@ export function normalizeAttachment(raw: z.infer<typeof rawAttachmentSchema>): N
 
 // ---- Request payload validation ----
 
+/**
+ * A repeatable query parameter. Express gives a bare string for `?x=a` and an
+ * array for `?x=a&x=b`; both must validate identically, because multi-select
+ * within one axis is expressed as a repeated key. Empty strings are dropped so
+ * a cleared dropdown does not become a filter for "".
+ */
+function repeatable<T extends z.ZodTypeAny>(item: T) {
+  return z.preprocess(
+    (v) => (v === undefined ? undefined : (Array.isArray(v) ? v : [v]).filter((s) => s !== '')),
+    z.array(item).optional()
+  );
+}
+
+/** Free-text facet values (product/component/status) - user data, not a fixed vocabulary. */
+const facetValue = z.string().min(1).max(200);
+
 export const listBugsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(25),
   offset: z.coerce.number().int().min(0).default(0),
-  product: z.string().optional(),
-  component: z.string().optional(),
-  status: z.string().optional(),
-  severity: z.string().optional(),
-  priority: z.string().optional(),
+
+  // --- the two classification axes; invalid values are rejected with a 400 ---
+  severity: repeatable(z.enum(SEVERITIES)),
+  priority: repeatable(z.enum(PRIORITIES)),
+  category: repeatable(z.enum(CATEGORIES)),
+
+  // --- multi-select facets over Bugzilla's own values ---
+  product: repeatable(facetValue),
+  component: repeatable(facetValue),
+  status: repeatable(facetValue),
+  /** Business tier of the affected module, from the `[tierN]` whiteboard tag. */
+  tier: repeatable(z.coerce.number().int().min(1).max(9)),
+
+  // --- single-valued filters ---
   assignedTo: z.string().optional(),
   creator: z.string().optional(),
   cc: z.string().optional(),
   search: z.string().optional(),
-  /**
-   * Substring match against Bugzilla's Status Whiteboard. The bench writes each
-   * module's business tier there as `[tier1]`..`[tier3]`, so `whiteboard=tier1`
-   * is how the UI filters by tier - Bugzilla has no dedicated tier field.
-   */
-  whiteboard: z.string().optional(),
+
   sortBy: z.string().default('last_change_time'),
   sortDir: z.enum(['asc', 'desc']).default('desc'),
 });
@@ -224,11 +245,12 @@ export const countBugsQuerySchema = listBugsQuerySchema.pick({
   status: true,
   severity: true,
   priority: true,
+  category: true,
+  tier: true,
   assignedTo: true,
   creator: true,
   cc: true,
   search: true,
-  whiteboard: true,
 });
 
 export type CountBugsQuery = z.infer<typeof countBugsQuerySchema>;

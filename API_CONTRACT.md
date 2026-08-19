@@ -350,3 +350,121 @@ Bugzilla's REST API almost certainly exposes some form of group-membership editi
 | Component | `8` | `ZZZ_THROWAWAY_COMPONENT` (under product 5) | Active, default assignee `meeravelu2303@gmail.com` |
 
 None of these were requested ahead of time — the user-creation one in particular was an unintended side effect of a "does this endpoint require more than an email?" probe that unexpectedly succeeded rather than returning a validation error. Flagging transparently rather than silently deleting them myself, consistent with how bugs 38-40 were handled earlier.
+
+---
+
+## 13. BFF endpoints (this app's own API, added with the two-axis classification)
+
+Everything above documents *Bugzilla's* REST API. This section documents the
+endpoints **this BFF** exposes to its frontend. All require an authenticated
+session (`middleware/auth.ts`) and use the user's own Bugzilla token, so results
+respect Bugzilla's per-user group visibility.
+
+### 13.1 The classification model
+
+Two axes. Severity and Priority are paired; Category is independent.
+
+| Severity | Priority | Meaning |
+|---|---|---|
+| Critical | P0 / Showstopper | Crash, severe data loss, total feature blockade, no workaround |
+| Major | P1 | Significant loss of core functionality; difficult workaround may exist |
+| Minor | P2 | Small functional failure or limitation |
+| Trivial | P3 | Cosmetic — misalignment, spelling, visual glitch |
+
+Category: `Functional` · `Performance` · `Security` · `Compatibility`.
+
+Anything unmapped degrades to an explicit **`Unclassified`** bucket on every
+axis — never dropped, never fatal to a request.
+
+### 13.2 How the axes are encoded in Bugzilla (probed live, 2026-08-19)
+
+Bugzilla has native fields for severity and priority and **nothing for
+category**, so two encodings coexist and both are read:
+
+| Axis | Current bench writes | The 1,283 pre-change bugs hold |
+|---|---|---|
+| Category | `[cat:Security]` appended to the Status Whiteboard → `[tier1][cat:Security]` | *nothing* — whiteboard is only `[tierN]`, `keywords` empty on every bug |
+| Severity | `critical` / `major` / `minor` / `trivial` | `critical` 130, `major` 706, **`normal` 187**, `minor` 260 |
+| Grouping | `Affected endpoints (N), observed by M test case(s):` block in the description | *absent* — 0 descriptions carry it |
+
+Legacy bugs stay classifiable because **all 1,283 carry a `Classification:`
+line** as the first line of their description, which maps to a category through
+the same table the bench uses (`CATEGORY_BY_CLASSIFICATION`).
+
+`minor` is overloaded — the old bench used it for the P3 band, the new one for
+P2 — and is resolved by its paired priority (`minor`+`Low` → Trivial,
+`minor`+`Normal` → Minor). Severity and priority pair 1:1 in the data, which is
+what makes this exact.
+
+**All of this lives in `backend/src/lib/classification.ts`.** Parsing and
+filtering both read from it; no classification string literal belongs anywhere
+else.
+
+### 13.3 Verified Bugzilla query primitives
+
+Counts below are exact against the live instance:
+
+| Query | Result |
+|---|---|
+| `bug_severity=critical&bug_severity=major` (repeat = OR) | 836 = 130 + 706 |
+| repeat OR + second axis (AND) | 17 |
+| `longdesc=Security/` (description substring search) | 338 = 314 + 13 + 11 |
+| boolean chart `f1=status_whiteboard` OR `f2=longdesc`, `j_top=OR` | 338 |
+| that chart AND `bug_severity=critical` | 17 |
+
+The boolean chart is what lets one category filter match **either** encoding in
+a single Bugzilla query — no fetch-and-filter in the BFF.
+
+### 13.4 `GET /api/bugs`
+
+Filters, all combinable. Repeating a key ORs within that axis; separate keys AND
+across axes. Invalid enum values are rejected with `400 VALIDATION` through the
+existing `parseInput`/`errorHandler` path — nothing unvalidated reaches Bugzilla.
+
+| Param | Repeatable | Values |
+|---|---|---|
+| `severity` | yes | `Critical` `Major` `Minor` `Trivial` `Unclassified` |
+| `priority` | yes | `P0` `P1` `P2` `P3` `Unclassified` |
+| `category` | yes | `Functional` `Performance` `Security` `Compatibility` `Unclassified` |
+| `product` / `component` / `status` | yes | free text (Bugzilla's own values) |
+| `tier` | yes | 1–9 |
+| `search` | no | substring against summary |
+| `assignedTo` / `creator` / `cc` | no | email |
+| `limit` (≤200) / `offset` / `sortBy` / `sortDir` | no | pagination and sort |
+
+Each returned bug gains a **`triage`** object (`severity`, `priority`,
+`category`, `classification`, `tier`). Named `triage`, not `classification`,
+because `bug.classification` is already Bugzilla's product-classification string.
+
+### 13.5 `GET /api/bugs/:id`
+
+As above plus `grouping`, parsed server-side from the description so the
+frontend never regexes a body:
+
+```json
+{ "occurrences": 37, "endpointCount": 12, "truncated": true, "isGrouped": true,
+  "affectedEndpoints": [{ "method": "GET", "path": "/v2/a", "module": "Authentication V2", "occurrences": 4 }] }
+```
+
+A bug filed before grouping existed returns an explicit empty shape
+(`isGrouped: false`, `occurrences: null`, `affectedEndpoints: []`) — never a
+partial one.
+
+### 13.6 `GET /api/bugs/stats`
+
+Every dashboard and report breakdown in one call: `total`, `open`, `resolved`,
+`bySeverity`, `byCategory`, `byComponent`, and the `matrix` (severity ×
+category). Accepts the same filters as the list.
+
+Cost is **five upstream calls on a cold cache, one when warm** — one search
+returning four fields per bug, plus one id-set query per category. Not sixteen:
+the matrix is computed by joining those in memory rather than querying per cell.
+The category id-sets are cached per user for `STATS_CACHE_TTL_MS`
+(`config/env.ts`, default 60s) — per user because bugs can be group-restricted
+and a shared cache would leak restricted bugs through counts.
+
+### 13.7 `GET /api/bugs/count`
+
+`{ counts: { total, open, resolved, blockerCritical, byStatus, bySeverity } }`
+for the same filter set. Used for the result count and the "hidden by filters"
+figure in the filter bar.

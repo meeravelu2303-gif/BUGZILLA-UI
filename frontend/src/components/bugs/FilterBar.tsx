@@ -1,204 +1,170 @@
-import { Search } from 'lucide-react';
-import { useMemo } from 'react';
-import type { BugMeta, Product } from '../../types';
-import { Select } from '../ui/Field';
-
-export interface Filters {
-  search: string;
-  product: string;
-  component: string;
-  status: string;
-  severity: string;
-  priority: string;
-  /** Business tier ("1".."3"), matched against the Status Whiteboard. */
-  tier: string;
-}
-
-/** Tiers the bench assigns; see tierOf() for where the value is stored. */
-const TIERS = [
-  { value: '1', label: 'Tier 1' },
-  { value: '2', label: 'Tier 2' },
-  { value: '3', label: 'Tier 3' },
-];
-
-const MULTI_PRODUCT_GROUP = 'In multiple products';
+import { Search, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { FACET_LABELS, type UseBugFilters } from '../../lib/useBugFilters';
+import { useDebounce } from '../../lib/useDebounce';
+import { CATEGORIES, PRIORITIES, SEVERITIES, type BugMeta, type BugStats, type Product } from '../../types';
+import { MultiSelect, type MultiSelectOption } from '../ui/MultiSelect';
 
 /**
- * Bugzilla has no global component list - components belong to a product. But
- * GET /api/products (already fetched for the Product filter) returns every
- * enterable product with its full `components` array, so the "All products"
- * case can offer a merged list without a second request.
+ * The primary control surface for every bug list.
  *
- * Bugzilla's `component` query param matches on *name* only, so names are
- * de-duplicated here: a name owned by one product is grouped under it, and a
- * name shared by several becomes a single option that honestly means "any
- * component with this name" - which is exactly what the filter will do.
+ * One component, one URL contract (lib/useBugFilters.ts) - BugList, MyBugs and
+ * AdvancedSearch all mount this rather than each growing their own filters.
  */
-function componentOptions(products: Product[] | undefined, product: string): { name: string; group: string }[] {
-  if (!products) return [];
-
-  if (product) {
-    const match = products.find((p) => p.name === product);
-    return (match?.components ?? []).map((c) => ({ name: c.name, group: '' })).sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  const owners = new Map<string, string[]>();
-  for (const p of products) {
-    for (const c of p.components) {
-      owners.set(c.name, [...(owners.get(c.name) ?? []), p.name]);
-    }
-  }
-  return [...owners.entries()]
-    .map(([name, ps]) => ({ name, group: ps.length === 1 ? ps[0] : MULTI_PRODUCT_GROUP }))
-    .sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
-}
-
-/**
- * Whether a component filter is still meaningful for a newly chosen product,
- * so BugList can drop a selection that would otherwise match nothing.
- */
-export function isComponentInProduct(products: Product[] | undefined, component: string, product: string): boolean {
-  if (!component) return true;
-  // "All products" merges every product's components, so any name stays valid.
-  if (!product) return true;
-  // Don't discard a selection we can't verify yet.
-  if (!products) return true;
-  const match = products.find((p) => p.name === product);
-  return Boolean(match?.components.some((c) => c.name === component));
-}
-
 export function FilterBar({
-  filters,
-  onChange,
+  controller,
   meta,
   products,
+  stats,
+  resultCount,
+  totalCount,
+  isLoading,
 }: {
-  filters: Filters;
-  onChange: (next: Partial<Filters>) => void;
+  controller: UseBugFilters;
   meta?: BugMeta;
   products?: Product[];
+  /** Supplies per-value counts, so a facet shows how much it would narrow to. */
+  stats?: BugStats;
+  resultCount?: number;
+  /** Unfiltered total, used to say plainly how much is being hidden. */
+  totalCount?: number;
+  isLoading?: boolean;
 }) {
-  const components = useMemo(() => componentOptions(products, filters.product), [products, filters.product]);
+  const { filters, activeChips, isFiltered, toggleFacet, setFacet, setSearch, removeChip, clearAll } = controller;
 
-  // With no product filter the list spans products, so label each run with its
-  // owning product via <optgroup>. Options are already sorted by group.
-  const componentGroups = useMemo(() => {
-    if (filters.product) return null;
-    const out: { label: string; names: string[] }[] = [];
-    for (const c of components) {
-      const last = out[out.length - 1];
-      if (last && last.label === c.group) last.names.push(c.name);
-      else out.push({ label: c.group, names: [c.name] });
-    }
-    return out;
-  }, [components, filters.product]);
+  // Typing must not fire a request per keystroke; the URL updates once the user pauses.
+  const [searchInput, setSearchInput] = useState(filters.search);
+  const debounced = useDebounce(searchInput, 350);
+  useEffect(() => {
+    if (debounced !== filters.search) setSearch(debounced);
+    // `setSearch` is stable per params object; re-running on filters.search would
+    // fight the user's typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
+  useEffect(() => {
+    // Keep the box in step when the URL changes from elsewhere (chip removal, back button).
+    setSearchInput(filters.search);
+  }, [filters.search]);
+
+  const withCounts = (values: readonly string[], counts?: Record<string, number>): MultiSelectOption[] =>
+    values.map((v) => ({ value: v, label: v, count: counts?.[v] }));
+
+  const componentOptions: MultiSelectOption[] = Object.entries(stats?.byComponent ?? {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ value: name, label: name, count }));
+
+  const productOptions: MultiSelectOption[] = (products ?? []).map((p) => ({ value: p.name, label: p.name }));
+  const statusOptions: MultiSelectOption[] = (meta?.statuses ?? []).map((s) => ({ value: s, label: s.replace('_', ' ') }));
+
+  const hidden = totalCount !== undefined && resultCount !== undefined ? totalCount - resultCount : 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-white/30 px-5 py-4">
-      <div className="relative min-w-[220px] flex-1">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-        <input
-          value={filters.search}
-          onChange={(e) => onChange({ search: e.target.value })}
-          placeholder="Search summaries…"
-          aria-label="Search bugs"
-          className="focus-ring w-full rounded-xl border border-white/60 bg-white/80 py-2 pl-9 pr-3 text-sm placeholder:text-slate-500 backdrop-blur-sm"
+    <div className="border-b border-white/30 px-5 py-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden />
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search summaries…"
+            aria-label="Search bug summaries"
+            className="focus-ring w-full rounded-xl border border-white/60 bg-white/80 py-2 pl-9 pr-3 text-sm placeholder:text-slate-500 backdrop-blur-sm"
+          />
+        </div>
+
+        <MultiSelect
+          label={FACET_LABELS.severity}
+          className="w-40"
+          options={withCounts(SEVERITIES, stats?.bySeverity)}
+          selected={filters.severity}
+          onToggle={(v) => toggleFacet('severity', v)}
+          onClear={() => setFacet('severity', [])}
+        />
+        <MultiSelect
+          label={FACET_LABELS.priority}
+          className="w-36"
+          options={withCounts(PRIORITIES)}
+          selected={filters.priority}
+          onToggle={(v) => toggleFacet('priority', v)}
+          onClear={() => setFacet('priority', [])}
+        />
+        <MultiSelect
+          label={FACET_LABELS.category}
+          className="w-44"
+          options={withCounts(CATEGORIES, stats?.byCategory)}
+          selected={filters.category}
+          onToggle={(v) => toggleFacet('category', v)}
+          onClear={() => setFacet('category', [])}
+        />
+        <MultiSelect
+          label={FACET_LABELS.component}
+          className="w-52"
+          options={componentOptions}
+          selected={filters.component}
+          onToggle={(v) => toggleFacet('component', v)}
+          onClear={() => setFacet('component', [])}
+        />
+        <MultiSelect
+          label={FACET_LABELS.status}
+          className="w-40"
+          options={statusOptions}
+          selected={filters.status}
+          onToggle={(v) => toggleFacet('status', v)}
+          onClear={() => setFacet('status', [])}
+        />
+        {productOptions.length > 1 && (
+          <MultiSelect
+            label={FACET_LABELS.product}
+            className="w-44"
+            options={productOptions}
+            selected={filters.product}
+            onToggle={(v) => toggleFacet('product', v)}
+            onClear={() => setFacet('product', [])}
+          />
+        )}
+        <MultiSelect
+          label={FACET_LABELS.tier}
+          className="w-32"
+          options={[1, 2, 3].map((t) => ({ value: String(t), label: `Tier ${t}` }))}
+          selected={filters.tier.map(String)}
+          onToggle={(v) => toggleFacet('tier', v)}
+          onClear={() => setFacet('tier', [])}
         />
       </div>
 
-      <Select
-        aria-label="Filter by product"
-        placeholder="All products"
-        value={filters.product}
-        onChange={(e) => onChange({ product: e.target.value })}
-        className="w-40"
-      >
-        {products?.map((p) => (
-          <option key={p.id} value={p.name}>
-            {p.name}
-          </option>
-        ))}
-      </Select>
+      {(isFiltered || resultCount !== undefined) && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {activeChips.map((chip) => (
+            <button
+              key={`${chip.key}:${chip.value}`}
+              onClick={() => removeChip(chip)}
+              className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-800 ring-1 ring-inset ring-brand-600/20 hover:bg-brand-100"
+            >
+              {chip.label}
+              <X className="h-3 w-3" aria-hidden />
+              <span className="sr-only">Remove filter {chip.label}</span>
+            </button>
+          ))}
 
-      <Select
-        aria-label="Filter by component"
-        placeholder="All components"
-        value={filters.component}
-        onChange={(e) => onChange({ component: e.target.value })}
-        className="w-40"
-      >
-        {componentGroups
-          ? componentGroups.map((g) => (
-              <optgroup key={g.label} label={g.label}>
-                {g.names.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </optgroup>
-            ))
-          : components.map((c) => (
-              <option key={c.name} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-      </Select>
+          {isFiltered && (
+            <button onClick={clearAll} className="focus-ring rounded px-1 text-xs font-medium text-slate-700 underline hover:text-slate-900">
+              Clear all
+            </button>
+          )}
 
-      <Select
-        aria-label="Filter by status"
-        placeholder="All statuses"
-        value={filters.status}
-        onChange={(e) => onChange({ status: e.target.value })}
-        className="w-40"
-      >
-        {meta?.statuses.map((s) => (
-          <option key={s} value={s}>
-            {s.replace('_', ' ')}
-          </option>
-        ))}
-      </Select>
-
-      <Select
-        aria-label="Filter by severity"
-        placeholder="All severities"
-        value={filters.severity}
-        onChange={(e) => onChange({ severity: e.target.value })}
-        className="w-40"
-      >
-        {meta?.severities.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </Select>
-
-      <Select
-        aria-label="Filter by priority"
-        placeholder="All priorities"
-        value={filters.priority}
-        onChange={(e) => onChange({ priority: e.target.value })}
-        className="w-40"
-      >
-        {meta?.priorities.map((p) => (
-          <option key={p} value={p}>
-            {p}
-          </option>
-        ))}
-      </Select>
-
-      <Select
-        aria-label="Filter by tier"
-        placeholder="All tiers"
-        value={filters.tier}
-        onChange={(e) => onChange({ tier: e.target.value })}
-        className="w-32"
-      >
-        {TIERS.map((t) => (
-          <option key={t.value} value={t.value}>
-            {t.label}
-          </option>
-        ))}
-      </Select>
+          <span aria-live="polite" className="ml-auto text-xs text-slate-600">
+            {isLoading ? (
+              'Loading…'
+            ) : resultCount === undefined ? null : (
+              <>
+                <strong className="font-semibold text-slate-800">{resultCount.toLocaleString()}</strong>
+                {resultCount === 1 ? ' bug' : ' bugs'}
+                {isFiltered && hidden > 0 && <> · {hidden.toLocaleString()} hidden by filters</>}
+              </>
+            )}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

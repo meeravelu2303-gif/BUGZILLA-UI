@@ -13,6 +13,16 @@ const envSchema = z.object({
     .default('false')
     .transform((v) => v === 'true'),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  /**
+   * How long (ms) to reuse the per-user category index and dashboard stats
+   * before recomputing them from Bugzilla.
+   *
+   * Both are derived by asking Bugzilla which bug ids match each category, which
+   * is four searches over the whole product - cheap to reuse, wasteful to repeat
+   * on every list page. Kept short so a newly filed bug appears promptly; set to
+   * 0 to disable caching entirely (useful when debugging against a live bench run).
+   */
+  STATS_CACHE_TTL_MS: z.coerce.number().int().min(0).default(60_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

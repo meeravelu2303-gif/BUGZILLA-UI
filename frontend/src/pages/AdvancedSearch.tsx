@@ -1,154 +1,113 @@
-import { RotateCcw, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useMeta, useProducts } from '../api/hooks';
+import { RotateCcw } from 'lucide-react';
+import { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useBugCounts, useBugStats, useBugs, useMeta, useProducts } from '../api/hooks';
+import { BugTable } from '../components/bugs/BugTable';
+import { FilterBar } from '../components/bugs/FilterBar';
+import { Pagination } from '../components/bugs/Pagination';
 import { Button } from '../components/ui/Button';
 import { Card, CardBody } from '../components/ui/Card';
-import { Input, Select } from '../components/ui/Field';
+import { Input } from '../components/ui/Field';
 import { PageHeader } from '../components/ui/PageHeader';
-import { buildQuery } from '../api/client';
+import { useBugFilters } from '../lib/useBugFilters';
 
-interface SearchForm {
-  search: string;
-  product: string;
-  component: string;
-  status: string;
-  severity: string;
-  priority: string;
-  assignedTo: string;
-  creator: string;
-}
+const LIMIT = 20;
 
-const EMPTY: SearchForm = {
-  search: '',
-  product: '',
-  component: '',
-  status: '',
-  severity: '',
-  priority: '',
-  assignedTo: '',
-  creator: '',
-};
-
+/**
+ * Advanced Search is the same list, the same filter bar and the same URL
+ * contract as /bugs - it just adds the person-scoped fields that do not belong
+ * in the main facet row. Deliberately not a second filter implementation: two
+ * would drift from each other and from the API.
+ */
 export function AdvancedSearch() {
-  const navigate = useNavigate();
   const { data: meta } = useMeta();
   const { data: productsData } = useProducts();
-  const [form, setForm] = useState<SearchForm>(EMPTY);
+  const [params, setParams] = useSearchParams();
 
-  const components = useMemo(() => {
-    const product = productsData?.products.find((p) => p.name === form.product);
-    return product?.components.map((c) => c.name) ?? [];
-  }, [productsData, form.product]);
+  const controller = useBugFilters({ sortBy: 'importance', sortDir: 'asc' });
+  const { queryParams, sortBy, sortDir, toggleSort, offset, setOffset, clearAll } = controller;
 
-  function set<K extends keyof SearchForm>(key: K, value: string) {
-    setForm((prev) => {
-      const next = { ...prev, [key]: value };
-      if (key === 'product') next.component = '';
-      return next;
-    });
+  const assignedTo = params.get('assignedTo') ?? '';
+  const creator = params.get('creator') ?? '';
+
+  function setPerson(key: 'assignedTo' | 'creator', value: string) {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    next.delete('offset');
+    setParams(next, { replace: true });
   }
 
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const params = buildQuery({ ...form });
-    navigate(`/bugs${params}`);
+  const scoped = useMemo(() => {
+    const out = { ...queryParams };
+    if (assignedTo) out.assignedTo = assignedTo;
+    if (creator) out.creator = creator;
+    return out;
+  }, [queryParams, assignedTo, creator]);
+
+  const query = useMemo(() => ({ ...scoped, limit: LIMIT, offset, sortBy, sortDir }), [scoped, offset, sortBy, sortDir]);
+
+  const { data, isLoading, isFetching } = useBugs(query);
+  const { data: scopedCount } = useBugCounts(scoped);
+  const { data: totalCount } = useBugCounts({});
+  const { data: stats } = useBugStats();
+
+  function resetAll() {
+    clearAll();
+    const next = new URLSearchParams();
+    setParams(next, { replace: true });
   }
 
   return (
-    <div className="mx-auto max-w-[1000px] px-4 py-8 sm:px-8">
-      <PageHeader
-        title="Advanced Search"
-        description="Combine any number of criteria to build a precise query, then open the results in the bug list."
-        crumbs={[{ label: 'Bugs', to: '/bugs' }, { label: 'Advanced Search' }]}
-      />
+    <div className="mx-auto max-w-[1600px] px-8 py-8">
+      <PageHeader title="Advanced Search" description="Every axis at once — the resulting URL is the shareable query." />
 
-      <Card>
-        <form onSubmit={onSubmit}>
-          <CardBody className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Input
-                label="Summary contains"
-                value={form.search}
-                onChange={(e) => set('search', e.target.value)}
-                placeholder="e.g. login timeout"
-              />
-            </div>
-
-            <Select label="Product" placeholder="Any product" value={form.product} onChange={(e) => set('product', e.target.value)}>
-              {productsData?.products.map((p) => (
-                <option key={p.id} value={p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-
-            <Select
-              label="Component"
-              placeholder={form.product ? 'Any component' : 'Select a product first'}
-              value={form.component}
-              onChange={(e) => set('component', e.target.value)}
-              disabled={!form.product}
-            >
-              {components.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
-
-            <Select label="Status" placeholder="Any status" value={form.status} onChange={(e) => set('status', e.target.value)}>
-              {meta?.statuses.map((s) => (
-                <option key={s} value={s}>
-                  {s.replace('_', ' ')}
-                </option>
-              ))}
-            </Select>
-
-            <Select label="Severity" placeholder="Any severity" value={form.severity} onChange={(e) => set('severity', e.target.value)}>
-              {meta?.severities.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
-
-            <Select label="Priority" placeholder="Any priority" value={form.priority} onChange={(e) => set('priority', e.target.value)}>
-              {meta?.priorities.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </Select>
-
-            <div className="hidden sm:block" />
-
+      <Card className="mt-6">
+        <CardBody>
+          <div className="flex flex-wrap items-end gap-3">
             <Input
-              label="Assignee email"
-              type="email"
-              value={form.assignedTo}
-              onChange={(e) => set('assignedTo', e.target.value)}
+              label="Assignee"
               placeholder="name@example.com"
+              defaultValue={assignedTo}
+              onBlur={(e) => setPerson('assignedTo', e.target.value.trim())}
+              className="w-64"
             />
-
             <Input
-              label="Reporter email"
-              type="email"
-              value={form.creator}
-              onChange={(e) => set('creator', e.target.value)}
+              label="Reporter"
               placeholder="name@example.com"
+              defaultValue={creator}
+              onBlur={(e) => setPerson('creator', e.target.value.trim())}
+              className="w-64"
             />
-          </CardBody>
-
-          <div className="flex items-center justify-end gap-2 border-t border-white/30 px-5 py-4">
-            <Button type="button" variant="secondary" onClick={() => setForm(EMPTY)}>
-              <RotateCcw className="h-4 w-4" /> Reset
-            </Button>
-            <Button type="submit">
-              <Search className="h-4 w-4" /> Search
+            <Button variant="ghost" onClick={resetAll} className="mb-0.5">
+              <RotateCcw className="h-4 w-4" aria-hidden /> Reset everything
             </Button>
           </div>
-        </form>
+        </CardBody>
+      </Card>
+
+      <Card className="mt-4">
+        <FilterBar
+          controller={controller}
+          meta={meta}
+          products={productsData?.products}
+          stats={stats}
+          resultCount={scopedCount?.counts.total}
+          totalCount={totalCount?.counts.total}
+          isLoading={isLoading}
+        />
+        <div className={isFetching && !isLoading ? 'opacity-60 transition-opacity' : undefined}>
+          <BugTable bugs={data?.bugs ?? []} isLoading={isLoading} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+        </div>
+        {data && (data.bugs.length > 0 || offset > 0) && (
+          <Pagination
+            offset={offset}
+            hasMore={data.pageInfo.hasMore}
+            count={data.bugs.length}
+            onPrev={() => setOffset(Math.max(0, offset - LIMIT))}
+            onNext={() => setOffset(offset + LIMIT)}
+          />
+        )}
       </Card>
     </div>
   );

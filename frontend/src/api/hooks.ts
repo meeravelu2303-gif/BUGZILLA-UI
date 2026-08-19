@@ -1,19 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, buildQuery } from './client';
+import type { BugQueryParams } from '../lib/useBugFilters';
 import type {
   AdminGroup,
   AdminUser,
   AuthUser,
   BugCounts,
   BugDetailResponse,
+  BugStats,
   BugListResponse,
   BugMeta,
-  CountBugsParams,
   CreateBugInput,
   CreateComponentInput,
   CreateProductInput,
   CreateUserInput,
-  ListBugsParams,
   Product,
   UpdateBugInput,
   UpdateProductInput,
@@ -70,10 +70,10 @@ export function useProducts() {
   });
 }
 
-export function useBugs(params: ListBugsParams) {
+export function useBugs(params: BugQueryParams) {
   return useQuery({
     queryKey: ['bugs', params],
-    queryFn: () => api.get<BugListResponse>(`/bugs${buildQuery(params as Record<string, string | number | undefined>)}`),
+    queryFn: () => api.get<BugListResponse>(`/bugs${buildQuery(params)}`),
     placeholderData: (prev) => prev,
   });
 }
@@ -83,10 +83,23 @@ export function useBugs(params: ListBugsParams) {
  * useBugs is capped at 200 server-side - counting its results understates the
  * real number as soon as there are more bugs than one page.
  */
-export function useBugCounts(params: CountBugsParams = {}) {
+export function useBugCounts(params: BugQueryParams = {}) {
   return useQuery({
     queryKey: ['bugs', 'count', params],
-    queryFn: () => api.get<{ counts: BugCounts }>(`/bugs/count${buildQuery(params as Record<string, string | number | undefined>)}`),
+    queryFn: () => api.get<{ counts: BugCounts }>(`/bugs/count${buildQuery(params)}`),
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Every dashboard and report breakdown in one request: counts by severity, by
+ * category, by component, and the severity x category matrix. Computed
+ * server-side so drawing a chart never costs 1,283 bug records.
+ */
+export function useBugStats(params: BugQueryParams = {}) {
+  return useQuery({
+    queryKey: ['bugs', 'stats', params],
+    queryFn: () => api.get<BugStats>(`/bugs/stats${buildQuery(params)}`),
     staleTime: 30 * 1000,
   });
 }

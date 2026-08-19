@@ -6,6 +6,15 @@ export interface UserRef {
 
 export interface Bug {
   id: number;
+  /**
+   * The two-axis classification, computed by the backend on both list and
+   * detail responses. Named `triage` rather than `classification` because
+   * `classification` below is Bugzilla's own product-classification string.
+   */
+  triage?: Classification;
+  /** Detail responses only - the list deliberately does not carry grouping. */
+  grouping?: Grouping;
+  facts?: DescriptionFacts;
   alias: string[];
   summary: string;
   status: string;
@@ -239,4 +248,97 @@ export interface UpdateBugInput {
   assignedTo?: string;
   targetMilestone?: string;
   whiteboard?: string;
+}
+
+// ---- Two-axis classification (mirrors backend/src/lib/classification.ts) ----
+
+export const SEVERITIES = ['Critical', 'Major', 'Minor', 'Trivial', 'Unclassified'] as const;
+export type Severity = (typeof SEVERITIES)[number];
+
+export const PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'Unclassified'] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+export const CATEGORIES = ['Functional', 'Performance', 'Security', 'Compatibility', 'Unclassified'] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+/** Severity paired with its priority, per the classification model. */
+export const PRIORITY_FOR_SEVERITY: Record<Severity, Priority> = {
+  Critical: 'P0',
+  Major: 'P1',
+  Minor: 'P2',
+  Trivial: 'P3',
+  Unclassified: 'Unclassified',
+};
+
+export const SEVERITY_MEANING: Record<Severity, string> = {
+  Critical: 'System crash, severe data loss, or total feature blockade with no workaround',
+  Major: 'Significant loss of core functionality; a difficult workaround may exist',
+  Minor: 'Small functional failure or limitation that does not impair basic operations',
+  Trivial: 'Cosmetic — minor UI misalignment, spelling error, or visual glitch',
+  Unclassified: 'Filed with a severity outside the classification model',
+};
+
+export const CATEGORY_MEANING: Record<Category, string> = {
+  Functional: 'Incorrect output, logic failure, or a broken workflow',
+  Performance: 'Slow responses, excessive resource use, or degradation under stress',
+  Security: 'Vulnerability, data leak, or authorization flaw',
+  Compatibility: 'Behaviour specific to certain clients, versions, devices or environments',
+  Unclassified: 'No category tag, and no recognised classification in the description',
+};
+
+export interface Classification {
+  severity: Severity;
+  priority: Priority;
+  category: Category;
+  /** The bench's finer-grained flaw label, e.g. "Security/Access Control". */
+  classification: string | null;
+  tier: number | null;
+}
+
+export interface AffectedEndpoint {
+  method: string;
+  path: string;
+  module: string;
+  occurrences: number;
+}
+
+/** Grouping is absent on bugs filed before the bench grouped them - hence the nulls. */
+export interface Grouping {
+  occurrences: number | null;
+  endpointCount: number | null;
+  affectedEndpoints: AffectedEndpoint[];
+  truncated: boolean;
+  isGrouped: boolean;
+}
+
+export interface DescriptionFacts {
+  classification: string | null;
+  endpoint: string | null;
+  module: string | null;
+  owner: string | null;
+  environment: string | null;
+  grouping: Grouping;
+}
+
+export interface BugStats {
+  total: number;
+  open: number;
+  resolved: number;
+  bySeverity: Record<Severity, number>;
+  byCategory: Record<Category, number>;
+  byComponent: Record<string, number>;
+  matrix: Record<Severity, Record<Category, number>>;
+  cachedAt: string;
+}
+
+/** The URL/query contract shared by every list view. Arrays are repeated params. */
+export interface BugFilters {
+  severity: Severity[];
+  priority: Priority[];
+  category: Category[];
+  product: string[];
+  component: string[];
+  status: string[];
+  tier: number[];
+  search: string;
 }

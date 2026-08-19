@@ -2,7 +2,18 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { Env } from '../config/env';
 import { requireAuth } from '../middleware/auth';
+import { getCategoryIndex } from '../lib/categoryIndex';
+import {
+  CATEGORIES,
+  SEVERITIES,
+  classify,
+  toBugzillaQuery,
+  type BugFilters,
+  type Category,
+  type Severity,
+} from '../lib/classification';
 import { AppError } from '../lib/errors';
+import { parseDescription } from '../lib/grouping';
 import { parseInput } from '../lib/validate';
 import {
   addCommentSchema,
@@ -21,6 +32,23 @@ import {
 } from '../schemas/bug';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/** The narrow projection /stats asks Bugzilla for - never whole bug records. */
+interface StatsRow {
+  id: number;
+  severity: string;
+  priority: string;
+  status: string;
+  component: string;
+  product: string;
+  whiteboard?: string;
+  is_open: boolean;
+}
+
+/** A counter object with every key present at zero, so absent bands still render. */
+function zeroed<T extends readonly string[]>(keys: T): Record<T[number], number> {
+  return Object.fromEntries(keys.map((k) => [k, 0])) as Record<T[number], number>;
+}
 
 /**
  * Maps the sort keys this API exposes onto the column names Bugzilla's `order`
@@ -93,30 +121,12 @@ const CAMEL_TO_BUGZILLA_UPDATE: Record<string, string> = {
 };
 
 /**
- * Translates this BFF's camelCase filter names into Bugzilla's own search
- * parameters. Shared by the list and count endpoints so the two always agree on
- * what a given filter means - a count that filtered differently from the list
- * it sits above would be worse than no count at all.
+ * Filters are translated by lib/classification.ts, which owns the vocabulary in
+ * both directions. Shared by the list, count and stats endpoints so a count can
+ * never disagree with the list it sits above.
  */
-function applyBugFilters(
-  params: Record<string, string | number>,
-  query: Partial<
-    Record<
-      'product' | 'component' | 'status' | 'severity' | 'priority' | 'assignedTo' | 'creator' | 'cc' | 'search' | 'whiteboard',
-      string
-    >
-  >
-): void {
-  if (query.product) params.product = query.product;
-  if (query.component) params.component = query.component;
-  if (query.status) params.bug_status = query.status;
-  if (query.severity) params.severity = query.severity;
-  if (query.priority) params.priority = query.priority;
-  if (query.assignedTo) params.assigned_to = query.assignedTo;
-  if (query.creator) params.creator = query.creator;
-  if (query.cc) params.cc = query.cc;
-  if (query.search) params.summary = query.search;
-  if (query.whiteboard) params.whiteboard = query.whiteboard;
+function applyBugFilters(params: Record<string, unknown>, query: BugFilters): void {
+  Object.assign(params, toBugzillaQuery(query));
 }
 
 export function bugsRouter(env: Env): Router {
@@ -155,8 +165,27 @@ export function bugsRouter(env: Env): Router {
       const hasMore = raw.bugs.length > query.limit;
       const page = raw.bugs.slice(0, query.limit).map((b) => normalizeBug(rawBugSchema.parse(b)));
 
+      /*
+       * Category needs the description, which a bug search never returns, so it
+       * comes from the cached per-user id index instead of one comment fetch per
+       * row. Severity/priority come straight off the bug. If the index cannot be
+       * built the list still renders - rows degrade to Unclassified rather than
+       * the whole page failing over a breakdown that is decoration here.
+       */
+      const index = await getCategoryIndex(req.bugzilla!, req.sessionUser!.bzUserId, env.STATS_CACHE_TTL_MS).catch(
+        () => null
+      );
+
+      const bugs = page.map((bug) => ({
+        ...bug,
+        triage: {
+          ...classify({ severity: bug.severity, priority: bug.priority, whiteboard: bug.whiteboard }),
+          category: index?.categoryOf(bug.id) ?? 'Unclassified',
+        },
+      }));
+
       res.json({
-        bugs: page,
+        bugs,
         pageInfo: { limit: query.limit, offset: query.offset, hasMore },
       });
     } catch (err) {
@@ -191,6 +220,66 @@ export function bugsRouter(env: Env): Router {
     }
   });
 
+  /*
+   * GET /api/bugs/stats - every dashboard/report breakdown in one call.
+   *
+   * Registered before '/:id' so the literal path wins the match.
+   *
+   * Deliberately not one query per cell: a severity x category matrix is 16
+   * cells, and asking Bugzilla 16 times would make the dashboard the slowest
+   * page in the app. Instead this is *one* search returning four fields for
+   * every matching bug, joined against the cached per-user category index -
+   * five upstream calls on a cold cache, one on a warm one, regardless of how
+   * many cells the matrix has.
+   */
+  router.get('/stats', auth, async (req, res, next) => {
+    try {
+      const query = parseInput(countBugsQuerySchema, req.query);
+
+      const params: Record<string, unknown> = {
+        limit: 0,
+        include_fields: 'id,severity,priority,status,component,product,whiteboard,is_open',
+      };
+      applyBugFilters(params, query);
+
+      const [raw, index] = await Promise.all([
+        req.bugzilla!.get<{ bugs: StatsRow[] }>('/bug', params as Record<string, string | number>),
+        getCategoryIndex(req.bugzilla!, req.sessionUser!.bzUserId, env.STATS_CACHE_TTL_MS),
+      ]);
+
+      const bySeverity = zeroed(SEVERITIES);
+      const byCategory = zeroed(CATEGORIES);
+      const byComponent: Record<string, number> = {};
+      const matrix = Object.fromEntries(
+        SEVERITIES.map((s) => [s, zeroed(CATEGORIES)])
+      ) as Record<Severity, Record<Category, number>>;
+
+      let open = 0;
+      for (const row of raw.bugs) {
+        const { severity } = classify({ severity: row.severity, priority: row.priority, whiteboard: row.whiteboard });
+        const category = index.categoryOf(row.id);
+        bySeverity[severity] += 1;
+        byCategory[category] += 1;
+        matrix[severity][category] += 1;
+        byComponent[row.component] = (byComponent[row.component] ?? 0) + 1;
+        if (row.is_open) open += 1;
+      }
+
+      res.json({
+        total: raw.bugs.length,
+        open,
+        resolved: raw.bugs.length - open,
+        bySeverity,
+        byCategory,
+        byComponent,
+        matrix,
+        cachedAt: new Date(index.builtAt).toISOString(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // GET /api/bugs/:id
   router.get('/:id', auth, async (req, res, next) => {
     try {
@@ -211,7 +300,25 @@ export function bugsRouter(env: Env): Router {
       const rawAttachments = attachmentResp.bugs[String(id)] ?? [];
       const attachments = rawAttachments.map((a) => normalizeAttachment(rawAttachmentSchema.parse(a)));
 
-      res.json({ bug: { ...bug, description }, comments, attachments });
+      /*
+       * The detail view has the description in hand, so classification and the
+       * grouping block are both resolved directly here - no category index, and
+       * no regex in the browser. A bug filed before grouping existed returns an
+       * explicit empty shape (isGrouped false, endpoints []), never a partial one.
+       */
+      const facts = parseDescription(description);
+      const classification = classify({
+        severity: bug.severity,
+        priority: bug.priority,
+        whiteboard: bug.whiteboard,
+        description,
+      });
+
+      res.json({
+        bug: { ...bug, description, triage: classification, grouping: facts.grouping, facts },
+        comments,
+        attachments,
+      });
     } catch (err) {
       next(err);
     }

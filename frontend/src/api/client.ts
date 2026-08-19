@@ -38,10 +38,19 @@ export const api = {
   patch: <T>(path: string, data?: unknown) => request<T>(path, { method: 'PATCH', body: data !== undefined ? JSON.stringify(data) : undefined }),
 };
 
-export function buildQuery(params: Record<string, string | number | undefined>): string {
+/**
+ * Array values become repeated keys (`?severity=Critical&severity=Major`),
+ * which is how multi-select within one axis is expressed end to end: the
+ * backend's Zod schema accepts repeats, and Bugzilla ORs them together.
+ */
+export function buildQuery(params: Record<string, string | number | string[] | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === '') continue;
+    if (Array.isArray(value)) {
+      for (const v of value) if (v !== '') search.append(key, String(v));
+      continue;
+    }
     search.set(key, String(value));
   }
   const qs = search.toString();

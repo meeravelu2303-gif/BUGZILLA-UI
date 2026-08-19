@@ -1,77 +1,108 @@
-import { UserCheck, PencilLine, Eye } from 'lucide-react';
-import { useState } from 'react';
-import { useBugs, useMe } from '../api/hooks';
+import { Eye, PencilLine, UserCircle2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useBugCounts, useBugStats, useBugs, useMe, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
+import { FilterBar } from '../components/bugs/FilterBar';
+import { Pagination } from '../components/bugs/Pagination';
 import { Card } from '../components/ui/Card';
-import { PageHeader } from '../components/ui/PageHeader';
-import type { ListBugsParams } from '../types';
 import { cn } from '../lib/utils';
+import { useBugFilters } from '../lib/useBugFilters';
+
+const LIMIT = 20;
 
 type TabId = 'assigned' | 'reported' | 'cc';
 
-const TABS: { id: TabId; label: string; icon: typeof UserCheck }[] = [
-  { id: 'assigned', label: 'Assigned to me', icon: UserCheck },
+const TABS: { id: TabId; label: string; icon: typeof UserCircle2 }[] = [
+  { id: 'assigned', label: 'Assigned to me', icon: UserCircle2 },
   { id: 'reported', label: 'Reported by me', icon: PencilLine },
   { id: 'cc', label: "I'm on CC", icon: Eye },
 ];
 
 export function MyBugs() {
   const { data: me } = useMe();
-  const email = me?.user.email ?? '';
-  const [tab, setTab] = useState<TabId>('assigned');
-  // Opens in triage order - tier (component criticality), then severity, then
-  // priority - so the work that matters most is at the top without sorting for it.
-  // Any column header still switches to a plain single-column sort.
-  const [sortBy, setSortBy] = useState('importance');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const { data: meta } = useMeta();
+  const { data: productsData } = useProducts();
+  const [params, setParams] = useSearchParams();
 
-  const base: ListBugsParams = { limit: 100, offset: 0, sortBy, sortDir };
-  const query: ListBugsParams =
-    tab === 'assigned'
-      ? { ...base, assignedTo: email }
-      : tab === 'reported'
-        ? { ...base, creator: email }
-        : { ...base, cc: email };
+  const tab = (params.get('tab') as TabId) ?? 'assigned';
+  const email = me?.user.email ?? '';
+
+  /*
+   * The same filter controller and URL contract as the bug list - MyBugs is the
+   * same table with one extra scoping clause, not a second implementation.
+   */
+  const controller = useBugFilters({ sortBy: 'importance', sortDir: 'asc' });
+  const { queryParams, sortBy, sortDir, toggleSort, offset, setOffset } = controller;
+
+  /** The tab is a scope, not a filter, so it is applied on top of the shared params. */
+  const scope = useMemo(
+    () => (tab === 'assigned' ? { assignedTo: email } : tab === 'reported' ? { creator: email } : { cc: email }),
+    [tab, email]
+  );
+
+  const scoped = useMemo(() => ({ ...queryParams, ...scope }), [queryParams, scope]);
+  const query = useMemo(() => ({ ...scoped, limit: LIMIT, offset, sortBy, sortDir }), [scoped, offset, sortBy, sortDir]);
 
   const { data, isLoading, isFetching } = useBugs(query);
+  const { data: scopedCount } = useBugCounts(scoped);
+  const { data: tabTotal } = useBugCounts(scope);
+  const { data: stats } = useBugStats();
 
-  function onSort(key: string) {
-    if (sortBy === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else {
-      setSortBy(key);
-      setSortDir('asc');
-    }
+  function setTab(next: TabId) {
+    const p = new URLSearchParams(params);
+    p.set('tab', next);
+    p.delete('offset');
+    setParams(p, { replace: true });
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-8">
-      <PageHeader title="My Bugs" description="Everything that lands on your desk — assigned, reported, or watched." />
+    <div className="mx-auto max-w-[1600px] px-8 py-8">
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900">My Bugs</h1>
+        <p className="mt-1 text-sm text-slate-600">Everything that lands on your desk — assigned, reported, or watched.</p>
+      </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {TABS.map((t) => (
+        {TABS.map(({ id, label, icon: Icon }) => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={id}
+            onClick={() => setTab(id)}
+            aria-pressed={tab === id}
             className={cn(
               'focus-ring inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors',
-              tab === t.id
-                ? 'bg-gradient-to-b from-brand-700 to-brand-800 text-white shadow-glass'
-                : 'glass-surface text-slate-600 hover:text-slate-900'
+              tab === id ? 'bg-brand-700 text-white' : 'bg-white/70 text-slate-700 hover:bg-white'
             )}
           >
-            <t.icon className="h-4 w-4" />
-            {t.label}
-            {tab === t.id && data && (
-              <span className="rounded-full bg-white/25 px-1.5 text-xs tabular-nums">{data.bugs.length}</span>
-            )}
+            <Icon className="h-4 w-4" aria-hidden />
+            {label}
+            {tab === id && tabTotal && <span className="font-mono text-xs opacity-90">{tabTotal.counts.total}</span>}
           </button>
         ))}
       </div>
 
       <Card>
-        <div className={isFetching && !isLoading ? 'opacity-60 transition-opacity' : ''}>
-          <BugTable bugs={data?.bugs ?? []} isLoading={isLoading} sortBy={sortBy} sortDir={sortDir} onSort={onSort} />
+        <FilterBar
+          controller={controller}
+          meta={meta}
+          products={productsData?.products}
+          stats={stats}
+          resultCount={scopedCount?.counts.total}
+          totalCount={tabTotal?.counts.total}
+          isLoading={isLoading}
+        />
+        <div className={isFetching && !isLoading ? 'opacity-60 transition-opacity' : undefined}>
+          <BugTable bugs={data?.bugs ?? []} isLoading={isLoading} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
         </div>
+        {data && (data.bugs.length > 0 || offset > 0) && (
+          <Pagination
+            offset={offset}
+            hasMore={data.pageInfo.hasMore}
+            count={data.bugs.length}
+            onPrev={() => setOffset(Math.max(0, offset - LIMIT))}
+            onNext={() => setOffset(offset + LIMIT)}
+          />
+        )}
       </Card>
     </div>
   );
