@@ -12,17 +12,20 @@ export function adminUsersRouter(env: Env): Router {
   const gate = [requireAuth(env), requirePermission('canManageUsers')];
 
   // GET /api/admin/users?search=
-  // Bugzilla's User.get requires a match term — it has no "list everyone" call.
-  // With no search we match on "@", which every email-based login contains, to
-  // approximate the full list; a real search term narrows it. include_disabled
-  // is set so the admin can see (and re-enable) disabled accounts too.
+  // Bugzilla's User.get requires a match term — it has no "list everyone" call, and — verified
+  // against this instance — it returns nothing for a punctuation-only term like "@". So an
+  // org-email token (BUGZILLA_USER_MATCH, default "kpost") lists everyone; a real search term
+  // narrows it. include_disabled lets the admin see (and re-enable) disabled accounts;
+  // groups_membership returns each user's groups so the UI can filter by product access (a
+  // product's access is granted through group membership).
   router.get('/', ...gate, async (req, res, next) => {
     try {
       const { search } = parseInput(listUsersQuerySchema, req.query);
-      const term = search?.trim() ? search.trim() : '@';
+      const term = search?.trim() ? search.trim() : process.env.BUGZILLA_USER_MATCH || 'kpost';
       const resp = await req.bugzilla!.get<{ users: unknown[] }>('/user', {
         match: term,
         include_disabled: 1,
+        groups_membership: 1,
         limit: 500,
       });
       const users = resp.users

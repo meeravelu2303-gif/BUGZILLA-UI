@@ -29,8 +29,6 @@ const COLUMNS: Column[] = [
   { key: 'severity', label: 'Severity', sortable: true, className: 'w-32' },
   { key: 'priority', label: 'Priority', sortable: true, className: 'w-24' },
   { key: 'category', label: 'Category', className: 'w-36' },
-  { key: 'occurrences', label: 'Occur.', className: 'w-20', numeric: true },
-  { key: 'endpoints', label: 'Endpoints', className: 'w-24', numeric: true },
   { key: 'status', label: 'Status', sortable: true, className: 'w-28' },
   { key: 'assigned_to', label: 'Assignee', sortable: true, className: 'w-40' },
   { key: 'last_change_time', label: 'Changed', sortable: true, className: 'w-24' },
@@ -170,12 +168,6 @@ export function BugTable({
                     <td className="px-3 py-2.5">{triage && <SeverityPill severity={triage.severity} />}</td>
                     <td className="px-3 py-2.5">{triage && <PriorityPill priority={triage.priority} />}</td>
                     <td className="px-3 py-2.5">{triage && <CategoryPill category={triage.category} />}</td>
-                    <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-700">
-                      {group?.occurrences ?? <span className="text-slate-400">—</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-700">
-                      {group?.endpointCount ?? <span className="text-slate-400">—</span>}
-                    </td>
                     <td className="px-3 py-2.5">
                       <StatusPill status={bug.status} />
                     </td>
