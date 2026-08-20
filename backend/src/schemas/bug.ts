@@ -220,8 +220,6 @@ export const listBugsQuerySchema = z.object({
   product: repeatable(facetValue),
   component: repeatable(facetValue),
   status: repeatable(facetValue),
-  /** Business tier of the affected module, from the `[tierN]` whiteboard tag. */
-  tier: repeatable(z.coerce.number().int().min(1).max(9)),
 
   // --- single-valued filters ---
   assignedTo: z.string().optional(),
@@ -246,7 +244,6 @@ export const countBugsQuerySchema = listBugsQuerySchema.pick({
   severity: true,
   priority: true,
   category: true,
-  tier: true,
   assignedTo: true,
   creator: true,
   cc: true,
@@ -328,6 +325,15 @@ export const updateBugSchema = z
     whiteboard: z.string().optional(),
   })
   .refine((obj) => Object.keys(obj).length > 0, { message: 'At least one field must be provided' });
+
+/**
+ * Bulk reassignment: one assignee applied to many bugs at once. Bugzilla's `Bug.update` accepts
+ * an id array, so this maps to a single REST call. Capped at 500 to stay within one request.
+ */
+export const bulkReassignSchema = z.object({
+  ids: z.array(z.coerce.number().int().positive()).min(1).max(500),
+  assignedTo: z.string().email(),
+});
 
 export type UpdateBugInput = z.infer<typeof updateBugSchema>;
 

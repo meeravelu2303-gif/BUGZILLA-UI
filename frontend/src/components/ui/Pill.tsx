@@ -129,7 +129,7 @@ export function CategoryPill({ category, className }: { category: Category; clas
   );
 }
 
-/* --------------------------------------------------- status / tier (unchanged axes) */
+/* --------------------------------------------------- status */
 
 export const STATUS_TONE: Record<string, Tone> = {
   UNCONFIRMED: 'slate',
@@ -141,18 +141,6 @@ export const STATUS_TONE: Record<string, Tone> = {
 
 export function StatusPill({ status }: { status: string }) {
   return <Pill tone={STATUS_TONE[status] ?? 'slate'}>{status.replace('_', ' ')}</Pill>;
-}
-
-/** Tier 1 is the most business-critical module, so it reads as heavily as a blocker. */
-export const TIER_TONE: Record<number, Tone> = { 1: 'rose', 2: 'orange', 3: 'sky' };
-
-export function TierPill({ tier }: { tier: number | null }) {
-  if (tier === null) return null;
-  return (
-    <Pill tone={TIER_TONE[tier] ?? 'slate'} title={`Business tier ${tier} of the affected module`}>
-      Tier {tier}
-    </Pill>
-  );
 }
 
 /**

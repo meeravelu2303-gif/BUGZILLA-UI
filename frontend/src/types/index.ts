@@ -217,7 +217,7 @@ export interface ListBugsParams {
   creator?: string;
   cc?: string;
   search?: string;
-  /** Substring match on the Status Whiteboard, e.g. "tier1" for the tier filter. */
+  /** Substring match on the Status Whiteboard, e.g. "cat:Security". */
   whiteboard?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
@@ -292,7 +292,6 @@ export interface Classification {
   category: Category;
   /** The bench's finer-grained flaw label, e.g. "Security/Access Control". */
   classification: string | null;
-  tier: number | null;
 }
 
 export interface AffectedEndpoint {
@@ -339,6 +338,5 @@ export interface BugFilters {
   product: string[];
   component: string[];
   status: string[];
-  tier: number[];
   search: string;
 }

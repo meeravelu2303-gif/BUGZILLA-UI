@@ -5,7 +5,7 @@ import { bugDisplayId, cn, timeAgo } from '../../lib/utils';
 import type { Bug } from '../../types';
 import { Avatar } from '../ui/Avatar';
 import { EmptyState } from '../ui/EmptyState';
-import { CategoryPill, PriorityPill, SeverityPill, StatusPill, TierPill } from '../ui/Pill';
+import { CategoryPill, PriorityPill, SeverityPill, StatusPill } from '../ui/Pill';
 import { TableSkeleton } from '../ui/Skeleton';
 
 interface Column {
@@ -20,7 +20,7 @@ interface Column {
 /*
  * `severity` sorts on Bugzilla's bug_severity sortkey, which ranks
  * blocker->trivial rather than sorting the words alphabetically. `importance`
- * (the default) is the composite triage order: tier, then severity, then priority.
+ * (the default) is the composite triage order: severity, then priority.
  */
 const COLUMNS: Column[] = [
   { key: 'id', label: 'ID', sortable: true, className: 'w-24' },
@@ -29,7 +29,6 @@ const COLUMNS: Column[] = [
   { key: 'severity', label: 'Severity', sortable: true, className: 'w-32' },
   { key: 'priority', label: 'Priority', sortable: true, className: 'w-24' },
   { key: 'category', label: 'Category', className: 'w-36' },
-  { key: 'status_whiteboard', label: 'Tier', sortable: true, className: 'w-20' },
   { key: 'occurrences', label: 'Occur.', className: 'w-20', numeric: true },
   { key: 'endpoints', label: 'Endpoints', className: 'w-24', numeric: true },
   { key: 'status', label: 'Status', sortable: true, className: 'w-28' },
@@ -43,12 +42,20 @@ export function BugTable({
   sortBy,
   sortDir,
   onSort,
+  selection,
 }: {
   bugs: Bug[];
   isLoading: boolean;
   sortBy: string;
   sortDir: 'asc' | 'desc';
   onSort: (key: string) => void;
+  /** When provided, renders a selection checkbox column for bulk actions. */
+  selection?: {
+    selectedIds: Set<number>;
+    onToggle: (id: number) => void;
+    onToggleAll: () => void;
+    allOnPageSelected: boolean;
+  };
 }) {
   const [expanded, setExpanded] = useState<number | null>(null);
 
@@ -61,6 +68,17 @@ export function BugTable({
       <table className="w-full border-collapse text-left text-sm">
         <thead className="sticky top-0 z-10">
           <tr className="border-b border-white/40 bg-white/85 text-xs font-medium uppercase tracking-wide text-slate-700 backdrop-blur-md">
+            {selection && (
+              <th scope="col" className="w-10 px-3 py-3">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus-ring"
+                  checked={selection.allOnPageSelected}
+                  onChange={selection.onToggleAll}
+                  aria-label="Select all bugs on this page"
+                />
+              </th>
+            )}
             <th scope="col" className="w-8 px-2 py-3">
               <span className="sr-only">Expand row</span>
             </th>
@@ -95,7 +113,7 @@ export function BugTable({
         <tbody>
           {isLoading ? null : bugs.length === 0 ? (
             <tr>
-              <td colSpan={COLUMNS.length + 1}>
+              <td colSpan={COLUMNS.length + 1 + (selection ? 1 : 0)}>
                 <EmptyState icon={BugIcon} title="No bugs match these filters" description="Try removing a filter, or clear them all." />
               </td>
             </tr>
@@ -109,6 +127,17 @@ export function BugTable({
               return (
                 <Fragment key={bug.id}>
                   <tr className="border-b border-white/30 align-middle transition-colors last:border-0 hover:bg-white/60">
+                    {selection && (
+                      <td className="px-3 py-2.5">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus-ring"
+                          checked={selection.selectedIds.has(bug.id)}
+                          onChange={() => selection.onToggle(bug.id)}
+                          aria-label={`Select ${bugDisplayId(bug)}`}
+                        />
+                      </td>
+                    )}
                     <td className="px-2 py-2.5">
                       {canExpand && (
                         <button
@@ -141,7 +170,6 @@ export function BugTable({
                     <td className="px-3 py-2.5">{triage && <SeverityPill severity={triage.severity} />}</td>
                     <td className="px-3 py-2.5">{triage && <PriorityPill priority={triage.priority} />}</td>
                     <td className="px-3 py-2.5">{triage && <CategoryPill category={triage.category} />}</td>
-                    <td className="px-3 py-2.5">{triage && <TierPill tier={triage.tier} />}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs text-slate-700">
                       {group?.occurrences ?? <span className="text-slate-400">—</span>}
                     </td>
@@ -164,6 +192,7 @@ export function BugTable({
 
                   {isOpen && (
                     <tr className="border-b border-white/30 bg-slate-50/70">
+                      {selection && <td />}
                       <td />
                       <td colSpan={COLUMNS.length} className="px-3 py-3">
                         <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-700">

@@ -62,6 +62,20 @@ export function useMeta() {
   });
 }
 
+export interface AssignableUser {
+  email: string;
+  name: string;
+}
+
+/** The people a bug can be reassigned to — populates the Assignee dropdown. */
+export function useAssignableUsers() {
+  return useQuery({
+    queryKey: ['meta', 'assignable-users'],
+    queryFn: () => api.get<{ users: AssignableUser[] }>('/meta/assignable-users'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useProducts() {
   return useQuery({
     queryKey: ['products'],
@@ -128,6 +142,18 @@ export function useUpdateBug(id: number) {
     mutationFn: (input: UpdateBugInput) => api.patch<{ bug: BugDetailResponse['bug'] }>(`/bugs/${id}`, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bugs', id] });
+      qc.invalidateQueries({ queryKey: ['bugs'], exact: false });
+    },
+  });
+}
+
+/** Reassigns many bugs to one assignee in a single call. */
+export function useBulkReassign() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { ids: number[]; assignedTo: string }) =>
+      api.patch<{ updated: number }>('/bugs', input),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bugs'], exact: false });
     },
   });

@@ -122,14 +122,6 @@ export function FilterBar({
             onClear={() => setFacet('product', [])}
           />
         )}
-        <MultiSelect
-          label={FACET_LABELS.tier}
-          className="w-32"
-          options={[1, 2, 3].map((t) => ({ value: String(t), label: `Tier ${t}` }))}
-          selected={filters.tier.map(String)}
-          onToggle={(v) => toggleFacet('tier', v)}
-          onClear={() => setFacet('tier', [])}
-        />
       </div>
 
       {(isFiltered || resultCount !== undefined) && (

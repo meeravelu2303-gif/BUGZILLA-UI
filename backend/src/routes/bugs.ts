@@ -21,6 +21,7 @@ import {
   countBugsQuerySchema,
   createBugSchema,
   listBugsQuerySchema,
+  bulkReassignSchema,
   normalizeAttachment,
   normalizeBug,
   normalizeComment,
@@ -73,36 +74,33 @@ const SORT_FIELDS: Record<string, string> = {
   last_change_time: 'changeddate',
   creation_time: 'opendate',
   summary: 'short_desc',
-  // Business tier lives in the Status Whiteboard as `[tier1]`..`[tier3]`, so an
-  // alphabetical sort on it is a true tier sort (tier1 < tier2 < tier3).
   status_whiteboard: 'status_whiteboard',
   /**
    * Triage order: how important is this bug to fix next.
    *
-   * Tier first (the business criticality of the affected module - tier 1 means
-   * the product is broken or data is exposed), then severity, then priority.
-   * Severity and priority sort by Bugzilla's per-value `sortkey`, not
-   * alphabetically, so ascending genuinely means blocker->trivial and
-   * Highest->Lowest rather than an alphabetical jumble.
+   * Severity first (the impact of the defect), then priority. Both sort by
+   * Bugzilla's per-value `sortkey`, not alphabetically, so ascending genuinely
+   * means blocker->trivial and Highest->Lowest rather than an alphabetical
+   * jumble. Module criticality is no longer a separate sort axis — it is carried
+   * by a defect's severity and shown by its component.
    */
-  importance: 'status_whiteboard,bug_severity,priority',
+  importance: 'bug_severity,priority',
 };
 
 const DEFAULT_SORT = 'last_change_time';
 
 /**
- * Appended after whatever sort the caller asked for, so equal-ranked bugs read
- * newest-first and, ultimately, in a fully determined order.
+ * Appended after whatever sort the caller asked for, so equal-ranked bugs read in a stable,
+ * intuitive order: **ascending by bug id** (KPA-001, KPA-002, …).
  *
- * bug_id last is not decorative. Bugs filed in the same second share a
- * changeddate (55 such pairs in the current data), and without a unique final
- * key their relative order is undefined. That is not merely untidy: each page of
- * an offset query is ordered separately, so an undefined order lets the same bug
- * appear on two pages, or vanish between them.
+ * bug_id is the single tiebreaker on purpose. Within one severity band nearly every defect
+ * shares a rank, and a `changeddate DESC` tie made them read newest-first (KPA-352 before
+ * KPA-001), which looks mis-ordered. Ascending bug id is what a reader expects and is fully
+ * deterministic (bug_id is unique), so each page of an offset query is ordered the same way —
+ * no bug appearing on two pages or vanishing between them.
  */
 const TIEBREAKERS = [
-  { field: SORT_FIELDS[DEFAULT_SORT], clause: `${SORT_FIELDS[DEFAULT_SORT]} DESC` },
-  { field: 'bug_id', clause: 'bug_id DESC' },
+  { field: 'bug_id', clause: 'bug_id ASC' },
 ];
 
 const CAMEL_TO_BUGZILLA_UPDATE: Record<string, string> = {
@@ -147,10 +145,10 @@ export function bugsRouter(env: Env): Router {
               .map((f) => `${f} DESC`)
               .join(',')
           : sortField;
-      // Tier only has three distinct values, so without tiebreakers 700+ bugs in
-      // one tier come back in an arbitrary order that shifts between pages. Each
-      // tiebreaker is skipped when the chosen sort already contains that column,
-      // so a column is never named twice in one order clause.
+      // A coarse sort (e.g. severity has four values) leaves hundreds of bugs
+      // equal-ranked, so without tiebreakers they come back in an arbitrary order
+      // that shifts between pages. Each tiebreaker is skipped when the chosen sort
+      // already contains that column, so a column is never named twice.
       const chosen = sortField.split(',');
       const order = [primary, ...TIEBREAKERS.filter((t) => !chosen.includes(t.field)).map((t) => t.clause)].join(',');
 
@@ -376,6 +374,24 @@ export function bugsRouter(env: Env): Router {
   });
 
   // PATCH /api/bugs/:id
+  /**
+   * PATCH /api/bugs — bulk reassignment.
+   *
+   * Applies one assignee to many bugs in a single Bugzilla `Bug.update` call (it accepts an id
+   * array). Registered before `/:id` so the collection route is not shadowed by the item route.
+   */
+  router.patch('/', auth, async (req, res, next) => {
+    try {
+      const { ids, assignedTo } = parseInput(bulkReassignSchema, req.body);
+      // Bugzilla requires an id in the URL; the body `ids` array is what selects every bug to
+      // change, so all of them are updated by this one request.
+      await req.bugzilla!.put(`/bug/${ids[0]}`, { ids, assigned_to: assignedTo });
+      res.json({ updated: ids.length });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.patch('/:id', auth, async (req, res, next) => {
     try {
       const { id } = parseInput(idParamSchema, req.params);

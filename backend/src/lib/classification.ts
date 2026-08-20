@@ -141,14 +141,6 @@ const CATEGORY_TAG = /\[cat:([A-Za-z]+)\]/;
 /** `Classification: <value>` on the first line of the description - every legacy bug has one. */
 const CLASSIFICATION_LINE = /^\s*Classification:\s*(.+?)\s*$/m;
 
-/** Business tier of the affected module, `[tier1]`..`[tier3]`. Independent of category. */
-const TIER_TAG = /\[tier(\d+)\]/i;
-
-export function tierOf(whiteboard: string | undefined): number | null {
-  const m = TIER_TAG.exec(whiteboard ?? '');
-  return m ? Number(m[1]) : null;
-}
-
 /** The raw `Classification:` value, kept for display - finer grained than Category. */
 export function classificationOf(description: string | undefined): string | null {
   if (!description) return null;
@@ -180,7 +172,6 @@ export interface Classification {
   category: Category;
   /** The bench's finer-grained flaw label, e.g. "Security/Access Control". */
   classification: string | null;
-  tier: number | null;
 }
 
 /**
@@ -202,7 +193,6 @@ export function classify(raw: {
     priority: PRIORITY_FROM_BUGZILLA[raw.priority ?? ''] ?? PRIORITY_FOR_SEVERITY[severity],
     category: categoryOf(raw.whiteboard, raw.description),
     classification: classificationOf(raw.description),
-    tier: tierOf(raw.whiteboard),
   };
 }
 
@@ -239,7 +229,6 @@ export interface BugFilters {
   assignedTo?: string;
   creator?: string;
   cc?: string;
-  tier?: number[];
 }
 
 /**
@@ -312,11 +301,6 @@ export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
   if (filters.assignedTo) query.assigned_to = filters.assignedTo;
   if (filters.creator) query.creator = filters.creator;
   if (filters.cc) query.cc = filters.cc;
-  if (filters.tier?.length) {
-    // One tier is a plain substring; several need the chart, so keep the simple
-    // case simple and let categoryChart own the multi-value case if both apply.
-    if (filters.tier.length === 1) query.whiteboard = `[tier${filters.tier[0]}]`;
-  }
 
   if (filters.category?.length) categoryChart(filters.category, query);
 

@@ -30,28 +30,19 @@ export function timeAgo(iso: string): string {
 }
 
 /**
- * How a bug is labelled in the UI: its Bugzilla alias (e.g. KPA-001) when it has
- * one, falling back to #<bug id>. Bugzilla 5.x returns `alias` as an array, and a
- * bug can legitimately have none - the automation reporter files without an alias
- * rather than dropping a ticket when every candidate number is taken.
+ * How a bug is labelled in the UI: the `KPA-NNN` form (e.g. `KPA-001`).
  *
- * Links and sorting deliberately keep using the numeric id; only the label changes.
+ * Bugzilla on this instance does not auto-assign the `KPA-` alias, so rather than fall back to
+ * a bare `#<id>`, the label is derived from the bug id — `KPA-` plus the id zero-padded to at
+ * least three digits. A real alias, if one is ever set, is preferred as-is. The numeric id is
+ * still what links and sorting use; only the visible label changes.
  */
 export function bugDisplayId(bug: { id: number; alias?: string[] }): string {
-  return bug.alias?.[0] ?? `#${bug.id}`;
+  const real = bug.alias?.[0];
+  if (real) return real;
+  return `KPA-${String(bug.id).padStart(3, '0')}`;
 }
 
-/**
- * Business tier of the affected module, which the test bench writes into
- * Bugzilla's Status Whiteboard as `[tier1]`..`[tier3]` - Bugzilla has no tier
- * field of its own. Tier 1 is the most severe (product broken, or accounts and
- * personal data exposed). Returns null when the whiteboard carries anything else,
- * so a hand-filed bug simply shows no tier rather than a broken badge.
- */
-export function tierOf(bug: { whiteboard?: string }): number | null {
-  const match = /\[tier([1-9]\d*)\]/i.exec(bug.whiteboard ?? '');
-  return match ? Number(match[1]) : null;
-}
 
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/);

@@ -15,7 +15,7 @@ import type { BugFilters, Category, Priority, Severity } from '../types';
  */
 
 /** Array-valued facets. Everything else in BugFilters is scalar. */
-export const FACET_KEYS = ['severity', 'priority', 'category', 'product', 'component', 'status', 'tier'] as const;
+export const FACET_KEYS = ['severity', 'priority', 'category', 'product', 'component', 'status'] as const;
 export type FacetKey = (typeof FACET_KEYS)[number];
 
 export const FACET_LABELS: Record<FacetKey, string> = {
@@ -25,7 +25,6 @@ export const FACET_LABELS: Record<FacetKey, string> = {
   product: 'Product',
   component: 'Component',
   status: 'Status',
-  tier: 'Tier',
 };
 
 /** Params the list/count/stats endpoints understand, built from the URL. */
@@ -72,7 +71,6 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       product: readAll(params, 'product'),
       component: readAll(params, 'component'),
       status: readAll(params, 'status'),
-      tier: readAll(params, 'tier').map(Number).filter(Number.isFinite),
       search: params.get('search') ?? '',
     }),
     [params]
@@ -130,7 +128,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       readAll(params, key).map((value) => ({
         key,
         value,
-        label: `${FACET_LABELS[key]}: ${key === 'tier' ? `Tier ${value}` : value}`,
+        label: `${FACET_LABELS[key]}: ${value}`,
       }))
     );
     const search = params.get('search');

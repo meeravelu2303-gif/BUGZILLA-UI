@@ -6,9 +6,10 @@ import { AddCommentBox } from '../components/bugs/AddCommentBox';
 import { AttachmentList } from '../components/bugs/AttachmentList';
 import { CommentThread } from '../components/bugs/CommentThread';
 import { MetadataSidebar } from '../components/bugs/MetadataSidebar';
+import { DescriptionReport } from '../components/bugs/DescriptionReport';
 import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
-import { CategoryPill, PriorityPill, SeverityPill, StatusPill, TierPill } from '../components/ui/Pill';
+import { CategoryPill, PriorityPill, SeverityPill, StatusPill } from '../components/ui/Pill';
 import { Skeleton } from '../components/ui/Skeleton';
 import { bugDisplayId } from '../lib/utils';
 
@@ -21,7 +22,7 @@ export function BugDetail() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-[1200px] px-8 py-8">
+      <div className="mx-auto max-w-[1600px] px-8 py-8">
         <Skeleton className="h-6 w-24" />
         <Skeleton className="mt-4 h-8 w-2/3" />
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -35,7 +36,7 @@ export function BugDetail() {
   if (isError || !data) {
     const message = error instanceof ApiError ? error.message : 'Something went wrong loading this bug.';
     return (
-      <div className="mx-auto max-w-[1200px] px-8 py-8">
+      <div className="mx-auto max-w-[1600px] px-8 py-8">
         <EmptyState icon={AlertCircle} title="Couldn't load this bug" description={message} />
       </div>
     );
@@ -48,40 +49,49 @@ export function BugDetail() {
   const facts = bug.facts;
 
   return (
-    <div className="mx-auto max-w-[1200px] px-8 py-8">
-      <Link to="/bugs" className="focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-800">
+    <div className="mx-auto max-w-[1600px] overflow-x-clip px-6 py-8 sm:px-8">
+      <Link to="/bugs" className="focus-ring inline-flex items-center gap-1.5 rounded text-sm font-medium text-slate-500 transition-colors hover:text-slate-800">
         <ArrowLeft className="h-3.5 w-3.5" /> Back to bugs
       </Link>
 
-      {/* Classification leads: what kind of defect this is, and how urgent. */}
-      <div className="mt-4">
-        <p className="font-mono text-sm text-slate-600" title={`Bug #${bug.id}`}>
-          {bugDisplayId(bug)} · {bug.product} / {bug.component}
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">{bug.summary}</h1>
+      {/* Classification leads: what kind of defect this is, and how urgent. An elevated hero
+          so the id, title and the severity/category pills read as one clear header. */}
+      <header className="mt-4 rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm ring-1 ring-black/[0.02] backdrop-blur-sm">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className="rounded-md bg-slate-900/[0.04] px-2 py-0.5 font-mono font-semibold text-slate-700 ring-1 ring-inset ring-slate-900/10" title={`Bug #${bug.id}`}>
+            {bugDisplayId(bug)}
+          </span>
+          <span className="text-slate-400">·</span>
+          <span className="font-medium text-slate-600">{bug.product}</span>
+          <span className="text-slate-400">/</span>
+          <span className="font-medium text-slate-600">{bug.component}</span>
+        </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <h1 className="mt-2 text-[1.6rem] font-semibold leading-snug tracking-tight text-slate-900">
+          {bug.summary}
+        </h1>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {triage && <SeverityPill severity={triage.severity} />}
           {triage && <PriorityPill priority={triage.priority} />}
           {triage && <CategoryPill category={triage.category} />}
-          {triage && <TierPill tier={triage.tier} />}
           <StatusPill status={bug.status} />
           {triage?.classification && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-600/20">
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-600/20">
               {triage.classification}
             </span>
           )}
         </div>
 
         {facts?.owner && (
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
+          <p className="mt-4 flex items-center gap-1.5 border-t border-slate-200/70 pt-3 text-xs text-slate-500">
             <User className="h-3.5 w-3.5" aria-hidden /> {facts.owner}
           </p>
         )}
-      </div>
+      </header>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           {/*
            * The blast radius. This is what makes one grouped ticket worth more
            * than the many per-endpoint tickets it replaces, so it sits above the
@@ -149,9 +159,7 @@ export function BugDetail() {
               <CardTitle>Description</CardTitle>
             </CardHeader>
             <CardBody>
-              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-800">
-                {bug.description}
-              </pre>
+              <DescriptionReport description={bug.description ?? ''} />
             </CardBody>
           </Card>
 

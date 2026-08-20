@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useBugCounts, useBugStats, useBugs, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
+import { BulkReassignBar } from '../components/bugs/BulkReassignBar';
 import { FilterBar } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
 import { Card } from '../components/ui/Card';
@@ -17,8 +18,8 @@ export function BugList() {
   /*
    * Filters, sort and pagination all live in the URL via one shared controller,
    * so this view is shareable and survives reload and back/forward. The default
-   * sort is triage order (tier, then severity, then priority) rather than
-   * newest-first: the most important work should be on top without asking.
+   * sort is triage order (severity, then priority) rather than newest-first: the
+   * most important work should be on top without asking.
    */
   const controller = useBugFilters({ sortBy: 'importance', sortDir: 'asc' });
   const { queryParams, sortBy, sortDir, toggleSort, offset, setOffset, isFiltered } = controller;
@@ -29,6 +30,27 @@ export function BugList() {
   );
 
   const { data, isLoading, isFetching, isError, error } = useBugs(query);
+
+  // Bulk selection lives here (the table only renders it). It is cleared whenever the visible
+  // set changes — a new page or filter — so you never act on rows you can no longer see.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  useEffect(() => setSelectedIds(new Set()), [offset, sortBy, sortDir, queryParams]);
+
+  const pageIds = data?.bugs.map((b) => b.id) ?? [];
+  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const toggle = (id: number) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
   // The exact size of the filtered set, and of the whole product, so the bar can
   // say how much is hidden rather than leaving the user to infer it.
   const { data: filteredCount } = useBugCounts(queryParams);
@@ -62,8 +84,16 @@ export function BugList() {
         ) : (
           <>
             <div className={isFetching && !isLoading ? 'opacity-60 transition-opacity' : undefined}>
-              <BugTable bugs={data?.bugs ?? []} isLoading={isLoading} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+              <BugTable
+                bugs={data?.bugs ?? []}
+                isLoading={isLoading}
+                sortBy={sortBy}
+                sortDir={sortDir}
+                onSort={toggleSort}
+                selection={{ selectedIds, onToggle: toggle, onToggleAll: toggleAll, allOnPageSelected }}
+              />
             </div>
+            <BulkReassignBar selectedIds={selectedIds} onDone={() => setSelectedIds(new Set())} />
             {data && (data.bugs.length > 0 || offset > 0) && (
               <Pagination
                 offset={offset}

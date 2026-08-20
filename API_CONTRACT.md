@@ -383,7 +383,7 @@ category**, so two encodings coexist and both are read:
 
 | Axis | Current bench writes | The 1,283 pre-change bugs hold |
 |---|---|---|
-| Category | `[cat:Security]` appended to the Status Whiteboard → `[tier1][cat:Security]` | *nothing* — whiteboard is only `[tierN]`, `keywords` empty on every bug |
+| Category | `[cat:Security]` — the only tag on the Status Whiteboard | *nothing* — whiteboard is only the legacy `[tierN]` (now ignored), `keywords` empty on every bug |
 | Severity | `critical` / `major` / `minor` / `trivial` | `critical` 130, `major` 706, **`normal` 187**, `minor` 260 |
 | Grouping | `Affected endpoints (N), observed by M test case(s):` block in the description | *absent* — 0 descriptions carry it |
 
@@ -427,13 +427,12 @@ existing `parseInput`/`errorHandler` path — nothing unvalidated reaches Bugzil
 | `priority` | yes | `P0` `P1` `P2` `P3` `Unclassified` |
 | `category` | yes | `Functional` `Performance` `Security` `Compatibility` `Unclassified` |
 | `product` / `component` / `status` | yes | free text (Bugzilla's own values) |
-| `tier` | yes | 1–9 |
 | `search` | no | substring against summary |
 | `assignedTo` / `creator` / `cc` | no | email |
 | `limit` (≤200) / `offset` / `sortBy` / `sortDir` | no | pagination and sort |
 
 Each returned bug gains a **`triage`** object (`severity`, `priority`,
-`category`, `classification`, `tier`). Named `triage`, not `classification`,
+`category`, `classification`). Named `triage`, not `classification`,
 because `bug.classification` is already Bugzilla's product-classification string.
 
 ### 13.5 `GET /api/bugs/:id`

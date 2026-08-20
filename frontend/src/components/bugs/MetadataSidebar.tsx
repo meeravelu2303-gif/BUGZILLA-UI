@@ -1,7 +1,7 @@
 import { Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ApiError } from '../../api/client';
-import { useUpdateBug } from '../../api/hooks';
+import { useAssignableUsers, useUpdateBug } from '../../api/hooks';
 import { useToast } from '../../context/ToastContext';
 import type { Bug, BugMeta, Product } from '../../types';
 import { Avatar } from '../ui/Avatar';
@@ -42,6 +42,7 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
   const [form, setForm] = useState<FormState>(() => toFormState(bug));
   const { toast } = useToast();
   const updateBug = useUpdateBug(bug.id);
+  const { data: assignable } = useAssignableUsers();
 
   useEffect(() => {
     setForm(toFormState(bug));
@@ -133,13 +134,28 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
           ))}
         </Select>
 
-        <Input
+        <Select
           label="Assignee"
-          type="email"
           value={form.assignedTo}
           onChange={(e) => set('assignedTo', e.target.value)}
-          placeholder="name@example.com"
-        />
+        >
+          {/* Members with access to this product. The current assignee is always listed even
+              if the lookup hasn't loaded, so the field never shows blank for a set value. */}
+          {(() => {
+            const users = assignable?.users ?? [];
+            const known = new Set(users.map((u) => u.email));
+            const options = [...users];
+            if (form.assignedTo && !known.has(form.assignedTo)) {
+              options.unshift({ email: form.assignedTo, name: form.assignedTo });
+            }
+            {/* Show the person's name only; the email is the stored value, not the label. */}
+            return options.map((u) => (
+              <option key={u.email} value={u.email} title={u.email}>
+                {u.name}
+              </option>
+            ));
+          })()}
+        </Select>
 
         <Input label="Whiteboard" value={form.whiteboard} onChange={(e) => set('whiteboard', e.target.value)} />
 
