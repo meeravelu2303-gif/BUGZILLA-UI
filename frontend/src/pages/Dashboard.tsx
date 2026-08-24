@@ -24,19 +24,35 @@ export function Dashboard() {
   });
   const recent = recentData?.bugs ?? [];
 
-  const severityItems: BarListItem[] = SEVERITIES.filter((s) => (stats?.bySeverity[s] ?? 0) > 0).map((s) => ({
+  /*
+   * This page reports *current defect load*, so every breakdown below counts open
+   * bugs only. The lifetime tallies (`bySeverity` and friends) stay available for
+   * the filter bar, where they describe the result set a filter would return.
+   *
+   * Mixing the two is what made this page read wrong: with 177 bugs resolved,
+   * "Critical (P0)" showed 75 - every Critical ever filed - while 46 were actually
+   * open, so resolving tickets moved the Open tile and nothing else.
+   *
+   * The `??` fallbacks keep the page correct against a backend that predates the
+   * open-only fields: it degrades to the old lifetime numbers instead of zeroes.
+   */
+  const loadBySeverity = stats?.openBySeverity ?? stats?.bySeverity;
+  const loadByCategory = stats?.openByCategory ?? stats?.byCategory;
+  const loadByComponent = stats?.openByComponent ?? stats?.byComponent;
+
+  const severityItems: BarListItem[] = SEVERITIES.filter((s) => (loadBySeverity?.[s] ?? 0) > 0).map((s) => ({
     label: s,
-    value: stats?.bySeverity[s] ?? 0,
+    value: loadBySeverity?.[s] ?? 0,
     tone: s === 'Critical' ? 'rose' : s === 'Major' ? 'orange' : s === 'Minor' ? 'sky' : 'slate',
   }));
 
-  const categoryItems: BarListItem[] = CATEGORIES.filter((c) => (stats?.byCategory[c] ?? 0) > 0).map((c) => ({
+  const categoryItems: BarListItem[] = CATEGORIES.filter((c) => (loadByCategory?.[c] ?? 0) > 0).map((c) => ({
     label: c,
-    value: stats?.byCategory[c] ?? 0,
+    value: loadByCategory?.[c] ?? 0,
     tone: c === 'Security' ? 'violet' : c === 'Functional' ? 'blue' : c === 'Performance' ? 'amber' : 'emerald',
   }));
 
-  const topComponents: BarListItem[] = Object.entries(stats?.byComponent ?? {})
+  const topComponents: BarListItem[] = Object.entries(loadByComponent ?? {})
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
     .map(([label, value]) => ({ label, value, tone: 'slate' as const }));
@@ -71,7 +87,7 @@ export function Dashboard() {
           <StatCard icon={BugIcon} label="Total bugs" value={stats.total} tone="brand" />
           <StatCard icon={CircleDot} label="Open" value={stats.open} tone="amber" />
           <StatCard icon={CheckCircle2} label="Resolved" value={stats.resolved} tone="emerald" />
-          <StatCard icon={AlertOctagon} label="Critical (P0)" value={stats.bySeverity.Critical ?? 0} tone="rose" />
+          <StatCard icon={AlertOctagon} label="Critical (P0) open" value={loadBySeverity?.Critical ?? 0} tone="rose" />
         </div>
       )}
 

@@ -15,6 +15,8 @@ export type ErrorCode =
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
+  /** Well-formed request that conflicts with the resource's current state (HTTP 409). */
+  | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'UPSTREAM_TIMEOUT'
   | 'UPSTREAM_UNREACHABLE'

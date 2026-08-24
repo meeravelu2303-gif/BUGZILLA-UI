@@ -174,6 +174,7 @@ export type ErrorCode =
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
+  | 'CONFLICT'
   | 'RATE_LIMITED'
   | 'UPSTREAM_TIMEOUT'
   | 'UPSTREAM_UNREACHABLE'
@@ -323,10 +324,20 @@ export interface BugStats {
   total: number;
   open: number;
   resolved: number;
+  /** Every matching bug, resolved ones included. Belongs beside a filter option. */
   bySeverity: Record<Severity, number>;
   byCategory: Record<Category, number>;
   byComponent: Record<string, number>;
   matrix: Record<Severity, Record<Category, number>>;
+  /**
+   * Still-open bugs only — the current defect load, and what the dashboard shows.
+   * Optional so a frontend running against an older backend falls back to the
+   * lifetime figures rather than rendering zeroes.
+   */
+  openBySeverity?: Record<Severity, number>;
+  openByCategory?: Record<Category, number>;
+  openByComponent?: Record<string, number>;
+  openMatrix?: Record<Severity, Record<Category, number>>;
   cachedAt: string;
 }
 

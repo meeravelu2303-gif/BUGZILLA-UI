@@ -12,6 +12,8 @@ import {
   type Category,
   type Severity,
 } from '../lib/classification';
+import type { BugzillaClient } from '../lib/bugzillaClient';
+import { closedStatuses } from '../lib/bugStatus';
 import { AppError } from '../lib/errors';
 import { parseDescription } from '../lib/grouping';
 import { parseInput } from '../lib/validate';
@@ -117,6 +119,60 @@ const CAMEL_TO_BUGZILLA_UPDATE: Record<string, string> = {
   targetMilestone: 'target_milestone',
   whiteboard: 'whiteboard',
 };
+
+/**
+ * The assignee cannot change on a bug that is closed, or that this request is
+ * closing.
+ *
+ * Reassignment means "this person is going to work on it", which is meaningless
+ * once the work is finished - and worse, it rewrites the record of who actually
+ * fixed it.
+ *
+ * Both halves matter, because they reach the same end state. Guarding only the
+ * already-closed case leaves a loophole: refusing "resolve, then reassign"
+ * while allowing "resolve and reassign in one save" blocks the two-step route
+ * to a closed-bug-with-a-changed-assignee and waves through the one-step route
+ * to exactly the same record. The rule is about the resulting state, not the
+ * number of requests used to get there.
+ *
+ * Enforced here rather than only in the UI: the UI disables the control, but a
+ * direct API call would otherwise sail straight through to Bugzilla.
+ */
+async function assertReassignable(client: BugzillaClient, ids: number[], targetStatus?: string): Promise<void> {
+  const resp = await client.get<{ bugs: { id: number; status: string; is_open: boolean }[] }>('/bug', {
+    id: ids.join(','),
+    include_fields: 'id,status,is_open',
+    limit: 0,
+  });
+
+  const closed = resp.bugs.filter((b) => !b.is_open);
+  if (closed.length > 0) {
+    // Name the offenders: on a bulk action "some of them are closed" is not
+    // actionable, and the caller cannot tell which selection to fix.
+    const listed = closed
+      .slice(0, 5)
+      .map((b) => `#${b.id} (${b.status})`)
+      .join(', ');
+    const rest = closed.length > 5 ? `, and ${closed.length - 5} more` : '';
+    const subject = closed.length === 1 ? 'that bug is' : `${closed.length} of the selected bugs are`;
+
+    throw new AppError(
+      409,
+      'CONFLICT',
+      `Cannot reassign - ${subject} already closed: ${listed}${rest}. Reopen the bug before assigning it to someone else.`
+    );
+  }
+
+  // The bug is open now, but this same request may be closing it.
+  if (targetStatus && (await closedStatuses(client)).has(targetStatus)) {
+    throw new AppError(
+      409,
+      'CONFLICT',
+      `Cannot change the assignee while closing a bug - the assignee records who fixed it. ` +
+        `Save the reassignment first, then set the status to ${targetStatus}.`
+    );
+  }
+}
 
 /**
  * Filters are translated by lib/classification.ts, which owns the vocabulary in
@@ -252,6 +308,28 @@ export function bugsRouter(env: Env): Router {
         SEVERITIES.map((s) => [s, zeroed(CATEGORIES)])
       ) as Record<Severity, Record<Category, number>>;
 
+      /*
+       * The same four breakdowns, restricted to bugs that are still open.
+       *
+       * Both sets are needed and they answer different questions. The all-bugs
+       * tallies belong beside a filter option: an option reading "Critical (46)"
+       * that returns 75 rows once the status filter is cleared misdescribes its
+       * own result set. The open-only tallies are what a *defect load* dashboard
+       * means - how much is broken now.
+       *
+       * Reporting the lifetime figure as current load is why this endpoint read
+       * wrong on 2026-08-24. 177 bugs had been resolved, yet "Critical (P0)"
+       * still showed 75 - every bug ever filed at that severity - while only 46
+       * were open. The Open tile moved and nothing else did, so an afternoon of
+       * closing tickets looked like it had changed nothing.
+       */
+      const openBySeverity = zeroed(SEVERITIES);
+      const openByCategory = zeroed(CATEGORIES);
+      const openByComponent: Record<string, number> = {};
+      const openMatrix = Object.fromEntries(
+        SEVERITIES.map((s) => [s, zeroed(CATEGORIES)])
+      ) as Record<Severity, Record<Category, number>>;
+
       let open = 0;
       for (const row of raw.bugs) {
         const { severity } = classify({ severity: row.severity, priority: row.priority, whiteboard: row.whiteboard });
@@ -260,7 +338,13 @@ export function bugsRouter(env: Env): Router {
         byCategory[category] += 1;
         matrix[severity][category] += 1;
         byComponent[row.component] = (byComponent[row.component] ?? 0) + 1;
-        if (row.is_open) open += 1;
+        if (row.is_open) {
+          open += 1;
+          openBySeverity[severity] += 1;
+          openByCategory[category] += 1;
+          openMatrix[severity][category] += 1;
+          openByComponent[row.component] = (openByComponent[row.component] ?? 0) + 1;
+        }
       }
 
       res.json({
@@ -271,6 +355,10 @@ export function bugsRouter(env: Env): Router {
         byCategory,
         byComponent,
         matrix,
+        openBySeverity,
+        openByCategory,
+        openByComponent,
+        openMatrix,
         cachedAt: new Date(index.builtAt).toISOString(),
       });
     } catch (err) {
@@ -383,6 +471,10 @@ export function bugsRouter(env: Env): Router {
   router.patch('/', auth, async (req, res, next) => {
     try {
       const { ids, assignedTo } = parseInput(bulkReassignSchema, req.body);
+      // All-or-nothing: Bugzilla applies the whole id array in one call, so a
+      // partial success is not expressible. Refusing the batch and naming the
+      // closed bugs is better than silently reassigning some of them.
+      await assertReassignable(req.bugzilla!, ids);
       // Bugzilla requires an id in the URL; the body `ids` array is what selects every bug to
       // change, so all of them are updated by this one request.
       await req.bugzilla!.put(`/bug/${ids[0]}`, { ids, assigned_to: assignedTo });
@@ -404,6 +496,10 @@ export function bugsRouter(env: Env): Router {
         const bzKey = CAMEL_TO_BUGZILLA_UPDATE[camelKey];
         if (bzKey) payload[bzKey] = value as string;
       }
+
+      // Only guard when the assignee is actually changing: every other edit
+      // (adding a resolution, correcting a component) stays legal on a closed bug.
+      if (input.assignedTo !== undefined) await assertReassignable(client, [id], input.status);
 
       await client.put(`/bug/${id}`, payload);
 

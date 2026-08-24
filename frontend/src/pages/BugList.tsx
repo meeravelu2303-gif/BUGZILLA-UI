@@ -36,7 +36,12 @@ export function BugList() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   useEffect(() => setSelectedIds(new Set()), [offset, sortBy, sortDir, queryParams]);
 
-  const pageIds = data?.bugs.map((b) => b.id) ?? [];
+  /*
+   * Only open bugs are selectable. The one bulk action is reassignment, which the
+   * backend refuses on a closed bug, so "select all" must not sweep closed rows
+   * into a batch that is then rejected in its entirety.
+   */
+  const pageIds = data?.bugs.filter((b) => b.isOpen).map((b) => b.id) ?? [];
   const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
   const toggle = (id: number) =>
     setSelectedIds((prev) => {

@@ -127,12 +127,25 @@ export function BugTable({
                   <tr className="border-b border-white/30 align-middle transition-colors last:border-0 hover:bg-white/60">
                     {selection && (
                       <td className="px-3 py-2.5">
+                        {/*
+                          Closed bugs are not selectable: the only bulk action is
+                          reassignment, and reassigning finished work is refused by
+                          the backend. Disabling here means the refusal never has to
+                          happen - the reason is on the control instead of arriving
+                          as an error after the fact.
+                        */}
                         <input
                           type="checkbox"
-                          className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus-ring"
+                          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus-ring enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                           checked={selection.selectedIds.has(bug.id)}
+                          disabled={!bug.isOpen}
                           onChange={() => selection.onToggle(bug.id)}
-                          aria-label={`Select ${bugDisplayId(bug)}`}
+                          aria-label={
+                            bug.isOpen
+                              ? `Select ${bugDisplayId(bug)}`
+                              : `${bugDisplayId(bug)} is closed and cannot be reassigned`
+                          }
+                          title={bug.isOpen ? undefined : `${bug.status} bugs can't be reassigned — reopen it first.`}
                         />
                       </td>
                     )}

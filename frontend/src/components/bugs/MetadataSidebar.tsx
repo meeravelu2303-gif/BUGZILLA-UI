@@ -52,9 +52,26 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
   const dirty = (Object.keys(form) as (keyof FormState)[]).filter((k) => form[k] !== original[k]);
   const isDirty = dirty.length > 0;
   const needsResolution = !OPEN_STATUSES.has(form.status);
+  /** Closed as stored, per Bugzilla's own `isOpen` flag rather than a status name. */
+  const isClosed = !bug.isOpen;
+  /**
+   * The assignee is locked once a bug is closed *or* while this edit is closing
+   * it. Both reach the same end state - a closed bug whose assignee changed at
+   * closing time - and the assignee is the record of who actually fixed it, so
+   * allowing the one-save route would just be a loophole around the other.
+   * Reassign first, save, then close.
+   */
+  const lockAssignee = isClosed || needsResolution;
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      // Choosing a closing status drops any pending assignee edit, so the form
+      // can always be saved. Leaving it staged would produce a disabled field
+      // holding a value the backend is about to reject.
+      if (key === 'status' && !OPEN_STATUSES.has(String(value))) next.assignedTo = original.assignedTo;
+      return next;
+    });
   }
 
   async function onSave() {
@@ -134,10 +151,25 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
           ))}
         </Select>
 
+        {/*
+          A closed bug cannot be reassigned - the work is done, and changing the
+          assignee would rewrite the record of who fixed it. Disabled rather than
+          hidden so the current assignee is still readable, with the reason and
+          the way out ("reopen it first") stated in the hint. The backend enforces
+          the same rule, so this is a courtesy, not the control.
+        */}
         <Select
           label="Assignee"
           value={form.assignedTo}
           onChange={(e) => set('assignedTo', e.target.value)}
+          disabled={lockAssignee}
+          hint={
+            isClosed
+              ? "Closed bugs can't be reassigned — reopen it to change the assignee."
+              : needsResolution
+                ? 'Save the reassignment before closing — the assignee records who fixed it.'
+                : undefined
+          }
         >
           {/* Members with access to this product. The current assignee is always listed even
               if the lookup hasn't loaded, so the field never shows blank for a set value. */}
