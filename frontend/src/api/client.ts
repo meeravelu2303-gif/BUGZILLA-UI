@@ -3,12 +3,19 @@ import type { ApiErrorBody } from '../types';
 export class ApiError extends Error {
   status: number;
   code: ApiErrorBody['code'];
+  /**
+   * Carried through so callers can react to an error, not just print it - the
+   * sign-in form reads the cooldown out of a RATE_LIMITED `details` block.
+   * Dropping this on the floor is why the retry time never reached the UI.
+   */
+  details?: ApiErrorBody['details'];
 
   constructor(body: ApiErrorBody) {
     super(body.message);
     this.name = 'ApiError';
     this.status = body.status;
     this.code = body.code;
+    this.details = body.details;
   }
 }
 

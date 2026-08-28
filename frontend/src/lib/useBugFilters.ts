@@ -1,6 +1,7 @@
-import { useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import type { BugFilters, Category, Priority, Severity } from '../types';
+import { rememberListView } from './lastListView';
 
 /**
  * The single filter contract for every list view.
@@ -15,17 +16,45 @@ import type { BugFilters, Category, Priority, Severity } from '../types';
  */
 
 /** Array-valued facets. Everything else in BugFilters is scalar. */
-export const FACET_KEYS = ['severity', 'priority', 'category', 'product', 'component', 'status'] as const;
+export const FACET_KEYS = [
+  'severity',
+  'priority',
+  'category',
+  'browser',
+  'product',
+  'component',
+  'status',
+  'resolution',
+] as const;
 export type FacetKey = (typeof FACET_KEYS)[number];
 
 export const FACET_LABELS: Record<FacetKey, string> = {
   severity: 'Severity',
   priority: 'Priority',
   category: 'Category',
+  browser: 'Browser',
   product: 'Product',
   component: 'Component',
   status: 'Status',
+  resolution: 'Resolution',
 };
+
+/**
+ * Resolution values offered in the UI.
+ *
+ * Status cannot answer "what did we actually fix?" — FIXED, INVALID and DUPLICATE are all
+ * RESOLVED, and on this product they mean very different things: a genuine fix, a finding that
+ * was never a defect, and a re-filed copy of one. `Unresolved` is Bugzilla's `---`, translated
+ * server-side so the sentinel never reaches the URL.
+ */
+export const RESOLUTION_VALUES = [
+  'Unresolved',
+  'FIXED',
+  'INVALID',
+  'DUPLICATE',
+  'WONTFIX',
+  'WORKSFORME',
+] as const;
 
 /** Params the list/count/stats endpoints understand, built from the URL. */
 export type BugQueryParams = Record<string, string | number | string[] | undefined>;
@@ -62,15 +91,28 @@ export interface UseBugFilters {
 
 export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'desc' }): UseBugFilters {
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
+
+  /*
+   * Record where the reader is, so a bug's "Back to bugs" returns to this exact view rather
+   * than a bare `/bugs`. Every list view already routes its filters, sort and pagination
+   * through this hook, so recording here covers BugList, MyBugs and AdvancedSearch at once and
+   * cannot fall out of step with them.
+   */
+  useEffect(() => {
+    rememberListView(location.pathname, location.search);
+  }, [location.pathname, location.search]);
 
   const filters = useMemo<BugFilters>(
     () => ({
       severity: readAll(params, 'severity') as Severity[],
       priority: readAll(params, 'priority') as Priority[],
       category: readAll(params, 'category') as Category[],
+      browser: readAll(params, 'browser'),
       product: readAll(params, 'product'),
       component: readAll(params, 'component'),
       status: readAll(params, 'status'),
+      resolution: readAll(params, 'resolution'),
       search: params.get('search') ?? '',
     }),
     [params]

@@ -215,11 +215,25 @@ export const listBugsQuerySchema = z.object({
   severity: repeatable(z.enum(SEVERITIES)),
   priority: repeatable(z.enum(PRIORITIES)),
   category: repeatable(z.enum(CATEGORIES)),
+  /*
+   * Browser is UI-bench only: it comes from the `[browser:…]` whiteboard tag,
+   * which API-bench bugs never carry. Not restricted to the BROWSERS enum on
+   * purpose — a Playwright project added to the bench before this list is
+   * updated should still be filterable rather than 400.
+   */
+  browser: repeatable(facetValue),
 
   // --- multi-select facets over Bugzilla's own values ---
   product: repeatable(facetValue),
   component: repeatable(facetValue),
   status: repeatable(facetValue),
+  /*
+   * Resolution, so a reader can separate FIXED from INVALID and DUPLICATE among closed bugs.
+   * Status alone cannot: all three are RESOLVED, and "what did we actually fix?" is the question
+   * a triage review exists to answer. An open bug carries an empty resolution, which Bugzilla
+   * matches with the literal `---`.
+   */
+  resolution: repeatable(facetValue),
 
   // --- single-valued filters ---
   assignedTo: z.string().optional(),
@@ -241,9 +255,11 @@ export const countBugsQuerySchema = listBugsQuerySchema.pick({
   product: true,
   component: true,
   status: true,
+  resolution: true,
   severity: true,
   priority: true,
   category: true,
+  browser: true,
   assignedTo: true,
   creator: true,
   cc: true,

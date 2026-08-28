@@ -63,22 +63,26 @@ export function MultiSelect({
         aria-expanded={open}
         aria-haspopup="listbox"
         className={cn(
-          'focus-ring flex w-full items-center justify-between gap-2 rounded-xl border bg-white/80 px-3 py-2 text-sm backdrop-blur-sm',
-          selected.length > 0 ? 'border-brand-600/40 text-slate-900' : 'border-white/60 text-slate-700'
+          'focus-ring flex h-9 w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-sm transition-colors',
+          // An active facet is marked with the brand teal, so which controls are
+          // narrowing the list is visible without reading every label.
+          selected.length > 0
+            ? 'border-brand-500 font-medium text-slate-900'
+            : 'border-slate-200 text-slate-500 hover:border-slate-300'
         )}
       >
         <span className="truncate">{summary}</span>
-        <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-500 transition-transform', open && 'rotate-180')} aria-hidden />
+        <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform', open && 'rotate-180')} aria-hidden />
       </button>
 
       {open && (
         <div
           role="listbox"
           aria-multiselectable
-          className="absolute left-0 z-30 mt-1 max-h-72 w-64 overflow-auto rounded-xl border border-white/60 bg-white/95 p-1 shadow-lg backdrop-blur-md"
+          className="absolute left-0 z-30 mt-1.5 max-h-72 w-64 overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
         >
           {options.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-slate-600">Nothing to filter by yet.</p>
+            <p className="px-3 py-2 text-sm text-slate-500">Nothing to filter by yet.</p>
           ) : (
             <>
               {options.map((opt) => {
@@ -90,20 +94,20 @@ export function MultiSelect({
                     role="option"
                     aria-selected={isOn}
                     onClick={() => onToggle(opt.value)}
-                    className="focus-ring flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-100"
+                    className="focus-ring flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-slate-50"
                   >
                     <span
                       className={cn(
-                        'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                        isOn ? 'border-brand-700 bg-brand-700 text-white' : 'border-slate-400 bg-white'
+                        'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+                        isOn ? 'border-brand-700 bg-brand-700 text-white' : 'border-slate-300 bg-white'
                       )}
                     >
                       {isOn && <Check className="h-3 w-3" aria-hidden />}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-slate-800" title={opt.label}>
+                    <span className="min-w-0 flex-1 truncate text-slate-700" title={opt.label}>
                       {opt.label}
                     </span>
-                    {opt.count !== undefined && <span className="shrink-0 font-mono text-xs text-slate-500">{opt.count}</span>}
+                    {opt.count !== undefined && <span className="shrink-0 font-mono text-xs text-slate-400">{opt.count}</span>}
                   </button>
                 );
               })}
@@ -111,7 +115,7 @@ export function MultiSelect({
                 <button
                   type="button"
                   onClick={onClear}
-                  className="focus-ring mt-1 w-full rounded-lg px-2 py-1.5 text-left text-xs font-medium text-brand-800 hover:bg-brand-50"
+                  className="focus-ring mt-1 w-full rounded-md border-t border-slate-100 px-2 py-1.5 text-left text-xs font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
                 >
                   Clear {label.toLowerCase()}
                 </button>

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { BugzillaClient } from '../lib/bugzillaClient';
 import { AppError } from '../lib/errors';
+import { touchSession } from '../lib/sessionRegistry';
 import type { Permissions } from '../schemas/common';
 import type { Env } from '../config/env';
 
@@ -28,6 +29,15 @@ export function requireAuth(env: Env) {
       permissions: session.permissions ?? { canManageUsers: false, canManageProducts: false },
     };
     req.bugzilla = new BugzillaClient(env.BUGZILLA_URL, { kind: 'token', token: session.bzToken });
+
+    /*
+     * Mark this session used, so the LRU ordering in sessionRegistry reflects
+     * actual activity. Without this the "least recently used" session would
+     * really be the least recently *logged in*, and a device someone uses daily
+     * could be evicted in favour of one they signed into last week and
+     * abandoned.
+     */
+    touchSession(req.sessionID);
     next();
   };
 }

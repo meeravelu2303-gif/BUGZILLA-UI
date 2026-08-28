@@ -7,6 +7,7 @@ import type { Bug, BugMeta, Product } from '../../types';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { Card, CardBody, CardHeader, CardTitle } from '../ui/Card';
+import { BrowserPills } from '../ui/Pill';
 import { Input, Select } from '../ui/Field';
 import { formatDateTime } from '../../lib/utils';
 
@@ -42,7 +43,9 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
   const [form, setForm] = useState<FormState>(() => toFormState(bug));
   const { toast } = useToast();
   const updateBug = useUpdateBug(bug.id);
-  const { data: assignable } = useAssignableUsers();
+  // Scoped to this bug's product: the dropdown must offer that product's team, not every
+  // account on the instance. `bug.product` is authoritative; `product` may not have loaded.
+  const { data: assignable } = useAssignableUsers(bug.product);
 
   useEffect(() => {
     setForm(toFormState(bug));
@@ -204,6 +207,21 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
               <dt className="text-slate-600">Product</dt>
               <dd className="font-medium text-slate-900">{bug.product}</dd>
             </div>
+            {/*
+              The UI bench files one ticket per browser, so this answers the
+              first question a developer has: is this one mine? Rendered only
+              when the bug carries a [browser:x] tag — API-bench bugs have none,
+              and a blank row would read as "browser unknown" rather than "not
+              applicable to this product".
+            */}
+            {bug.triage?.browsers && bug.triage.browsers.length > 0 && (
+              <div className="flex items-start justify-between gap-3">
+                <dt className="shrink-0 pt-0.5 text-slate-600">Browser</dt>
+                <dd className="text-right">
+                  <BrowserPills browsers={bug.triage.browsers} className="justify-end" />
+                </dd>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <dt className="text-slate-600">Created</dt>
               <dd className="font-medium text-slate-900">{formatDateTime(bug.creationTime)}</dd>

@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button';
 import { Card, CardBody } from '../components/ui/Card';
 import { Input } from '../components/ui/Field';
 import { PageHeader } from '../components/ui/PageHeader';
+import { useBrowserScope } from '../lib/useBrowserScope';
 import { useBugFilters } from '../lib/useBugFilters';
 
 const LIMIT = 20;
@@ -51,6 +52,8 @@ export function AdvancedSearch() {
   const { data: scopedCount } = useBugCounts(scoped);
   const { data: totalCount } = useBugCounts({});
   const { data: stats } = useBugStats();
+  // Shared with FilterBar so the Browser column and its filter agree.
+  const { hasBrowsers } = useBrowserScope(controller.filters, stats);
 
   function resetAll() {
     clearAll();
@@ -86,7 +89,7 @@ export function AdvancedSearch() {
         </CardBody>
       </Card>
 
-      <Card className="mt-4">
+      <Card variant="solid" className="mt-4">
         <FilterBar
           controller={controller}
           meta={meta}
@@ -97,13 +100,23 @@ export function AdvancedSearch() {
           isLoading={isLoading}
         />
         <div className={isFetching && !isLoading ? 'opacity-60 transition-opacity' : undefined}>
-          <BugTable bugs={data?.bugs ?? []} isLoading={isLoading} sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} />
+          <BugTable
+            bugs={data?.bugs ?? []}
+            isLoading={isLoading}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={toggleSort}
+            showBrowserColumn={hasBrowsers}
+          />
         </div>
         {data && (data.bugs.length > 0 || offset > 0) && (
           <Pagination
             offset={offset}
             hasMore={data.pageInfo.hasMore}
             count={data.bugs.length}
+            // Count for the CURRENT filters, so Next is never offered past the end of a
+            // narrowed result set.
+            total={scopedCount?.counts.total}
             onPrev={() => setOffset(Math.max(0, offset - LIMIT))}
             onNext={() => setOffset(offset + LIMIT)}
           />

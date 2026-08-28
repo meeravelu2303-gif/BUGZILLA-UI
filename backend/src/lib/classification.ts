@@ -37,6 +37,19 @@ export type Priority = (typeof PRIORITIES)[number];
 export const CATEGORIES = ['Functional', 'Performance', 'Security', 'Compatibility', 'Unclassified'] as const;
 export type Category = (typeof CATEGORIES)[number];
 
+/**
+ * The Playwright projects the UI bench runs, and therefore the only values that
+ * can appear in a `[browser:…]` tag.
+ *
+ * Listed here for the same reason severities are: the filter dropdown and the
+ * query builder must offer and accept exactly the same vocabulary. A project
+ * added to the bench and not added here still *renders* (Pill falls back to the
+ * raw name) but cannot be filtered on — so keep this in step with
+ * `playwright.config.ts` in KPOST-UI-AUTOMATION.
+ */
+export const BROWSERS = ['chromium', 'firefox', 'webkit', 'mobile-chrome'] as const;
+export type Browser = (typeof BROWSERS)[number];
+
 /** Lower sorts first. Used wherever severity must rank rather than sort alphabetically. */
 export const SEVERITY_RANK: Record<Severity, number> = {
   Critical: 0,
@@ -138,6 +151,38 @@ export const CATEGORY_BY_CLASSIFICATION: Record<string, Category> = {
 /** `[cat:Security]` in the Status Whiteboard - what the current bench writes. */
 const CATEGORY_TAG = /\[cat:([A-Za-z]+)\]/;
 
+/**
+ * `[browser:webkit]` in the Status Whiteboard.
+ *
+ * The UI bench files one ticket per (defect, browser) — "broken on Safari" and
+ * "broken everywhere" are different problems to triage and to close — and tags
+ * each ticket with the browser it belongs to. Reading it here makes the browser
+ * a real field the list can show and filter on, rather than something a reader
+ * has to pick out of the summary text by eye.
+ *
+ * Hyphens are allowed: `mobile-chrome` is a project name.
+ */
+const BROWSER_TAG = /\[browser:([A-Za-z0-9,-]+)\]/;
+
+/**
+ * The browsers a bug was observed on, in order, or an empty list when it
+ * carries no tag — every API-bench bug, and any UI bug filed before browser
+ * tagging existed.
+ *
+ * A list rather than a single value: one defect commonly fails on several
+ * browsers, and the UI bench files it as ONE ticket naming all of them rather
+ * than duplicating the ticket per browser. Empty must render as "not
+ * specified"; never guess a browser onto a bug.
+ */
+export function browsersOf(whiteboard: string | undefined): string[] {
+  const tagged = BROWSER_TAG.exec(whiteboard ?? '');
+  if (!tagged) return [];
+  return tagged[1]
+    .split(',')
+    .map((b) => b.trim())
+    .filter(Boolean);
+}
+
 /** `Classification: <value>` on the first line of the description - every legacy bug has one. */
 const CLASSIFICATION_LINE = /^\s*Classification:\s*(.+?)\s*$/m;
 
@@ -172,6 +217,8 @@ export interface Classification {
   category: Category;
   /** The bench's finer-grained flaw label, e.g. "Security/Access Control". */
   classification: string | null;
+  /** Which browsers the bug was seen on. Empty when the bug carries no tag. */
+  browsers: string[];
 }
 
 /**
@@ -193,6 +240,7 @@ export function classify(raw: {
     priority: PRIORITY_FROM_BUGZILLA[raw.priority ?? ''] ?? PRIORITY_FOR_SEVERITY[severity],
     category: categoryOf(raw.whiteboard, raw.description),
     classification: classificationOf(raw.description),
+    browsers: browsersOf(raw.whiteboard),
   };
 }
 
@@ -222,9 +270,13 @@ export interface BugFilters {
   severity?: Severity[];
   priority?: Priority[];
   category?: Category[];
+  /** Playwright project names from the `[browser:…]` whiteboard tag. */
+  browser?: string[];
   product?: string[];
   component?: string[];
   status?: string[];
+  /** Bugzilla resolutions (FIXED, INVALID, DUPLICATE …). `Unresolved` maps to Bugzilla's `---`. */
+  resolution?: string[];
   search?: string;
   assignedTo?: string;
   creator?: string;
@@ -240,34 +292,79 @@ export interface BugFilters {
 export type BugzillaQuery = Record<string, string | number | string[]>;
 
 /**
- * Category -> a boolean chart matching EITHER encoding.
+ * Chart rows are `fN`/`oN`/`vN`, numbered across the whole query. `fN=OP` opens
+ * a parenthesised group and `fN=CP` closes it; `jN=OR` makes the rows *inside*
+ * that group alternatives of each other. The top level is left at its default
+ * AND, so each group ANDs with the others and with the plain params alongside.
  *
- * Chart row `n` is `fN`/`oN`/`vN`; `j_top=OR` makes the rows alternatives of
- * each other while still ANDing with the plain params alongside. Verified live:
- * whiteboard `[cat:Security]` OR longdesc `Classification: Security/` returns
- * exactly 338, the true Security count, and ANDs with severity correctly.
+ * Two facets live in the chart because neither is a native Bugzilla field:
+ * category (whiteboard tag OR legacy description line) and browser (whiteboard
+ * tag). They must AND with each other — "Security bugs on webkit" is one
+ * question, not two — which is precisely what a flat `j_top=OR` cannot express.
+ *
+ * Verified live against this instance: `(cat:Functional) AND (chromium)` returns
+ * the tagged bug, `(cat:Security) AND (chromium)` returns none. A flat OR chart
+ * would have returned a match for both.
  */
-function categoryChart(categories: Category[], query: BugzillaQuery): void {
-  const wanted = categories.filter((c) => c !== 'Unclassified');
-  if (wanted.length === 0) return;
-
+function chartWriter(query: BugzillaQuery) {
   let row = 0;
-  const push = (field: string, value: string) => {
-    row += 1;
-    query[`f${row}`] = field;
-    query[`o${row}`] = 'substring';
-    query[`v${row}`] = value;
+  return {
+    /** Opens a group whose rows are OR'd together. */
+    open(): void {
+      row += 1;
+      query[`f${row}`] = 'OP';
+      query[`j${row}`] = 'OR';
+    },
+    push(field: string, value: string): void {
+      row += 1;
+      query[`f${row}`] = field;
+      query[`o${row}`] = 'substring';
+      query[`v${row}`] = value;
+    },
+    close(): void {
+      row += 1;
+      query[`f${row}`] = 'CP';
+    },
   };
+}
 
-  for (const category of wanted) {
-    // New encoding: the explicit tag.
-    push('status_whiteboard', `[cat:${category}]`);
-    // Legacy encoding: every classification that maps to this category.
-    for (const [classification, mapped] of Object.entries(CATEGORY_BY_CLASSIFICATION)) {
-      if (mapped === category) push('longdesc', `Classification: ${classification}`);
+/**
+ * The two whiteboard-backed facets, each as its own OR'd group.
+ *
+ * Browser matches on the bare project name rather than the whole `[browser:x]`
+ * tag, because the bench writes every affected browser into ONE comma-joined
+ * tag (`[browser:chromium,firefox]`) and a substring match cannot anchor to a
+ * list element. The names are distinctive enough for that to be exact —
+ * `chromium` is not a substring of `mobile-chrome`, and no category value
+ * contains a browser name — but a project named as a prefix of another would
+ * break it, which is the standing reason to keep BROWSERS in step with the
+ * bench's Playwright projects.
+ */
+function whiteboardCharts(filters: BugFilters, query: BugzillaQuery): void {
+  const categories = (filters.category ?? []).filter((c) => c !== 'Unclassified');
+  const browsers = filters.browser ?? [];
+  if (categories.length === 0 && browsers.length === 0) return;
+
+  const chart = chartWriter(query);
+
+  if (categories.length > 0) {
+    chart.open();
+    for (const category of categories) {
+      // New encoding: the explicit tag.
+      chart.push('status_whiteboard', `[cat:${category}]`);
+      // Legacy encoding: every classification that maps to this category.
+      for (const [classification, mapped] of Object.entries(CATEGORY_BY_CLASSIFICATION)) {
+        if (mapped === category) chart.push('longdesc', `Classification: ${classification}`);
+      }
     }
+    chart.close();
   }
-  query.j_top = 'OR';
+
+  if (browsers.length > 0) {
+    chart.open();
+    for (const browser of browsers) chart.push('status_whiteboard', browser);
+    chart.close();
+  }
 }
 
 /**
@@ -297,12 +394,20 @@ export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
   if (filters.product?.length) query.product = filters.product;
   if (filters.component?.length) query.component = filters.component;
   if (filters.status?.length) query.bug_status = filters.status;
+  /*
+   * Bugzilla spells "no resolution yet" as the literal `---`, not as an empty string, and a
+   * bare empty value in the query matches nothing. Translating here keeps that quirk out of the
+   * URL contract, so the UI can offer a plain "Unresolved" option.
+   */
+  if (filters.resolution?.length) {
+    query.resolution = filters.resolution.map((r) => (r === '' || r === 'Unresolved' ? '---' : r));
+  }
   if (filters.search) query.summary = filters.search;
   if (filters.assignedTo) query.assigned_to = filters.assignedTo;
   if (filters.creator) query.creator = filters.creator;
   if (filters.cc) query.cc = filters.cc;
 
-  if (filters.category?.length) categoryChart(filters.category, query);
+  whiteboardCharts(filters, query);
 
   return query;
 }

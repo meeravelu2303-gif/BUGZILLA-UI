@@ -187,6 +187,27 @@ export interface ApiErrorBody {
   code: ErrorCode;
   message: string;
   upstream?: { code: number; message: string };
+  /**
+   * Machine-readable specifics the UI can act on rather than only print.
+   * RATE_LIMITED carries the cooldown shape, which is what lets the sign-in
+   * form say "try again in 4 minutes" instead of repeating a server sentence.
+   */
+  details?: RateLimitDetails & Record<string, unknown>;
+}
+
+/** The `details` block on a RATE_LIMITED error. Every field is optional: two
+ *  different limiters emit this shape - the BFF's own (which knows the exact
+ *  window) and Bugzilla's account lockout (which only knows a display time). */
+export interface RateLimitDetails {
+  retryAfterSeconds?: number;
+  /** ISO instant the cooldown ends. Absent for Bugzilla-side lockouts. */
+  retryAt?: string;
+  limit?: number;
+  remaining?: number;
+  windowSeconds?: number;
+  /** Bugzilla's own unlock time, already rendered in the server's locale. */
+  unlockAtText?: string;
+  scope?: string;
 }
 
 /**
@@ -293,6 +314,13 @@ export interface Classification {
   category: Category;
   /** The bench's finer-grained flaw label, e.g. "Security/Access Control". */
   classification: string | null;
+  /**
+   * Every browser the bug was observed on, from the `[browser:a,b]` whiteboard
+   * tag the UI bench writes. Empty for bugs that carry no tag — every API-bench
+   * bug, and any UI bug filed before browser tagging existed. Render empty as
+   * absent; never guess a browser onto a bug.
+   */
+  browsers: string[];
 }
 
 export interface AffectedEndpoint {
@@ -328,6 +356,16 @@ export interface BugStats {
   bySeverity: Record<Severity, number>;
   byCategory: Record<Category, number>;
   byComponent: Record<string, number>;
+  /**
+   * Bugs per Playwright project. A key is present only when some bug in scope
+   * carries that browser, so an empty object means "this scope has no
+   * browser-tagged bugs" — which is what gates the Browser filter control.
+   * Optional: an older backend does not send it.
+   *
+   * A bug naming several browsers counts once per browser, so these sum higher
+   * than the bug total. They size a filter option, not the result set.
+   */
+  byBrowser?: Record<string, number>;
   matrix: Record<Severity, Record<Category, number>>;
   /**
    * Still-open bugs only — the current defect load, and what the dashboard shows.
@@ -337,6 +375,7 @@ export interface BugStats {
   openBySeverity?: Record<Severity, number>;
   openByCategory?: Record<Category, number>;
   openByComponent?: Record<string, number>;
+  openByBrowser?: Record<string, number>;
   openMatrix?: Record<Severity, Record<Category, number>>;
   cachedAt: string;
 }
@@ -346,8 +385,17 @@ export interface BugFilters {
   severity: Severity[];
   priority: Priority[];
   category: Category[];
+  /**
+   * Playwright project names, from the `[browser:…]` whiteboard tag. UI-bench
+   * only — API-bench bugs carry no tag, so this facet narrows an API-only scope
+   * to nothing. The filter bar hides the control in that case rather than
+   * offering options that all return zero.
+   */
+  browser: string[];
   product: string[];
   component: string[];
   status: string[];
+  /** Bugzilla resolutions. `Unresolved` is translated to Bugzilla's `---` server-side. */
+  resolution: string[];
   search: string;
 }

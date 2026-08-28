@@ -2,7 +2,7 @@ import { BarChart3, Bug, ListChecks, LogIn, Search, ShieldCheck } from 'lucide-r
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLogin } from '../api/hooks';
-import { ApiError } from '../api/client';
+import { getSignInErrorMessage } from '../lib/authErrorMessage';
 import { UEducateLogo } from '../components/brand/UEducateLogo';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Field';
@@ -28,7 +28,7 @@ export function Login() {
       await loginMutation.mutateAsync({ login, password });
       navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+      setError(getSignInErrorMessage(err));
     }
   }
 

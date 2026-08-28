@@ -6,6 +6,7 @@ import { getCategoryIndex } from '../lib/categoryIndex';
 import {
   CATEGORIES,
   SEVERITIES,
+  browsersOf,
   classify,
   toBugzillaQuery,
   type BugFilters,
@@ -16,6 +17,7 @@ import type { BugzillaClient } from '../lib/bugzillaClient';
 import { closedStatuses } from '../lib/bugStatus';
 import { AppError } from '../lib/errors';
 import { parseDescription } from '../lib/grouping';
+import { displayNameFor, resolveDisplayNames } from '../lib/displayNames';
 import { parseInput } from '../lib/validate';
 import {
   addCommentSchema,
@@ -330,6 +332,19 @@ export function bugsRouter(env: Env): Router {
         SEVERITIES.map((s) => [s, zeroed(CATEGORIES)])
       ) as Record<Severity, Record<Category, number>>;
 
+      /*
+       * Browser counts, from the whiteboard this endpoint already fetches - no
+       * extra upstream call. Deliberately NOT pre-seeded with the known project
+       * names: an absent key means "no bug in this scope was seen on it", which
+       * is what lets the filter bar hide the Browser control entirely for an
+       * API-only scope rather than offering four options that all return zero.
+       *
+       * A bug naming several browsers counts once per browser, so these tally
+       * higher than the bug count. They size a filter option, not the result set.
+       */
+      const byBrowser: Record<string, number> = {};
+      const openByBrowser: Record<string, number> = {};
+
       let open = 0;
       for (const row of raw.bugs) {
         const { severity } = classify({ severity: row.severity, priority: row.priority, whiteboard: row.whiteboard });
@@ -338,12 +353,15 @@ export function bugsRouter(env: Env): Router {
         byCategory[category] += 1;
         matrix[severity][category] += 1;
         byComponent[row.component] = (byComponent[row.component] ?? 0) + 1;
+        const browsers = browsersOf(row.whiteboard);
+        for (const browser of browsers) byBrowser[browser] = (byBrowser[browser] ?? 0) + 1;
         if (row.is_open) {
           open += 1;
           openBySeverity[severity] += 1;
           openByCategory[category] += 1;
           openMatrix[severity][category] += 1;
           openByComponent[row.component] = (openByComponent[row.component] ?? 0) + 1;
+          for (const browser of browsers) openByBrowser[browser] = (openByBrowser[browser] ?? 0) + 1;
         }
       }
 
@@ -354,10 +372,12 @@ export function bugsRouter(env: Env): Router {
         bySeverity,
         byCategory,
         byComponent,
+        byBrowser,
         matrix,
         openBySeverity,
         openByCategory,
         openByComponent,
+        openByBrowser,
         openMatrix,
         cachedAt: new Date(index.builtAt).toISOString(),
       });
@@ -380,11 +400,31 @@ export function bugsRouter(env: Env): Router {
 
       const bug = normalizeBug(rawBugSchema.parse(bugResp.bugs[0]));
       const rawComments = commentResp.bugs[String(id)]?.comments ?? [];
-      const comments = rawComments.map((c) => normalizeComment(rawCommentSchema.parse(c))).sort((a, b) => a.count - b.count);
-      const description = comments.find((c) => c.count === 0)?.text ?? '';
+      const parsedComments = rawComments
+        .map((c) => normalizeComment(rawCommentSchema.parse(c)))
+        .sort((a, b) => a.count - b.count);
+      const description = parsedComments.find((c) => c.count === 0)?.text ?? '';
 
       const rawAttachments = attachmentResp.bugs[String(id)] ?? [];
-      const attachments = rawAttachments.map((a) => normalizeAttachment(rawAttachmentSchema.parse(a)));
+      const parsedAttachments = rawAttachments.map((a) => normalizeAttachment(rawAttachmentSchema.parse(a)));
+
+      /*
+       * Comments and attachments arrive carrying only a login (`jagan@kpost.in`),
+       * while the bug header carries a full `creator_detail` with a real name.
+       * Rendering each as it arrives put "Jaganathan Murthy" in the sidebar and
+       * his e-mail address on every comment and attachment right beside it.
+       * Resolve both through the same lookup so one page refers to a person one
+       * way. See `lib/displayNames.ts` for why Bugzilla makes this necessary.
+       */
+      const names = await resolveDisplayNames(client, [
+        ...parsedComments.map((c) => c.author),
+        ...parsedAttachments.map((a) => a.creator),
+      ]);
+      const comments = parsedComments.map((c) => ({ ...c, author: displayNameFor(names, c.author) }));
+      const attachments = parsedAttachments.map((a) => ({
+        ...a,
+        creator: displayNameFor(names, a.creator),
+      }));
 
       /*
        * The detail view has the description in hand, so classification and the
@@ -410,10 +450,15 @@ export function bugsRouter(env: Env): Router {
     }
   });
 
-  // GET /api/bugs/:id/attachments/:attachmentId  (binary download, streamed)
+  // GET /api/bugs/:id/attachments/:attachmentId  (binary, streamed)
+  // Video and image attachments are served `inline` by default so the browser
+  // can play/render them directly; everything else (traces, unknown binaries)
+  // defaults to `attachment` since there's nothing useful to render inline.
+  // Pass ?download=1 to force a save-as regardless of content type.
   router.get('/:id/attachments/:attachmentId', auth, async (req, res, next) => {
     try {
       const { attachmentId } = parseInput(z.object({ attachmentId: z.coerce.number().int().positive() }), req.params);
+      const forceDownload = req.query.download === '1';
       const client = req.bugzilla!;
       const resp = await client.get<{ attachments: Record<string, { data: string; file_name: string; content_type: string }> }>(
         `/bug/attachment/${attachmentId}`
@@ -423,9 +468,13 @@ export function bugsRouter(env: Env): Router {
         throw new AppError(404, 'NOT_FOUND', 'That attachment could not be found.');
       }
       const buffer = Buffer.from(attachment.data, 'base64');
-      res.setHeader('Content-Type', attachment.content_type || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.file_name)}"`);
+      const contentType = attachment.content_type || 'application/octet-stream';
+      const isInlineViewable = /^(video|image)\//.test(contentType);
+      const disposition = !forceDownload && isInlineViewable ? 'inline' : 'attachment';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(attachment.file_name)}"`);
       res.setHeader('Content-Length', String(buffer.length));
+      res.setHeader('Accept-Ranges', 'bytes');
       res.send(buffer);
     } catch (err) {
       next(err);
@@ -525,7 +574,14 @@ export function bugsRouter(env: Env): Router {
       const comments = rawComments.map((c) => normalizeComment(rawCommentSchema.parse(c))).sort((a, b) => a.count - b.count);
       const newest = comments[comments.length - 1];
 
-      res.status(201).json({ comment: newest });
+      // Resolve the author here too, or a freshly posted comment appears under
+      // an e-mail address until the page is reloaded and the rest appear under
+      // real names — the same inconsistency, just briefer.
+      const names = await resolveDisplayNames(client, newest ? [newest.author] : []);
+
+      res.status(201).json({
+        comment: newest ? { ...newest, author: displayNameFor(names, newest.author) } : newest,
+      });
     } catch (err) {
       next(err);
     }

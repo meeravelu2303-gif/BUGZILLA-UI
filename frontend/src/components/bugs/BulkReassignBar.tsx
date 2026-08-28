@@ -11,8 +11,23 @@ import { Select } from '../ui/Field';
  * them all in a single call. Reassigning is a normal developer action, so this is available
  * wherever the bug list is — the backend enforces the actual Bugzilla permission.
  */
-export function BulkReassignBar({ selectedIds, onDone }: { selectedIds: Set<number>; onDone: () => void }) {
-  const { data: assignable } = useAssignableUsers();
+export function BulkReassignBar({
+  selectedIds,
+  onDone,
+  product,
+}: {
+  selectedIds: Set<number>;
+  onDone: () => void;
+  /**
+   * Scopes the assignee list to one product's team.
+   *
+   * Passed only when the list is filtered to a single product — a selection spanning several has
+   * no one team to offer, and narrowing to an arbitrary one would hide the people the other bugs
+   * belong to. Undefined then, which falls back to the full list.
+   */
+  product?: string;
+}) {
+  const { data: assignable } = useAssignableUsers(product);
   const bulk = useBulkReassign();
   const { toast } = useToast();
   const [assignee, setAssignee] = useState('');

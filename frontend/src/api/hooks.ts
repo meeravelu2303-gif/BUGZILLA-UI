@@ -67,11 +67,21 @@ export interface AssignableUser {
   name: string;
 }
 
-/** The people a bug can be reassigned to — populates the Assignee dropdown. */
-export function useAssignableUsers() {
+/**
+ * The people a bug can be reassigned to — populates the Assignee dropdown.
+ *
+ * `product` scopes the list to that product's team. Without it the dropdown listed every account
+ * on the instance, so reassigning a KPost UI bug offered the API team and vice versa — and
+ * choosing one hands the bug to somebody who cannot see it. Keyed by product so switching
+ * between bugs never serves a cached list belonging to a different team.
+ */
+export function useAssignableUsers(product?: string) {
   return useQuery({
-    queryKey: ['meta', 'assignable-users'],
-    queryFn: () => api.get<{ users: AssignableUser[] }>('/meta/assignable-users'),
+    queryKey: ['meta', 'assignable-users', product ?? null],
+    queryFn: () =>
+      api.get<{ users: AssignableUser[] }>(
+        `/meta/assignable-users${buildQuery(product ? { product } : {})}`
+      ),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -110,11 +120,15 @@ export function useBugCounts(params: BugQueryParams = {}) {
  * category, by component, and the severity x category matrix. Computed
  * server-side so drawing a chart never costs 1,283 bug records.
  */
-export function useBugStats(params: BugQueryParams = {}) {
+export function useBugStats(params: BugQueryParams = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['bugs', 'stats', params],
     queryFn: () => api.get<BugStats>(`/bugs/stats${buildQuery(params)}`),
     staleTime: 30 * 1000,
+    // Callers that only need a scoped breakdown under some condition (the
+    // filter bar's browser gate) can skip the request entirely rather than
+    // fetching a duplicate of the unscoped stats they already hold.
+    enabled: options?.enabled ?? true,
   });
 }
 

@@ -11,6 +11,7 @@ import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { CategoryPill, PriorityPill, SeverityPill, StatusPill } from '../components/ui/Pill';
 import { Skeleton } from '../components/ui/Skeleton';
+import { lastListLabel, lastListView } from '../lib/lastListView';
 import { bugDisplayId } from '../lib/utils';
 
 export function BugDetail() {
@@ -43,6 +44,10 @@ export function BugDetail() {
   }
 
   const { bug, comments, attachments } = data;
+  // Read once per render, before any navigation away, so the link always points at the list the
+  // reader actually arrived from.
+  const backTo = lastListView();
+  const backLabel = lastListLabel();
   const product = productsData?.products.find((p) => p.name === bug.product);
   const triage = bug.triage;
   const grouping = bug.grouping;
@@ -50,8 +55,12 @@ export function BugDetail() {
 
   return (
     <div className="mx-auto max-w-[1600px] overflow-x-clip px-6 py-8 sm:px-8">
-      <Link to="/bugs" className="focus-ring inline-flex items-center gap-1.5 rounded text-sm font-medium text-slate-500 transition-colors hover:text-slate-800">
-        <ArrowLeft className="h-3.5 w-3.5" /> Back to bugs
+      {/* Returns to the list the reader came from, filters, sort and page intact. Resolved at
+          render rather than held in state: this page is reached from BugList, MyBugs, Advanced
+          Search and the dashboard matrix, and a plain `/bugs` discarded the filtering that found
+          the bug in the first place. Falls back to `/bugs` on a deep link or a fresh tab. */}
+      <Link to={backTo} className="focus-ring inline-flex items-center gap-1.5 rounded text-sm font-medium text-slate-500 transition-colors hover:text-slate-800">
+        <ArrowLeft className="h-3.5 w-3.5" /> {backLabel}
       </Link>
 
       {/* Classification leads: what kind of defect this is, and how urgent. An elevated hero

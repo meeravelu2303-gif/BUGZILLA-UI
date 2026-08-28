@@ -6,6 +6,7 @@ import { FilterBar } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
 import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
+import { useBrowserScope } from '../lib/useBrowserScope';
 import { useBugFilters } from '../lib/useBugFilters';
 import { AlertCircle } from 'lucide-react';
 
@@ -22,7 +23,7 @@ export function BugList() {
    * most important work should be on top without asking.
    */
   const controller = useBugFilters({ sortBy: 'importance', sortDir: 'asc' });
-  const { queryParams, sortBy, sortDir, toggleSort, offset, setOffset, isFiltered } = controller;
+  const { filters, queryParams, sortBy, sortDir, toggleSort, offset, setOffset, isFiltered } = controller;
 
   const query = useMemo(
     () => ({ ...queryParams, limit: LIMIT, offset, sortBy, sortDir }),
@@ -61,6 +62,9 @@ export function BugList() {
   const { data: filteredCount } = useBugCounts(queryParams);
   const { data: totalCount } = useBugCounts({});
   const { data: stats } = useBugStats();
+  // Same answer the FilterBar uses for its Browser control, so the column and
+  // the filter for it appear and disappear together.
+  const { hasBrowsers } = useBrowserScope(filters, stats);
 
   return (
     <div className="mx-auto max-w-[1600px] px-8 py-8">
@@ -69,7 +73,7 @@ export function BugList() {
         <p className="mt-1 text-sm text-slate-600">Browse, filter and triage every defect across your products.</p>
       </div>
 
-      <Card>
+      <Card variant="solid">
         <FilterBar
           controller={controller}
           meta={meta}
@@ -96,14 +100,23 @@ export function BugList() {
                 sortDir={sortDir}
                 onSort={toggleSort}
                 selection={{ selectedIds, onToggle: toggle, onToggleAll: toggleAll, allOnPageSelected }}
+                showBrowserColumn={hasBrowsers}
               />
             </div>
-            <BulkReassignBar selectedIds={selectedIds} onDone={() => setSelectedIds(new Set())} />
+            <BulkReassignBar
+              selectedIds={selectedIds}
+              onDone={() => setSelectedIds(new Set())}
+              // Only when exactly one product is in view: a mixed selection has no single team.
+              product={filters.product.length === 1 ? filters.product[0] : undefined}
+            />
             {data && (data.bugs.length > 0 || offset > 0) && (
               <Pagination
                 offset={offset}
                 hasMore={data.pageInfo.hasMore}
                 count={data.bugs.length}
+                // The count for the CURRENT filters, so Next is never offered past the end of a
+                // narrowed result set — the empty-page bug.
+                total={filteredCount?.counts.total}
                 onPrev={() => setOffset(Math.max(0, offset - LIMIT))}
                 onNext={() => setOffset(offset + LIMIT)}
               />
