@@ -1,0 +1,18 @@
+{
+  "name": "bugzilla-ui-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "End-to-end and security tests for the Bugzilla UI (React) + BFF (Express).",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:security": "playwright test --grep @security",
+    "test:visual": "playwright test --grep @visual",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "@types/node": "^20.14.10"
+  }
+}
