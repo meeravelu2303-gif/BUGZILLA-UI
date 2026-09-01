@@ -1,6 +1,6 @@
 # E2E suite — Bugzilla UI + BFF
 
-28 Playwright specs over the running stack: the Express BFF on `:4000` and the
+35 Playwright specs over the running stack: the Express BFF on `:4000` and the
 Vite dev server on `:5175`. No mocks — every assertion runs against the real
 servers and the real Bugzilla behind them.
 
@@ -10,10 +10,21 @@ cd frontend && npm run dev          # :5175
 
 cd e2e
 npm install && npx playwright install chromium
-npm test                            # all 28
+
+# The suite signs in as two robot accounts that are NOT left on the instance
+# between runs — a bug tracker's user list should hold people, not bots.
+# Run from the Bugzilla checkout, which is where its Perl modules resolve:
+#   cd C:\Bugzilla
+#   perl D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\e2e\provision-accounts.pl
+
+npm test                            # all 35
 npm run test:security               # @security only
 npm run test:visual                 # @visual only
 npm run report                      # last HTML report
+
+# Afterwards, take the robot accounts back out again:
+#   cd C:\Bugzilla
+#   perl D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\e2e\purge-accounts.pl
 ```
 
 ## Layout
@@ -32,7 +43,7 @@ e2e/
     ui-theme.spec.ts          4  light theme, incl. the dark-OS tripwire
     ui-browser-column.spec.ts 4  conditional column + its filter
     ui-badges.spec.ts         4  pastel micro-badges, distinguishable axes
-    ui-login-errors.spec.ts   5  rendered error copy and sanitisation
+    ui-login-errors.spec.ts  12  error copy, sanitisation, field validation, focus, reveal toggle
   SECURITY-CHECKLIST.md       audit items, automated and manual
 ```
 
@@ -66,6 +77,13 @@ BFF limiter is in play, so its threshold is actually reachable.
 | Account | Purpose |
 |---|---|
 | `qa-e2e@kpost.local` | The suite's identity. In **both** product groups, because the products are `MANDATORY`-gated and an account outside them sees zero bugs — every UI assertion would then pass against an empty table. |
+
+Both are created by `provision-accounts.pl` and removed again by
+`purge-accounts.pl`. They are **not** left on the instance between runs: they are
+robot accounts, and a bug tracker's user list should hold people. They author
+nothing — the suite reads bugs and reassigns them, it never files any — which is
+what makes removing them clean, and `purge-accounts.pl` refuses if that ever
+stops being true.
 | `qa-e2e-lockout@kpost.local` | Sacrificial. One spec must trip Bugzilla's *own* lockout, which lasts ~30 minutes; pointing that at the shared account would strand every later spec. Holds no groups and is used for nothing else. |
 
 Override with `E2E_LOGIN` / `E2E_PASSWORD` / `E2E_LOCKOUT_LOGIN`. **Never point

@@ -65,6 +65,10 @@ export function BugTable({
     onToggle: (id: number) => void;
     onToggleAll: () => void;
     allOnPageSelected: boolean;
+    /** Whether this row may take part in a bulk action at all. */
+    canSelect: (bug: Bug) => boolean;
+    /** Why not, for the tooltip and the accessible name. `undefined` when it can. */
+    selectReason: (bug: Bug) => string | undefined;
   };
   /**
    * Whether the Browser column is meaningful here — normally from
@@ -175,18 +179,22 @@ export function BugTable({
                           happen - the reason is on the control instead of arriving
                           as an error after the fact.
                         */}
+                        {/*
+                          Second reason a row may be unselectable: it belongs to
+                          someone else. Only the current assignee - or a tester,
+                          who triages - may hand a bug on, so a developer sees
+                          their own rows selectable and everyone else's greyed.
+                          The backend enforces the same rule; this just means the
+                          refusal never has to happen.
+                        */}
                         <input
                           type="checkbox"
                           className="h-4 w-4 rounded border-slate-300 text-brand-600 focus-ring enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                           checked={selection.selectedIds.has(bug.id)}
-                          disabled={!bug.isOpen}
+                          disabled={!selection.canSelect(bug)}
                           onChange={() => selection.onToggle(bug.id)}
-                          aria-label={
-                            bug.isOpen
-                              ? `Select ${bugDisplayId(bug)}`
-                              : `${bugDisplayId(bug)} is closed and cannot be reassigned`
-                          }
-                          title={bug.isOpen ? undefined : `${bug.status} bugs can't be reassigned — reopen it first.`}
+                          aria-label={selection.selectReason(bug) ?? `Select ${bugDisplayId(bug)}`}
+                          title={selection.selectReason(bug)}
                         />
                       </td>
                     )}

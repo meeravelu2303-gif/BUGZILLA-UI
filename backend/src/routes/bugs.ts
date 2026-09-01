@@ -140,12 +140,52 @@ const CAMEL_TO_BUGZILLA_UPDATE: Record<string, string> = {
  * Enforced here rather than only in the UI: the UI disables the control, but a
  * direct API call would otherwise sail straight through to Bugzilla.
  */
-async function assertReassignable(client: BugzillaClient, ids: number[], targetStatus?: string): Promise<void> {
-  const resp = await client.get<{ bugs: { id: number; status: string; is_open: boolean }[] }>('/bug', {
+/**
+ * `actor` enables the ownership rule: a caller who cannot triage may only move
+ * bugs already assigned to them.
+ *
+ * Bugzilla's own `editbugs` says "can edit all bug fields" and draws no line
+ * around ownership, so without this any developer could reach across and
+ * reassign a colleague's work - which is how a bug quietly leaves the person
+ * actually carrying it. Enforced here rather than only by hiding the control:
+ * the UI can be bypassed with a direct API call, and this is an authorisation
+ * rule, not a convenience.
+ */
+async function assertReassignable(
+  client: BugzillaClient,
+  ids: number[],
+  targetStatus?: string,
+  actor?: { email: string; canTriage: boolean }
+): Promise<void> {
+  const resp = await client.get<{
+    bugs: { id: number; status: string; is_open: boolean; assigned_to: string }[];
+  }>('/bug', {
     id: ids.join(','),
-    include_fields: 'id,status,is_open',
+    include_fields: 'id,status,is_open,assigned_to',
     limit: 0,
   });
+
+  if (actor && !actor.canTriage) {
+    const me = actor.email.toLowerCase();
+    const notMine = resp.bugs.filter((b) => (b.assigned_to ?? '').toLowerCase() !== me);
+    if (notMine.length > 0) {
+      // Named, like the closed-bug case: on a bulk action "some are not yours"
+      // leaves the caller guessing which row to deselect.
+      const listed = notMine
+        .slice(0, 5)
+        .map((b) => `#${b.id}`)
+        .join(', ');
+      const rest = notMine.length > 5 ? `, and ${notMine.length - 5} more` : '';
+      const subject = notMine.length === 1 ? 'that bug is' : `${notMine.length} of the selected bugs are`;
+
+      throw new AppError(
+        403,
+        'FORBIDDEN',
+        `Cannot reassign - ${subject} assigned to someone else: ${listed}${rest}. ` +
+          `Only the current assignee, or a tester, can hand a bug on.`
+      );
+    }
+  }
 
   const closed = resp.bugs.filter((b) => !b.is_open);
   if (closed.length > 0) {
@@ -523,7 +563,10 @@ export function bugsRouter(env: Env): Router {
       // All-or-nothing: Bugzilla applies the whole id array in one call, so a
       // partial success is not expressible. Refusing the batch and naming the
       // closed bugs is better than silently reassigning some of them.
-      await assertReassignable(req.bugzilla!, ids);
+      await assertReassignable(req.bugzilla!, ids, undefined, {
+        email: req.sessionUser!.email,
+        canTriage: req.sessionUser!.permissions.canTriage,
+      });
       // Bugzilla requires an id in the URL; the body `ids` array is what selects every bug to
       // change, so all of them are updated by this one request.
       await req.bugzilla!.put(`/bug/${ids[0]}`, { ids, assigned_to: assignedTo });
@@ -548,7 +591,12 @@ export function bugsRouter(env: Env): Router {
 
       // Only guard when the assignee is actually changing: every other edit
       // (adding a resolution, correcting a component) stays legal on a closed bug.
-      if (input.assignedTo !== undefined) await assertReassignable(client, [id], input.status);
+      if (input.assignedTo !== undefined) {
+        await assertReassignable(client, [id], input.status, {
+          email: req.sessionUser!.email,
+          canTriage: req.sessionUser!.permissions.canTriage,
+        });
+      }
 
       await client.put(`/bug/${id}`, payload);
 

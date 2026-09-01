@@ -121,6 +121,13 @@ export interface BugDetailResponse {
 export interface Permissions {
   canManageUsers: boolean;
   canManageProducts: boolean;
+  /**
+   * May hand a bug to someone else even when it is not theirs - testers and
+   * admins. A developer can move their own bugs on, but not a colleague's.
+   * Optional so a client running against an older backend degrades to the
+   * restrictive behaviour rather than assuming the permission.
+   */
+  canTriage?: boolean;
 }
 
 export interface AuthUser {
@@ -143,6 +150,10 @@ export interface CreateUserInput {
   email: string;
   fullName?: string;
   password: string;
+  /** Capability bundle; the backend maps it to Bugzilla groups. */
+  role?: Role;
+  /** Products the account may see - one same-named group each. */
+  products?: string[];
 }
 
 export interface UpdateUserInput {
@@ -150,6 +161,9 @@ export interface UpdateUserInput {
   password?: string;
   disabled?: boolean;
   disabledReason?: string;
+  /** Sent together: role decides capability, products decide access. */
+  role?: Role;
+  products?: string[];
 }
 
 export interface CreateProductInput {
@@ -398,4 +412,42 @@ export interface BugFilters {
   /** Bugzilla resolutions. `Unresolved` is translated to Bugzilla's `---` server-side. */
   resolution: string[];
   search: string;
+}
+
+/* ------------------------------------------------------------------ roles */
+
+/**
+ * Account roles, mirroring backend/src/lib/roles.ts.
+ *
+ * Duplicated rather than imported because the two builds are separate TypeScript
+ * projects with no shared package; the backend is the authority and validates
+ * whatever arrives, so a drift here is caught as a 400 rather than silently
+ * granting the wrong groups.
+ */
+export const ROLES = ['developer', 'tester', 'admin'] as const;
+export type Role = (typeof ROLES)[number];
+
+export const ROLE_LABELS: Record<Role, string> = {
+  developer: 'Developer',
+  tester: 'Tester',
+  admin: 'Administrator',
+};
+
+export const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  developer: 'Files and works bugs in the products they are given. Cannot confirm or triage.',
+  tester: 'Files, confirms and triages bugs, and marks duplicates.',
+  admin: 'Everything a tester can do, plus managing users and products.',
+};
+
+/**
+ * Best-fit role for an account, read back from the groups it holds.
+ * Mirrors roleFromGroups in backend/src/lib/roles.ts.
+ */
+export function roleFromGroups(groups: string[]): Role {
+  const held = new Set(groups);
+  // Widest first: an admin also holds `canconfirm`, so testing that first would
+  // report every admin as a tester.
+  if (held.has('editusers') || held.has('editcomponents')) return 'admin';
+  if (held.has('canconfirm')) return 'tester';
+  return 'developer';
 }

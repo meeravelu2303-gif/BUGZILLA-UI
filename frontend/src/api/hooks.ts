@@ -75,12 +75,15 @@ export interface AssignableUser {
  * choosing one hands the bug to somebody who cannot see it. Keyed by product so switching
  * between bugs never serves a cached list belonging to a different team.
  */
-export function useAssignableUsers(product?: string) {
+export function useAssignableUsers(product?: string | string[]) {
+  // Normalised so ['KPost API'] and 'KPost API' share one cache entry rather
+  // than fetching the same list twice under two keys.
+  const products = (Array.isArray(product) ? product : product ? [product] : []).filter(Boolean).sort();
   return useQuery({
-    queryKey: ['meta', 'assignable-users', product ?? null],
+    queryKey: ['meta', 'assignable-users', products.join('|')],
     queryFn: () =>
       api.get<{ users: AssignableUser[] }>(
-        `/meta/assignable-users${buildQuery(product ? { product } : {})}`
+        `/meta/assignable-users${buildQuery(products.length ? { product: products } : {})}`
       ),
     staleTime: 5 * 60 * 1000,
   });
@@ -207,7 +210,10 @@ export function useAdminUser(id: number) {
 export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateUserInput) => api.post<{ user: AdminUser }>('/admin/users', input),
+    // `skippedGroups` names any product with no matching Bugzilla group, so the
+    // form can say what was NOT granted instead of implying full setup.
+    mutationFn: (input: CreateUserInput) =>
+      api.post<{ user: AdminUser; skippedGroups?: string[]; groupError?: string }>('/admin/users', input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
@@ -217,7 +223,8 @@ export function useCreateUser() {
 export function useUpdateUser(id: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: UpdateUserInput) => api.patch<{ user: AdminUser }>(`/admin/users/${id}`, input),
+    mutationFn: (input: UpdateUserInput) =>
+      api.patch<{ user: AdminUser; skippedGroups?: string[]; groupError?: string }>(`/admin/users/${id}`, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'users'] });
     },

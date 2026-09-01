@@ -17,7 +17,28 @@ test.describe('conditional Browser column @visual', () => {
     await gotoBugList(page);
   });
 
+  /**
+   * Skips when the instance holds no browser-tagged bugs at all.
+   *
+   * The column is data-driven by design, so with an empty UI product there is
+   * genuinely nothing to assert and the feature is working correctly by hiding
+   * it. Failing here would report a product defect for what is really "the
+   * bench has not run yet" - and a suite that cries wolf after every data reset
+   * stops being read. Skipping states the reason instead.
+   */
+  async function requireBrowserData(page: import('@playwright/test').Page): Promise<void> {
+    const res = await page.request.get(
+      `http://localhost:4000/api/bugs/stats?product=${encodeURIComponent(PRODUCTS.ui)}`
+    );
+    const byBrowser = (await res.json().catch(() => null))?.byBrowser ?? {};
+    test.skip(
+      Object.keys(byBrowser).length === 0,
+      `No browser-tagged bugs in "${PRODUCTS.ui}" - run the UI bench to populate them.`
+    );
+  }
+
   test(`is present, with pills, when filtered to ${PRODUCTS.ui}`, async ({ page }) => {
+    await requireBrowserData(page);
     await filterByProduct(page, PRODUCTS.ui);
 
     await expect(columnHeader(page, 'Browser'), 'UI-bench bugs carry browser tags').toBeVisible();
@@ -54,6 +75,7 @@ test.describe('conditional Browser column @visual', () => {
   });
 
   test('the column returns when the filter is cleared', async ({ page }) => {
+    await requireBrowserData(page);
     await filterByProduct(page, PRODUCTS.api);
     await expect(columnHeader(page, 'Browser')).toHaveCount(0);
 

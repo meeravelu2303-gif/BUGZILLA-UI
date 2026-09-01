@@ -13,7 +13,7 @@ import { TEST_USER, UI_URL } from './env';
 export async function signIn(page: Page): Promise<void> {
   await page.goto(`${UI_URL}/login`);
   await page.getByLabel('Email').fill(TEST_USER.login);
-  await page.getByLabel('Password').fill(TEST_USER.password);
+  await page.getByLabel('Password', { exact: true }).fill(TEST_USER.password);
   await page.getByRole('button', { name: /sign in/i }).click();
   // The form is replaced by the app shell; waiting on the URL rather than a
   // spinner keeps this independent of loading-state markup.

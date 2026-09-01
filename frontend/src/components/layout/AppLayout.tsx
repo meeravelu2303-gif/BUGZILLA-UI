@@ -92,7 +92,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <UEducateLogo height={28} />
           <div className="flex items-center gap-2 pl-0.5">
             <Bug className="h-3.5 w-3.5 text-brand-700" />
-            <span className="text-sm font-semibold tracking-tight text-ueducate-ink">Bugzilla</span>
+            {/*
+              Product name, matching the sign-in screen. Purely a brand label -
+              unlike the "Open in Bugzilla" links on the admin pages, which name
+              the actual system they navigate to and must keep saying so.
+            */}
+            <span className="text-sm font-semibold tracking-tight text-ueducate-ink">Bug Tracker</span>
           </div>
         </div>
         <button

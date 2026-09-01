@@ -21,6 +21,16 @@ export function normalizeUser(u?: UserDetail | null): { id: number; email: strin
 export interface Permissions {
   canManageUsers: boolean;
   canManageProducts: boolean;
+  /**
+   * May hand a bug to someone else even when it is not theirs.
+   *
+   * Comes from `canconfirm`, the group that already marks a triager on this
+   * instance ("confirm a bug or mark it a duplicate"). Deciding who a defect
+   * belongs to is the same job as deciding whether it is real, so the same
+   * people do both - testers and admins. A developer keeps their own bugs
+   * movable, but cannot reach across and reassign a colleague's.
+   */
+  canTriage: boolean;
 }
 
 /**
@@ -35,5 +45,8 @@ export function derivePermissions(groups: { name: string }[]): Permissions {
   return {
     canManageUsers: names.has('editusers'),
     canManageProducts: names.has('editcomponents'),
+    // `editusers` implies it: an admin who can create the accounts should not be
+    // blocked from routing work between them.
+    canTriage: names.has('canconfirm') || names.has('editusers'),
   };
 }

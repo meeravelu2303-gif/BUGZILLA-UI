@@ -25,8 +25,18 @@ export function requireAuth(env: Env) {
       bzToken: session.bzToken,
       email: String(session.email ?? ''),
       realName: String(session.realName ?? ''),
-      // Defensive default for sessions issued before permissions existed on the session.
-      permissions: session.permissions ?? { canManageUsers: false, canManageProducts: false },
+      /*
+       * Defensive default for sessions issued before a permission existed.
+       * Every flag defaults to FALSE, including `canTriage` - a session
+       * predating that field must not be treated as able to reassign other
+       * people's bugs. Signing in again refreshes it from the real groups.
+       */
+      permissions: {
+        canManageUsers: false,
+        canManageProducts: false,
+        canTriage: false,
+        ...(session.permissions ?? {}),
+      },
     };
     req.bugzilla = new BugzillaClient(env.BUGZILLA_URL, { kind: 'token', token: session.bzToken });
 

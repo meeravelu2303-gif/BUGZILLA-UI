@@ -25,7 +25,7 @@ export function BulkReassignBar({
    * no one team to offer, and narrowing to an arbitrary one would hide the people the other bugs
    * belong to. Undefined then, which falls back to the full list.
    */
-  product?: string;
+  product?: string | string[];
 }) {
   const { data: assignable } = useAssignableUsers(product);
   const bulk = useBulkReassign();

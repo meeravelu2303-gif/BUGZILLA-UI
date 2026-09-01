@@ -45,9 +45,38 @@ function emptyIndex(): Record<Category, Set<number>> {
 async function build(client: BugzillaClient): Promise<CategoryIndex> {
   const byCategory = emptyIndex();
 
-  // One query per category. Each returns ids only, so the payload stays small
-  // even when a category covers most of the product.
-  const results = await Promise.all(
+  /*
+   * One query per category for the TAGGED encoding, and one more for the legacy
+   * description line - deliberately separate, because the two are not equal
+   * authority and collapsing them lost that.
+   *
+   * A bug can satisfy both and disagree with itself: the bench tags KPA-005
+   * `[cat:Security]` while its description still reads `Classification: Input
+   * Validation Gap`, which the legacy table maps to Functional. Querying the
+   * two encodings together and taking whichever category matched first let the
+   * fallback outrank the explicit tag purely because `Functional` is earlier in
+   * SEARCHABLE - so the list badged it Functional while the detail page, which
+   * prefers the tag, said Security. Same bug, two answers, and a filter option
+   * reading 41 that returned 67 rows.
+   *
+   * Resolving tags first restores one rule everywhere: an explicit tag wins,
+   * and the description is consulted only for bugs that carry no tag.
+   */
+  const tagged = await Promise.all(
+    SEARCHABLE.map(async (category) => {
+      const params = {
+        f1: 'status_whiteboard',
+        o1: 'substring',
+        v1: `[cat:${category}]`,
+        limit: 0,
+        include_fields: 'id',
+      };
+      const raw = await client.get<{ bugs: { id: number }[] }>('/bug', params);
+      return [category, raw.bugs.map((b) => b.id)] as const;
+    })
+  );
+
+  const legacy = await Promise.all(
     SEARCHABLE.map(async (category) => {
       const params = { ...toBugzillaQuery({ category: [category] }), limit: 0, include_fields: 'id' };
       const raw = await client.get<{ bugs: { id: number }[] }>('/bug', params);
@@ -55,18 +84,30 @@ async function build(client: BugzillaClient): Promise<CategoryIndex> {
     })
   );
 
-  for (const [category, ids] of results) {
-    for (const id of ids) byCategory[category].add(id);
+  /*
+   * Resolve each bug to ONE category, tags before legacy lines.
+   *
+   * The precedence lives in the order these two loops run, not in SEARCHABLE
+   * order. Iterating `SEARCHABLE` over a merged set - which is what this did -
+   * silently reintroduces the bug being fixed: whichever category sits earliest
+   * in the list wins, regardless of whether it was matched by an authoritative
+   * tag or a fallback description line.
+   */
+  const lookup = new Map<number, Category>();
+  for (const [category, ids] of tagged) {
+    for (const id of ids) if (!lookup.has(id)) lookup.set(id, category);
+  }
+  for (const [category, ids] of legacy) {
+    for (const id of ids) if (!lookup.has(id)) lookup.set(id, category);
   }
 
-  const lookup = new Map<number, Category>();
-  for (const category of SEARCHABLE) {
-    for (const id of byCategory[category]) {
-      // First category wins; a bug matching two is vanishingly unlikely and the
-      // alternative (throwing) would fail a whole list request over one oddity.
-      if (!lookup.has(id)) lookup.set(id, category);
-    }
-  }
+  /*
+   * Derived FROM the resolved lookup rather than accumulated alongside it, so a
+   * bug belongs to exactly one set. Accumulating both encodings put bugs in two
+   * sets at once, which is why the facet counts summed past the bug total and
+   * an option reading "Security 41" returned 67 rows.
+   */
+  for (const [id, category] of lookup) byCategory[category].add(id);
 
   return {
     byCategory,

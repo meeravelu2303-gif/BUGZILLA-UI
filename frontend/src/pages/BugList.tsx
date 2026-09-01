@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useBugCounts, useBugStats, useBugs, useMeta, useProducts } from '../api/hooks';
+import { useBugCounts, useBugStats, useBugs, useMe, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
 import { BulkReassignBar } from '../components/bugs/BulkReassignBar';
 import { FilterBar } from '../components/bugs/FilterBar';
@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useBrowserScope } from '../lib/useBrowserScope';
 import { useBugFilters } from '../lib/useBugFilters';
+import type { Bug } from '../types';
 import { AlertCircle } from 'lucide-react';
 
 const LIMIT = 20;
@@ -15,6 +16,8 @@ const LIMIT = 20;
 export function BugList() {
   const { data: meta } = useMeta();
   const { data: productsData } = useProducts();
+  // Needed early: the selection rules below depend on who is signed in.
+  const { data: me } = useMe();
 
   /*
    * Filters, sort and pagination all live in the URL via one shared controller,
@@ -38,11 +41,56 @@ export function BugList() {
   useEffect(() => setSelectedIds(new Set()), [offset, sortBy, sortDir, queryParams]);
 
   /*
-   * Only open bugs are selectable. The one bulk action is reassignment, which the
-   * backend refuses on a closed bug, so "select all" must not sweep closed rows
-   * into a batch that is then rejected in its entirety.
+   * Which product's team may receive this batch.
+   *
+   * Read from the SELECTED BUGS, not from the product filter. The filter is the
+   * wrong source: an unfiltered list is still overwhelmingly one product's bugs,
+   * and deriving from the filter alone meant the Assignee dropdown fell back to
+   * every account on the instance the moment no filter was set - offering the
+   * KPost UI team for a KPost API bug, and even accounts in no product group at
+   * all, who cannot see the bug they would be handed.
+   *
+   * A selection spanning two products has no single team, so nothing is passed
+   * and the backend returns the unscoped list; picking wrongly there is still
+   * possible, but that is a genuinely ambiguous batch rather than a wrong
+   * default. The filter remains the fallback for that case.
    */
-  const pageIds = data?.bugs.filter((b) => b.isOpen).map((b) => b.id) ?? [];
+  const reassignProduct = useMemo(() => {
+    const products = [
+      ...new Set((data?.bugs ?? []).filter((b) => selectedIds.has(b.id)).map((b) => b.product)),
+    ];
+    // Every product in the batch, so the backend can intersect: only people who
+    // can reach ALL of them may take the whole selection. Returning nothing for
+    // a mixed batch (as this did) silently widened the list back to everyone.
+    if (products.length > 0) return products;
+    return filters.product.length > 0 ? filters.product : undefined;
+  }, [data, selectedIds, filters.product]);
+
+  /*
+   * Two rules decide whether a row can join a bulk reassignment, and each has
+   * its own sentence so the tooltip says which one applied:
+   *
+   *   1. Closed bugs are never reassignable - the assignee records who fixed it.
+   *   2. A bug belongs to its assignee. Only they, or a tester who triages, may
+   *      hand it on; a developer cannot reach across and move a colleague's work.
+   *
+   * The backend enforces both independently (the UI can be bypassed with a
+   * direct API call). Disabling here just means the refusal never has to happen.
+   */
+  const canTriage = me?.user.permissions.canTriage ?? false;
+  const myEmail = (me?.user.email ?? '').toLowerCase();
+
+  const selectReason = (bug: Bug): string | undefined => {
+    if (!bug.isOpen) return `${bug.status} bugs can't be reassigned — reopen it first.`;
+    if (canTriage) return undefined;
+    if ((bug.assignedTo?.email ?? '').toLowerCase() !== myEmail) {
+      return `Assigned to ${bug.assignedTo?.name ?? 'someone else'} — only the assignee or a tester can reassign it.`;
+    }
+    return undefined;
+  };
+  const canSelect = (bug: Bug) => selectReason(bug) === undefined;
+
+  const pageIds = data?.bugs.filter(canSelect).map((b) => b.id) ?? [];
   const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
   const toggle = (id: number) =>
     setSelectedIds((prev) => {
@@ -99,15 +147,14 @@ export function BugList() {
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={toggleSort}
-                selection={{ selectedIds, onToggle: toggle, onToggleAll: toggleAll, allOnPageSelected }}
+                selection={{ selectedIds, onToggle: toggle, onToggleAll: toggleAll, allOnPageSelected, canSelect, selectReason }}
                 showBrowserColumn={hasBrowsers}
               />
             </div>
             <BulkReassignBar
               selectedIds={selectedIds}
               onDone={() => setSelectedIds(new Set())}
-              // Only when exactly one product is in view: a mixed selection has no single team.
-              product={filters.product.length === 1 ? filters.product[0] : undefined}
+              product={reassignProduct}
             />
             {data && (data.bugs.length > 0 || offset > 0) && (
               <Pagination

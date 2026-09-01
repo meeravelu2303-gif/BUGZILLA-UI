@@ -315,8 +315,32 @@ function chartWriter(query: BugzillaQuery) {
       query[`f${row}`] = 'OP';
       query[`j${row}`] = 'OR';
     },
+    /**
+     * Opens an OR'd group whose result is NEGATED (`nN=1`), i.e. "matches none
+     * of the following". This is the only way to express "has no category at
+     * all", since absence cannot be matched by a substring.
+     */
+    openNegated(): void {
+      row += 1;
+      query[`n${row}`] = '1';
+      query[`f${row}`] = 'OP';
+      query[`j${row}`] = 'OR';
+    },
+    /** Opens a group whose rows are AND'd together (Bugzilla's default join). */
+    openAnd(): void {
+      row += 1;
+      query[`f${row}`] = 'OP';
+    },
     push(field: string, value: string): void {
       row += 1;
+      query[`f${row}`] = field;
+      query[`o${row}`] = 'substring';
+      query[`v${row}`] = value;
+    },
+    /** A single NOT'd condition, for "does not contain". */
+    pushNegated(field: string, value: string): void {
+      row += 1;
+      query[`n${row}`] = '1';
       query[`f${row}`] = field;
       query[`o${row}`] = 'substring';
       query[`v${row}`] = value;
@@ -341,23 +365,96 @@ function chartWriter(query: BugzillaQuery) {
  * bench's Playwright projects.
  */
 function whiteboardCharts(filters: BugFilters, query: BugzillaQuery): void {
-  const categories = (filters.category ?? []).filter((c) => c !== 'Unclassified');
+  const selected = filters.category ?? [];
+  const named = selected.filter((c) => c !== 'Unclassified');
+  /*
+   * "Unclassified" is not a value written anywhere - it is the ABSENCE of both
+   * encodings. It therefore cannot be matched by a substring like the others,
+   * and stripping it out (which this did) left nothing to filter on at all, so
+   * selecting it returned the entire product instead of the handful of bugs
+   * that carry no category. Expressed here as a negated group instead.
+   */
+  const wantsUnclassified = selected.includes('Unclassified');
   const browsers = filters.browser ?? [];
-  if (categories.length === 0 && browsers.length === 0) return;
+  if (selected.length === 0 && browsers.length === 0) return;
 
   const chart = chartWriter(query);
 
-  if (categories.length > 0) {
-    chart.open();
-    for (const category of categories) {
-      // New encoding: the explicit tag.
-      chart.push('status_whiteboard', `[cat:${category}]`);
-      // Legacy encoding: every classification that maps to this category.
-      for (const [classification, mapped] of Object.entries(CATEGORY_BY_CLASSIFICATION)) {
-        if (mapped === category) chart.push('longdesc', `Classification: ${classification}`);
+  if (selected.length > 0) {
+    /*
+     * Selecting both a named category and Unclassified means the union of two
+     * conditions that cannot live in one OR'd group - one is positive, the
+     * other negated - so they are wrapped in an outer OR group. Verified
+     * against this instance: (Security) OR (NOT any category) returns 68 where
+     * Security alone returns 67 and Unclassified alone returns 1.
+     *
+     * Skipped when only one side is present, so the common cases emit the same
+     * flat chart they always did.
+     */
+    const bothSides = named.length > 0 && wantsUnclassified;
+    if (bothSides) chart.open();
+
+    if (named.length > 0) {
+      /*
+       * A category matches if it is TAGGED, or - only for bugs carrying no tag
+       * at all - if the legacy description line maps to it.
+       *
+       * The "only when untagged" half is essential, not defensive. The two
+       * encodings contradict each other on real data: 26 bugs here are tagged
+       * `[cat:Security]` while their description still reads `Classification:
+       * Input Validation Gap`, which the legacy table maps to Functional.
+       * Matching the legacy line unconditionally pulled all 26 into the
+       * Functional filter even though the bench had explicitly said Security -
+       * so Functional returned 588 rows against a facet count of 562, and the
+       * same bug was badged Security while appearing under Functional.
+       *
+       * This mirrors `categoryOf` and `categoryIndex` exactly: tag wins,
+       * description is consulted only in its absence. All three now answer the
+       * same question the same way.
+       */
+      chart.open();
+      for (const category of named) {
+        chart.push('status_whiteboard', `[cat:${category}]`);
       }
+
+      /*
+       * `named` is Category[] while the map's values exclude 'Unclassified',
+       * so the membership test is done through a Set of the wider type - the
+       * two never line up structurally, and casting either side would hide a
+       * genuine mismatch if a category were ever added to only one of them.
+       */
+      const wanted = new Set<Category>(named);
+      const legacyFor = Object.entries(CATEGORY_BY_CLASSIFICATION).filter(([, mapped]) =>
+        wanted.has(mapped)
+      );
+      if (legacyFor.length > 0) {
+        chart.openAnd();
+        chart.open();
+        for (const [classification] of legacyFor) {
+          chart.push('longdesc', `Classification: ${classification}`);
+        }
+        chart.close();
+        // ...and only where no tag exists to contradict it.
+        chart.pushNegated('status_whiteboard', '[cat:');
+        chart.close();
+      }
+      chart.close();
     }
-    chart.close();
+
+    if (wantsUnclassified) {
+      /*
+       * "Carries neither encoding." Matched on the ENCODING PREFIX rather than
+       * on each known value, so a bug tagged with a category this build has
+       * never heard of still counts as classified - which is the honest answer,
+       * and matches how the stats index treats it.
+       */
+      chart.openNegated();
+      chart.push('status_whiteboard', '[cat:');
+      chart.push('longdesc', 'Classification:');
+      chart.close();
+    }
+
+    if (bothSides) chart.close();
   }
 
   if (browsers.length > 0) {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { Env } from '../config/env';
+import { groupsForRole, managedGroups } from '../lib/roles';
 import { requireAuth, requirePermission } from '../middleware/auth';
 import { parseInput } from '../lib/validate';
 import { createUserSchema, listUsersQuerySchema, normalizeAdminUser, rawAdminUserSchema, updateUserSchema } from '../schemas/adminUser';
@@ -21,14 +22,54 @@ export function adminUsersRouter(env: Env): Router {
   router.get('/', ...gate, async (req, res, next) => {
     try {
       const { search } = parseInput(listUsersQuerySchema, req.query);
-      const term = search?.trim() ? search.trim() : process.env.BUGZILLA_USER_MATCH || 'kpost';
-      const resp = await req.bugzilla!.get<{ users: unknown[] }>('/user', {
-        match: term,
-        include_disabled: 1,
-        groups_membership: 1,
-        limit: 500,
-      });
-      const users = resp.users
+      const client = req.bugzilla!;
+      const term = search?.trim();
+
+      /*
+       * With no search term, "everyone" comes from group membership rather than
+       * an email-pattern search.
+       *
+       * `User.get` has no list-everyone call and rejects a punctuation-only
+       * match, so this used to fall back to matching logins containing "kpost".
+       * That quietly hid every account on another domain - including the
+       * instance administrator, on a gmail.com login. Which email a person signs
+       * in with is an organisational choice and must not decide whether they
+       * appear in the admin list.
+       *
+       * `editbugs` is the right pool: Bugzilla auto-grants it to every account
+       * (user_regexp `.*`), so its membership is literally everyone, disabled
+       * accounts included.
+       */
+      let rawUsers: unknown[];
+      if (term) {
+        const resp = await client.get<{ users: unknown[] }>('/user', {
+          match: term,
+          include_disabled: 1,
+          groups_membership: 1,
+          limit: 500,
+        });
+        rawUsers = resp.users;
+      } else {
+        const groupResp = await client.get<{
+          groups: Array<{ membership?: Array<{ id?: number }> }>;
+        }>('/group', { names: 'editbugs', membership: 1 });
+        const ids = (groupResp.groups?.[0]?.membership ?? [])
+          .map((m) => m.id)
+          .filter((id): id is number => typeof id === 'number');
+
+        // Re-read by id: the group payload omits the group memberships the list
+        // needs to show each account's role and product access.
+        const resp = ids.length
+          ? await client.get<{ users: unknown[] }>('/user', {
+              ids,
+              include_disabled: 1,
+              groups_membership: 1,
+            })
+          : { users: [] };
+        rawUsers = resp.users;
+      }
+
+      const users = rawUsers
         .map((u) => normalizeAdminUser(rawAdminUserSchema.parse(u)))
         .sort((a, b) => (a.fullName || a.email).localeCompare(b.fullName || b.email));
       res.json({ users });
@@ -61,9 +102,49 @@ export function adminUsersRouter(env: Env): Router {
         password: input.password,
       });
 
+      /*
+       * Groups are a SECOND call: Bugzilla's `User.create` accepts only email,
+       * name and password, so membership has to be set through `User.update`
+       * afterwards. Verified against this instance - PUT /user/<id> with
+       * `{groups:{add:[…]}}` returns the applied change.
+       *
+       * Deliberately not fatal. The account already exists by this point, and
+       * failing the whole request would leave a real user created but reported
+       * as an error - the caller would try again and hit "account already
+       * exists". Instead the account is returned with a note saying which
+       * groups did not apply, so the gap is visible and fixable rather than
+       * silent.
+       */
+      let skippedGroups: string[] = [];
+      let groupError: string | undefined;
+
+      if (input.role) {
+        try {
+          const groupsResp = await client.get<{ groups: Array<{ name: string }> }>('/group', {
+            // Bugzilla only returns groups the caller may bless; that is exactly
+            // the set it would accept in an update, so it doubles as validation.
+            membership: 0,
+          });
+          const available = new Set((groupsResp.groups ?? []).map((g) => g.name));
+          const { granted, skipped } = groupsForRole(input.role, input.products ?? [], available);
+          skippedGroups = skipped;
+
+          if (granted.length > 0) {
+            await client.put(`/user/${created.id}`, { groups: { add: granted } });
+          }
+        } catch (err) {
+          groupError = err instanceof Error ? err.message : 'Group assignment failed.';
+        }
+      }
+
       const resp = await client.get<{ users: unknown[] }>(`/user/${created.id}`);
       const user = normalizeAdminUser(rawAdminUserSchema.parse(resp.users[0]));
-      res.status(201).json({ user });
+      res.status(201).json({
+        user,
+        // Present only when something needs saying, so a clean create stays clean.
+        ...(skippedGroups.length > 0 ? { skippedGroups } : {}),
+        ...(groupError ? { groupError } : {}),
+      });
     } catch (err) {
       next(err);
     }
@@ -84,9 +165,57 @@ export function adminUsersRouter(env: Env): Router {
 
       await client.put(`/user/${id}`, payload);
 
+      /*
+       * Role and product access, applied as an explicit add/remove diff.
+       *
+       * Removals are bounded to `managedGroups` - the role groups plus the
+       * product groups. Sending the target list as the account's whole
+       * membership would strip everything this form does not model: an
+       * administrator's `admin`, `creategroups` and `tweakparams`, and the
+       * `bz_canusewhines` Bugzilla grants by regexp. Changing someone from
+       * tester to developer must move exactly those two axes and nothing else.
+       */
+      let skippedGroups: string[] = [];
+      let groupError: string | undefined;
+
+      if (input.role) {
+        try {
+          const [groupsResp, current] = await Promise.all([
+            client.get<{ groups: Array<{ name: string }> }>('/group', { membership: 0 }),
+            client.get<{ users: Array<{ groups?: Array<{ name: string }> }> }>(`/user/${id}`, {
+              groups_membership: 1,
+            }),
+          ]);
+
+          const available = new Set((groupsResp.groups ?? []).map((g) => g.name));
+          const held = (current.users[0]?.groups ?? []).map((g) => g.name);
+
+          const products = input.products ?? [];
+          const { granted, skipped } = groupsForRole(input.role, products, available);
+          skippedGroups = skipped;
+
+          const target = new Set(granted);
+          const managed = managedGroups(available, products.concat(held));
+          const add = granted.filter((g) => !held.includes(g));
+          const remove = held.filter((g) => managed.has(g) && !target.has(g));
+
+          if (add.length > 0 || remove.length > 0) {
+            await client.put(`/user/${id}`, { groups: { add, remove } });
+          }
+        } catch (err) {
+          groupError = err instanceof Error ? err.message : 'Role update failed.';
+        }
+      }
+
       const resp = await client.get<{ users: unknown[] }>(`/user/${id}`);
       const user = normalizeAdminUser(rawAdminUserSchema.parse(resp.users[0]));
-      res.json({ user });
+      res.json({
+        user,
+        // Same contract as create: say what did NOT apply rather than implying
+        // the whole change landed.
+        ...(skippedGroups.length > 0 ? { skippedGroups } : {}),
+        ...(groupError ? { groupError } : {}),
+      });
     } catch (err) {
       next(err);
     }
