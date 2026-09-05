@@ -109,7 +109,11 @@ export function BugList() {
   // say how much is hidden rather than leaving the user to infer it.
   const { data: filteredCount } = useBugCounts(queryParams);
   const { data: totalCount } = useBugCounts({});
-  const { data: stats } = useBugStats();
+  // Scope the facet-count breakdown to the selected product, so every filter shows this
+  // product's data only — never another product's severities, categories or components. Only the
+  // product facet is folded in (not severity/status/etc.), so picking one facet never collapses
+  // the counts shown on the others.
+  const { data: stats } = useBugStats({ product: filters.product });
   // Same answer the FilterBar uses for its Browser control, so the column and
   // the filter for it appear and disappear together.
   const { hasBrowsers } = useBrowserScope(filters, stats);

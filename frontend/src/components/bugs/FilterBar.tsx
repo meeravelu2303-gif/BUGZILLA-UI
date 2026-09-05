@@ -63,7 +63,26 @@ export function FilterBar({
   const withCounts = (values: readonly string[], counts?: Record<string, number>): MultiSelectOption[] =>
     values.map((v) => ({ value: v, label: v, count: counts?.[v] }));
 
+  /*
+   * `stats.byComponent` is instance-wide — it lists the components of every product the caller
+   * can see. Once a product is selected, the component facet must offer only THAT product's
+   * components (Bugzilla components are product-scoped, and a component from another product can
+   * never match a bug in this one). We intersect the instance-wide list with the selected
+   * product's own components, which we already hold on `products`. The restriction only applies
+   * once `products` has loaded, so a selected-but-not-yet-resolved product never blanks the menu.
+   */
+  const selectedProducts = new Set(filters.product);
+  const allowedComponents: Set<string> | null =
+    products && selectedProducts.size > 0
+      ? new Set(
+          products
+            .filter((p) => selectedProducts.has(p.name))
+            .flatMap((p) => p.components.map((c) => c.name)),
+        )
+      : null;
+
   const componentOptions: MultiSelectOption[] = Object.entries(stats?.byComponent ?? {})
+    .filter(([name]) => !allowedComponents || allowedComponents.has(name))
     .sort((a, b) => b[1] - a[1])
     .map(([name, count]) => ({ value: name, label: name, count }));
 
@@ -111,6 +130,18 @@ export function FilterBar({
           />
         </div>
 
+        {/* Product leads the row: it is the top-level scope for a user with access to more
+            than one product; the facets to its right narrow within that scope. */}
+        {productOptions.length > 1 && (
+          <MultiSelect
+            label={FACET_LABELS.product}
+            className="w-44"
+            options={productOptions}
+            selected={filters.product}
+            onToggle={(v) => toggleFacet('product', v)}
+            onClear={() => setFacet('product', [])}
+          />
+        )}
         <MultiSelect
           label={FACET_LABELS.severity}
           className="w-40"
@@ -171,16 +202,6 @@ export function FilterBar({
           onToggle={(v) => toggleFacet('resolution', v)}
           onClear={() => setFacet('resolution', [])}
         />
-        {productOptions.length > 1 && (
-          <MultiSelect
-            label={FACET_LABELS.product}
-            className="w-44"
-            options={productOptions}
-            selected={filters.product}
-            onToggle={(v) => toggleFacet('product', v)}
-            onClear={() => setFacet('product', [])}
-          />
-        )}
       </div>
 
       {(isFiltered || resultCount !== undefined) && (

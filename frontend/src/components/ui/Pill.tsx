@@ -223,6 +223,10 @@ export function BrowserPill({ browser, className }: { browser: string; className
  * not be fine for a filter — an unrecognised product falls back to showing its
  * own name in neutral slate rather than being mislabelled as one of the two.
  * That is why the Browser *filter* is gated on browser data instead of on this.
+ *
+ * "KPost Admin" is an API bench too (it drives APIRequestContext, no browser),
+ * but its name carries neither "API" nor "UI", so it is matched explicitly.
+ * The UI test runs first, so a hypothetical "Admin UI" bench still reads as UI.
  */
 export function TestTypePill({ product, className }: { product: string; className?: string }) {
   if (/\bUI\b/i.test(product)) {
@@ -232,7 +236,7 @@ export function TestTypePill({ product, className }: { product: string; classNam
       </Pill>
     );
   }
-  if (/\bAPI\b/i.test(product)) {
+  if (/\bAPI\b/i.test(product) || /\bAdmin\b/i.test(product)) {
     return (
       <Pill tone="indigo" icon={Workflow} className={className} title={`${product} — REST API suite`}>
         API Automation

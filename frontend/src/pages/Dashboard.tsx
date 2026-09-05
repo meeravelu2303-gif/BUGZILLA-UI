@@ -73,7 +73,7 @@ export function Dashboard() {
     <div className="mx-auto max-w-[1400px] px-8 py-8">
       <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-600">Defect load by severity and category, across every product.</p>
+        <p className="mt-1 text-sm text-slate-600">Defect load by severity and category, across the products you can access.</p>
       </div>
 
       {isLoading || !stats ? (

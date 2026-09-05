@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../config/env';
 import { requireAuth } from '../middleware/auth';
 import { getCategoryIndex } from '../lib/categoryIndex';
+import { scopeToAccessibleProducts } from '../lib/access';
 import {
   CATEGORIES,
   SEVERITIES,
@@ -256,6 +257,9 @@ export function bugsRouter(env: Env): Router {
         order,
       };
       applyBugFilters(params, query);
+      // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
+      // never count another product's bugs. No-op when an explicit product filter is set.
+      await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
 
       const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
       const hasMore = raw.bugs.length > query.limit;
@@ -306,6 +310,9 @@ export function bugsRouter(env: Env): Router {
         include_fields: 'id,is_open,status,severity',
       };
       applyBugFilters(params, query);
+      // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
+      // never count another product's bugs. No-op when an explicit product filter is set.
+      await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
 
       const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
       const rows = raw.bugs.map((b) => bugCountRowSchema.parse(b));
@@ -337,6 +344,9 @@ export function bugsRouter(env: Env): Router {
         include_fields: 'id,severity,priority,status,component,product,whiteboard,is_open',
       };
       applyBugFilters(params, query);
+      // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
+      // never count another product's bugs. No-op when an explicit product filter is set.
+      await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
 
       const [raw, index] = await Promise.all([
         req.bugzilla!.get<{ bugs: StatsRow[] }>('/bug', params as Record<string, string | number>),
