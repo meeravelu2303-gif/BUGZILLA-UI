@@ -1,9 +1,10 @@
 import { Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useBrowserScope } from '../../lib/useBrowserScope';
+import type { FacetStats } from '../../lib/useFacetStats';
 import { FACET_LABELS, RESOLUTION_VALUES, type UseBugFilters } from '../../lib/useBugFilters';
 import { useDebounce } from '../../lib/useDebounce';
-import { CATEGORIES, PRIORITIES, SEVERITIES, type BugMeta, type BugStats, type Product } from '../../types';
+import { CATEGORIES, PRIORITIES, SEVERITIES, type BugMeta, type Product } from '../../types';
 import { MultiSelect, type MultiSelectOption } from '../ui/MultiSelect';
 
 /**
@@ -37,8 +38,14 @@ export function FilterBar({
   controller: UseBugFilters;
   meta?: BugMeta;
   products?: Product[];
-  /** Supplies per-value counts, so a facet shows how much it would narrow to. */
-  stats?: BugStats;
+  /**
+   * Per-value counts, so a facet shows how much it would narrow to.
+   *
+   * A `FacetStats`, not a bare `BugStats`: each facet needs its counts computed
+   * with every OTHER active filter applied and its own selection excluded. One
+   * shared breakdown cannot satisfy both halves of that at once.
+   */
+  stats?: FacetStats;
   resultCount?: number;
   /** Unfiltered total, used to say plainly how much is being hidden. */
   totalCount?: number;
@@ -81,7 +88,7 @@ export function FilterBar({
         )
       : null;
 
-  const componentOptions: MultiSelectOption[] = Object.entries(stats?.byComponent ?? {})
+  const componentOptions: MultiSelectOption[] = Object.entries(stats?.for('component')?.byComponent ?? {})
     .filter(([name]) => !allowedComponents || allowedComponents.has(name))
     .sort((a, b) => b[1] - a[1])
     .map(([name, count]) => ({ value: name, label: name, count }));
@@ -111,7 +118,7 @@ export function FilterBar({
    * the table column have to agree, and computing "is browser meaningful here"
    * twice is how they would eventually stop agreeing.
    */
-  const { counts: browserCounts, hasBrowsers: showBrowser } = useBrowserScope(filters, stats);
+  const { counts: browserCounts, hasBrowsers: showBrowser } = useBrowserScope(filters, stats?.for('browser'));
   const browserOptions: MultiSelectOption[] = Object.entries(browserCounts)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([name, count]) => ({ value: name, label: BROWSER_LABELS[name] ?? name, count }));
@@ -145,7 +152,7 @@ export function FilterBar({
         <MultiSelect
           label={FACET_LABELS.severity}
           className="w-40"
-          options={withCounts(SEVERITIES, stats?.bySeverity)}
+          options={withCounts(SEVERITIES, stats?.for('severity')?.bySeverity)}
           selected={filters.severity}
           onToggle={(v) => toggleFacet('severity', v)}
           onClear={() => setFacet('severity', [])}
@@ -161,7 +168,7 @@ export function FilterBar({
         <MultiSelect
           label={FACET_LABELS.category}
           className="w-44"
-          options={withCounts(CATEGORIES, stats?.byCategory)}
+          options={withCounts(CATEGORIES, stats?.for('category')?.byCategory)}
           selected={filters.category}
           onToggle={(v) => toggleFacet('category', v)}
           onClear={() => setFacet('category', [])}

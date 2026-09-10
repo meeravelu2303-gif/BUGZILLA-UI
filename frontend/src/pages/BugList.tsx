@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useBugCounts, useBugStats, useBugs, useMe, useMeta, useProducts } from '../api/hooks';
+import { useBugCounts, useBugs, useMe, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
 import { BulkReassignBar } from '../components/bugs/BulkReassignBar';
 import { FilterBar } from '../components/bugs/FilterBar';
@@ -7,6 +7,7 @@ import { Pagination } from '../components/bugs/Pagination';
 import { Card } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useBrowserScope } from '../lib/useBrowserScope';
+import { useFacetStats } from '../lib/useFacetStats';
 import { useBugFilters } from '../lib/useBugFilters';
 import type { Bug } from '../types';
 import { AlertCircle } from 'lucide-react';
@@ -113,10 +114,11 @@ export function BugList() {
   // product's data only — never another product's severities, categories or components. Only the
   // product facet is folded in (not severity/status/etc.), so picking one facet never collapses
   // the counts shown on the others.
-  const { data: stats } = useBugStats({ product: filters.product });
+  // Facet counts under every applied filter - see lib/useFacetStats.ts.
+  const stats = useFacetStats({}, queryParams);
   // Same answer the FilterBar uses for its Browser control, so the column and
   // the filter for it appear and disappear together.
-  const { hasBrowsers } = useBrowserScope(filters, stats);
+  const { hasBrowsers } = useBrowserScope(filters, stats.for('browser'));
 
   return (
     <div className="mx-auto max-w-[1600px] px-8 py-8">

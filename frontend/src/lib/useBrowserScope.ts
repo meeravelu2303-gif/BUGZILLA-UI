@@ -1,4 +1,3 @@
-import { useBugStats } from '../api/hooks';
 import type { BugFilters, BugStats } from '../types';
 
 /**
@@ -21,31 +20,25 @@ import type { BugFilters, BugStats } from '../types';
  * it went. Scope-level counts are stable across pagination and sorting.
  */
 export interface BrowserScope {
-  /** Browser -> bug count within the current product scope. */
+  /** Browser -> bug count within the current scope. */
   counts: Record<string, number>;
   /** True when the scope contains at least one browser-tagged bug. */
   hasBrowsers: boolean;
 }
 
-export function useBrowserScope(filters: BugFilters, unscopedStats?: BugStats): BrowserScope {
-  const isProductFiltered = filters.product.length > 0;
-
-  /*
-   * `unscopedStats` is fetched without filters on purpose, so every facet count
-   * describes the whole product set rather than shrinking as you narrow. That
-   * makes it the wrong source for this one question: its `byBrowser` stays
-   * populated even once you have narrowed to the API product, which would leave
-   * a Browser column standing over nothing but em dashes.
-   *
-   * So when a product filter is active we ask again, scoped to it. React Query
-   * dedupes by key, so the filter bar and the table asking together is one
-   * request, not two.
-   */
-  const scoped = useBugStats(isProductFiltered ? { product: filters.product } : {}, {
-    enabled: isProductFiltered,
-  });
-
-  const counts = (isProductFiltered ? scoped.data?.byBrowser : unscopedStats?.byBrowser) ?? {};
+/**
+ * `stats` must be the BROWSER facet's breakdown - `useFacetStats().for('browser')` -
+ * meaning every other active filter applied and the browser selection itself not.
+ *
+ * This used to take the unfiltered stats and issue its own second request scoped
+ * to the product, because the stats it was handed ignored the filters entirely.
+ * That compensation is gone: `useFacetStats` already scopes correctly, and doing
+ * it again here meant the column and the filter bar could answer from two
+ * different queries - which is precisely the disagreement this hook exists to
+ * prevent.
+ */
+export function useBrowserScope(filters: BugFilters, stats?: BugStats): BrowserScope {
+  const counts = stats?.byBrowser ?? {};
 
   /*
    * A browser the reader has actively filtered on keeps the axis alive even at

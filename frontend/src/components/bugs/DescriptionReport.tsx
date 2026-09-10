@@ -1,5 +1,6 @@
-import { Check, Copy } from 'lucide-react';
-import { useState } from 'react';
+import { Check, Copy, TriangleAlert } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { copyText } from '../../lib/clipboard';
 
 /**
  * Renders the bench's structured defect description as clean, labelled sections instead of one
@@ -74,20 +75,54 @@ function parse(raw: string): Sections | null {
   return sections;
 }
 
+type CopyState = 'idle' | 'copied' | 'failed';
+
 function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<CopyState>('idle');
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+
+  // Clear the reset timer on unmount. Navigating away from a bug within the
+  // hold window would otherwise fire setState on a component that is gone.
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  async function onCopy() {
+    /*
+     * Awaited, and the result actually used. The old version fired the write
+     * and reported "Copied" regardless - so on an insecure origin, where
+     * `navigator.clipboard` does not exist at all, it claimed success while
+     * copying nothing. See lib/clipboard.ts.
+     */
+    const ok = await copyText(text);
+    setState(ok ? 'copied' : 'failed');
+    clearTimeout(timer.current);
+    // A failure needs longer on screen than a success: it asks the reader to do
+    // something, rather than just confirming what already happened.
+    timer.current = setTimeout(() => setState('idle'), ok ? 1500 : 5000);
+  }
+
+  const label =
+    state === 'copied' ? 'Copied' : state === 'failed' ? 'Select the text and press Ctrl+C' : 'Copy';
+
   return (
     <button
       type="button"
-      onClick={() => {
-        void navigator.clipboard?.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-      className="focus-ring inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-200"
+      onClick={onCopy}
+      // Announced, not just coloured - the label changes in place, so a screen
+      // reader needs to be told the region updated.
+      aria-live="polite"
+      title={state === 'failed' ? 'Your browser blocks clipboard access on this page' : undefined}
+      className={`focus-ring inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-white/5 ${
+        state === 'failed' ? 'text-amber-300 hover:text-amber-200' : 'text-slate-400 hover:text-slate-200'
+      }`}
     >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      {copied ? 'Copied' : 'Copy'}
+      {state === 'copied' ? (
+        <Check className="h-3.5 w-3.5" aria-hidden />
+      ) : state === 'failed' ? (
+        <TriangleAlert className="h-3.5 w-3.5" aria-hidden />
+      ) : (
+        <Copy className="h-3.5 w-3.5" aria-hidden />
+      )}
+      {label}
     </button>
   );
 }

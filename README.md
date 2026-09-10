@@ -245,3 +245,23 @@ auto-cleaned so you can inspect them first.
   `can_change_to` state machine per current status — an invalid transition is caught
   and surfaced as a normal validation error from Bugzilla rather than pre-validated
   client-side.
+
+### Bug list: filters and the Type column
+
+- The bug list's **Type** column labels each bug by the bench that filed it — "UI
+  Automation" or "API Automation" — derived from the Bugzilla product name rather than a
+  stored field: a product name containing "UI" reads as UI Automation, and one containing
+  "API" *or* "Admin" reads as API Automation. The KPost Admin product is a REST/API bench
+  like KPost API (it drives `APIRequestContext`, no browser), but its name carries neither
+  "API" nor "UI", so it is matched on "Admin" explicitly; the UI check runs first, so a
+  hypothetical future "Admin UI" product would still read as UI Automation. An unrecognised
+  product falls back to its own name, which is why this derivation drives the display badge
+  only and never a filter.
+- Selecting a product in the filter bar scopes the other facets and their counts to it.
+  The **Component** facet then lists only that product's own components — Bugzilla
+  components are product-scoped, but `stats.byComponent` is otherwise instance-wide, so
+  it is intersected with the selected product's components — and the severity / category /
+  component counts reflect only that product's bugs (each page passes the selected product
+  into `useBugStats`). Only the product facet is folded into those counts — not
+  severity/status/etc. — so selecting one facet never collapses the numbers shown on the
+  others. The global Dashboard overview stays cross-product on purpose.

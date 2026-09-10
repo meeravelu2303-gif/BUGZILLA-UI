@@ -1,7 +1,7 @@
 import { RotateCcw } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useBugCounts, useBugStats, useBugs, useMeta, useProducts } from '../api/hooks';
+import { useBugCounts, useBugs, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
 import { FilterBar } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
@@ -10,6 +10,7 @@ import { Card, CardBody } from '../components/ui/Card';
 import { Input } from '../components/ui/Field';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useBrowserScope } from '../lib/useBrowserScope';
+import { useFacetStats } from '../lib/useFacetStats';
 import { useBugFilters } from '../lib/useBugFilters';
 
 const LIMIT = 20;
@@ -51,13 +52,16 @@ export function AdvancedSearch() {
   const { data, isLoading, isFetching } = useBugs(query);
   const { data: scopedCount } = useBugCounts(scoped);
   const { data: totalCount } = useBugCounts({});
-  // Scope the facet-count breakdown to the selected product, so every filter shows this
-  // product's data only — never another product's severities, categories or components. Only the
-  // product facet is folded in (not severity/status/etc.), so picking one facet never collapses
-  // the counts shown on the others.
-  const { data: stats } = useBugStats({ product: controller.filters.product });
+  /*
+   * Facet counts under every applied filter - see lib/useFacetStats.ts.
+   *
+   * Built from `scoped`, not from `queryParams`: this page adds assignedTo and
+   * creator on top of the shared facets, and a breakdown that omitted them
+   * would describe a wider set than the table below it.
+   */
+  const stats = useFacetStats({}, scoped);
   // Shared with FilterBar so the Browser column and its filter agree.
-  const { hasBrowsers } = useBrowserScope(controller.filters, stats);
+  const { hasBrowsers } = useBrowserScope(controller.filters, stats.for('browser'));
 
   function resetAll() {
     clearAll();

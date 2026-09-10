@@ -1,13 +1,14 @@
 import { Eye, PencilLine, UserCircle2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useBugCounts, useBugStats, useBugs, useMe, useMeta, useProducts } from '../api/hooks';
+import { useBugCounts, useBugs, useMe, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
 import { FilterBar } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
 import { Card } from '../components/ui/Card';
 import { cn } from '../lib/utils';
 import { useBrowserScope } from '../lib/useBrowserScope';
+import { useFacetStats } from '../lib/useFacetStats';
 import { useBugFilters } from '../lib/useBugFilters';
 
 const LIMIT = 20;
@@ -48,13 +49,17 @@ export function MyBugs() {
   const { data, isLoading, isFetching } = useBugs(query);
   const { data: scopedCount } = useBugCounts(scoped);
   const { data: tabTotal } = useBugCounts(scope);
-  // Scope the facet-count breakdown to the current tab AND the selected product, so every filter
-  // shows this product's data only — never another product's severities, categories or
-  // components. Only the product facet is folded in (not severity/status/etc.), so picking one
-  // facet never collapses the counts shown on the others.
-  const { data: stats } = useBugStats({ ...scope, product: controller.filters.product });
+  /*
+   * Facet counts under the filters that are actually applied, tab scope included.
+   *
+   * This used to pass only `{ ...scope, product }`, which meant a status filter
+   * never reached the breakdown: narrowing to CONFIRMED left the Category
+   * dropdown reading "Functional 628" above a table holding 92 rows. See
+   * lib/useFacetStats.ts for why each facet still excludes its OWN selection.
+   */
+  const stats = useFacetStats(scope, queryParams);
   // Shared with FilterBar so the Browser column and its filter agree.
-  const { hasBrowsers } = useBrowserScope(controller.filters, stats);
+  const { hasBrowsers } = useBrowserScope(controller.filters, stats.for('browser'));
 
   function setTab(next: TabId) {
     const p = new URLSearchParams(params);
