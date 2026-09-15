@@ -16,6 +16,8 @@ import {
 } from '../lib/classification';
 import type { BugzillaClient } from '../lib/bugzillaClient';
 import { closedStatuses } from '../lib/bugStatus';
+import { buildBugWorkbook, type ExportBug } from '../lib/bugExport';
+import { EMPTY_REPORT, parseDefectReport } from '../lib/defectReport';
 import { AppError } from '../lib/errors';
 import { parseDescription } from '../lib/grouping';
 import { displayNameFor, resolveDisplayNames } from '../lib/displayNames';
@@ -25,6 +27,7 @@ import {
   bugCountRowSchema,
   countBugsQuerySchema,
   createBugSchema,
+  exportBugsQuerySchema,
   listBugsQuerySchema,
   bulkReassignSchema,
   normalizeAttachment,
@@ -226,6 +229,108 @@ function applyBugFilters(params: Record<string, unknown>, query: BugFilters): vo
   Object.assign(params, toBugzillaQuery(query));
 }
 
+/**
+ * The Bugzilla `order` clause for a sort key and direction. Shared by the list
+ * and the Excel export so a downloaded sheet is in the same order as the table
+ * it was exported from.
+ */
+function buildOrder(sortBy: string, sortDir: 'asc' | 'desc'): string {
+  const sortField = SORT_FIELDS[sortBy] ?? SORT_FIELDS[DEFAULT_SORT];
+  // A composite sort is several columns, so reversing it has to reverse every
+  // one of them - appending a single DESC would only flip the last column.
+  const primary =
+    sortDir === 'desc'
+      ? sortField
+          .split(',')
+          .map((f) => `${f} DESC`)
+          .join(',')
+      : sortField;
+  // A coarse sort (e.g. severity has four values) leaves hundreds of bugs
+  // equal-ranked, so without tiebreakers they come back in an arbitrary order
+  // that shifts between pages. Each tiebreaker is skipped when the chosen sort
+  // already contains that column, so a column is never named twice.
+  const chosen = sortField.split(',');
+  return [primary, ...TIEBREAKERS.filter((t) => !chosen.includes(t.field)).map((t) => t.clause)].join(',');
+}
+
+/**
+ * Bugzilla's own `max_search_results` on this instance. A search past it is
+ * truncated silently, so an export that hits the ceiling refuses rather than
+ * handing over a spreadsheet that looks complete and is not.
+ */
+const EXPORT_MAX_ROWS = 10_000;
+
+const EXPORT_FILTER_LABELS: Array<[keyof BugFilters, string]> = [
+  ['product', 'Product'],
+  ['component', 'Component'],
+  ['status', 'Status'],
+  ['resolution', 'Resolution'],
+  ['severity', 'Severity'],
+  ['priority', 'Priority'],
+  ['category', 'Category'],
+  ['browser', 'Browser'],
+  ['assignedTo', 'Assigned to'],
+  ['creator', 'Reported by'],
+  ['cc', 'CC'],
+  ['search', 'Summary contains'],
+];
+
+/** Bugs per comment request: keeps each URL short and each response a sane size. */
+const DESCRIPTION_BATCH = 100;
+/** Comment requests in flight at once - enough to be quick, not enough to swamp Bugzilla. */
+const DESCRIPTION_CONCURRENCY = 4;
+
+/**
+ * Each bug's description (its first comment), keyed by bug id.
+ *
+ * A bug search never returns comment text, and the endpoints and Expected /
+ * Actual columns live only there. Bugzilla's comment call takes many bug ids
+ * at once (`/bug/{first}/comment?ids=…`), so this is a handful of batched
+ * requests rather than one per bug. It still enforces access per bug and hides
+ * private comments from non-insiders, so nothing leaks into the sheet that the
+ * user could not read in the app.
+ */
+async function fetchDescriptions(client: BugzillaClient, ids: number[]): Promise<Map<number, string>> {
+  const batches: number[][] = [];
+  for (let i = 0; i < ids.length; i += DESCRIPTION_BATCH) batches.push(ids.slice(i, i + DESCRIPTION_BATCH));
+
+  const descriptions = new Map<number, string>();
+  let next = 0;
+
+  async function worker(): Promise<void> {
+    while (next < batches.length) {
+      const [first, ...rest] = batches[next++];
+      const resp = await client.get<{ bugs: Record<string, { comments: Array<{ count?: number; text?: string }> }> }>(
+        `/bug/${first}/comment`,
+        rest.length > 0 ? { ids: rest.map(String) } : {}
+      );
+      for (const [bugId, { comments }] of Object.entries(resp.bugs ?? {})) {
+        // `count` 0 is the description; fall back to the oldest visible comment
+        // when the description itself is private and was filtered out.
+        const description = comments.find((c) => c.count === 0) ?? comments[0];
+        if (description?.text) descriptions.set(Number(bugId), description.text);
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(DESCRIPTION_CONCURRENCY, batches.length) }, worker));
+  return descriptions;
+}
+
+/** The web app's origin, from the requesting page - used only to link ids back to it. */
+function appOriginOf(origin: string | undefined, referer: string | undefined): string | undefined {
+  for (const candidate of [origin, referer]) {
+    if (!candidate) continue;
+    try {
+      const url = new URL(candidate);
+      if (url.protocol === 'http:' || url.protocol === 'https:') return url.origin;
+    } catch {
+      // Not a URL - try the next header.
+    }
+  }
+  return undefined;
+}
+
 export function bugsRouter(env: Env): Router {
   const router = Router();
   const auth = requireAuth(env);
@@ -234,22 +339,7 @@ export function bugsRouter(env: Env): Router {
   router.get('/', auth, async (req, res, next) => {
     try {
       const query = parseInput(listBugsQuerySchema, req.query);
-      const sortField = SORT_FIELDS[query.sortBy] ?? SORT_FIELDS[DEFAULT_SORT];
-      // A composite sort is several columns, so reversing it has to reverse every
-      // one of them - appending a single DESC would only flip the last column.
-      const primary =
-        query.sortDir === 'desc'
-          ? sortField
-              .split(',')
-              .map((f) => `${f} DESC`)
-              .join(',')
-          : sortField;
-      // A coarse sort (e.g. severity has four values) leaves hundreds of bugs
-      // equal-ranked, so without tiebreakers they come back in an arbitrary order
-      // that shifts between pages. Each tiebreaker is skipped when the chosen sort
-      // already contains that column, so a column is never named twice.
-      const chosen = sortField.split(',');
-      const order = [primary, ...TIEBREAKERS.filter((t) => !chosen.includes(t.field)).map((t) => t.clause)].join(',');
+      const order = buildOrder(query.sortBy, query.sortDir);
 
       const params: Record<string, string | number> = {
         limit: query.limit + 1, // fetch one extra to detect a next page
@@ -318,6 +408,101 @@ export function bugsRouter(env: Env): Router {
       const rows = raw.bugs.map((b) => bugCountRowSchema.parse(b));
 
       res.json({ counts: tallyBugCounts(rows) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /*
+   * GET /api/bugs/export - the filtered bug list as an Excel workbook.
+   *
+   * Registered before '/:id' so the literal path wins the match.
+   *
+   * Takes exactly the list's filters and sort, and exports EVERY matching bug -
+   * not the 20 on screen. An export of the visible page would be a quiet lie:
+   * it reads as "the bugs matching these filters" while holding one page of
+   * them. Access scoping is applied the same way as the list, so a sheet can
+   * never contain a bug its downloader could not open in the app.
+   */
+  router.get('/export', auth, async (req, res, next) => {
+    try {
+      const query = parseInput(exportBugsQuerySchema, req.query);
+
+      const params: Record<string, string | number> = {
+        limit: EXPORT_MAX_ROWS,
+        order: buildOrder(query.sortBy, query.sortDir),
+      };
+      applyBugFilters(params, query);
+      await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
+
+      const [raw, index] = await Promise.all([
+        req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params),
+        // Same degradation as the list: no index means Unclassified, not a failed export.
+        getCategoryIndex(req.bugzilla!, req.sessionUser!.bzUserId, env.STATS_CACHE_TTL_MS).catch(() => null),
+      ]);
+
+      if (raw.bugs.length >= EXPORT_MAX_ROWS) {
+        throw new AppError(
+          400,
+          'VALIDATION',
+          `This export matches ${EXPORT_MAX_ROWS.toLocaleString('en-US')} or more bugs, which is Bugzilla's search limit, ` +
+            'so the file would be incomplete. Narrow the filters (for example by product or status) and export again.'
+        );
+      }
+
+      const normalized = raw.bugs.map((b) => normalizeBug(rawBugSchema.parse(b)));
+
+      /*
+       * Not wrapped in a fallback. The endpoint and Expected/Actual columns are
+       * the reason people export, and a sheet that quietly left them blank on a
+       * Bugzilla hiccup would read as "these bugs have no endpoints". Better to
+       * fail loudly and let the user retry.
+       */
+      const descriptions = await fetchDescriptions(
+        req.bugzilla!,
+        normalized.map((b) => b.id)
+      );
+
+      const bugs: ExportBug[] = normalized.map((bug) => {
+        const triage = classify({ severity: bug.severity, priority: bug.priority, whiteboard: bug.whiteboard });
+        const description = descriptions.get(bug.id);
+        return {
+          ...bug,
+          triage: {
+            severity: triage.severity,
+            priority: triage.priority,
+            category: index?.categoryOf(bug.id) ?? 'Unclassified',
+            browsers: triage.browsers,
+          },
+          report: description ? parseDefectReport(description) : EMPTY_REPORT,
+        };
+      });
+
+      const filters = EXPORT_FILTER_LABELS.flatMap(([key, label]) => {
+        const value = query[key];
+        const text = Array.isArray(value) ? value.join(', ') : value;
+        return text ? [{ label, value: String(text) }] : [];
+      });
+
+      const user = req.sessionUser!;
+      const buffer = await buildBugWorkbook(bugs, {
+        exportedBy: user.realName ? `${user.realName} <${user.email}>` : user.email,
+        filters,
+        appOrigin: appOriginOf(req.get('origin'), req.get('referer')),
+      });
+
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
+      res
+        .status(200)
+        .set({
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="bugs-${stamp}.xlsx"`,
+          'Content-Length': String(buffer.length),
+          // The file holds access-scoped data for one user; never let a proxy keep a copy.
+          'Cache-Control': 'no-store',
+          'X-Export-Rows': String(bugs.length),
+        })
+        .send(buffer);
     } catch (err) {
       next(err);
     }

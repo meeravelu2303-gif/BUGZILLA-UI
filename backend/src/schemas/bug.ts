@@ -269,6 +269,13 @@ export const countBugsQuerySchema = listBugsQuerySchema.pick({
 export type CountBugsQuery = z.infer<typeof countBugsQuerySchema>;
 
 /**
+ * The list's filters AND its sort, minus pagination - an export takes every
+ * matching bug, in the order the table shows them. Derived from
+ * listBugsQuerySchema so a new filter reaches the export without a second edit.
+ */
+export const exportBugsQuerySchema = listBugsQuerySchema.omit({ limit: true, offset: true });
+
+/**
  * The only three fields the dashboard tallies need. Kept deliberately narrow:
  * the count endpoint asks Bugzilla for these alone via include_fields, so a
  * count over thousands of bugs never pulls descriptions, users, cc or keywords.

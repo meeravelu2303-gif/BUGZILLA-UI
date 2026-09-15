@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useBugCounts, useBugs, useMe, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
 import { BulkReassignBar } from '../components/bugs/BulkReassignBar';
+import { ExportButton } from '../components/bugs/ExportButton';
 import { FilterBar } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
 import { Card } from '../components/ui/Card';
@@ -26,7 +27,7 @@ export function BugList() {
    * sort is triage order (severity, then priority) rather than newest-first: the
    * most important work should be on top without asking.
    */
-  const controller = useBugFilters({ sortBy: 'importance', sortDir: 'asc' });
+  const controller = useBugFilters({ sortBy: 'id', sortDir: 'asc' });
   const { filters, queryParams, sortBy, sortDir, toggleSort, offset, setOffset, isFiltered } = controller;
 
   const query = useMemo(
@@ -123,8 +124,14 @@ export function BugList() {
   return (
     <div className="mx-auto max-w-[1600px] px-8 py-8">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">Bugs</h1>
-        <p className="mt-1 text-sm text-slate-600">Browse, filter and triage every defect across your products.</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">Bugs</h1>
+            <p className="mt-1 text-sm text-slate-600">Browse, filter and triage every defect across your products.</p>
+          </div>
+          {/* The table's own filters and sort, minus the page - so the sheet holds every match. */}
+          <ExportButton params={{ ...queryParams, sortBy, sortDir }} count={filteredCount?.counts.total} />
+        </div>
       </div>
 
       <Card variant="solid">

@@ -15,6 +15,9 @@ import { copyText } from '../../lib/clipboard';
 interface Sections {
   meta: Array<{ label: string; value: string }>;
   summary: string;
+  whatThisMeans: string;
+  whyItMatters: string;
+  howToFix: string;
   expected: string;
   actual: string;
   repro: string;
@@ -30,7 +33,7 @@ const META_LINE: Record<string, string> = {
 };
 
 /** Ordered anchors that begin a multi-line block; text runs until the next anchor. */
-const BLOCK_ANCHORS = ['Expected:', 'Actual:', 'Repro:', 'Reproduce with Playwright:', 'curl:', 'Owner:', 'Environment:', 'Run date:'];
+const BLOCK_ANCHORS = ['What this means:', 'Why it matters:', 'How to fix:', 'Expected:', 'Actual:', 'Repro:', 'Reproduce with Playwright:', 'curl:', 'Owner:', 'Environment:', 'Run date:'];
 
 function parse(raw: string): Sections | null {
   const lines = raw.replace(/\r/g, '').split('\n');
@@ -64,6 +67,9 @@ function parse(raw: string): Sections | null {
   const sections: Sections = {
     meta,
     summary: summaryLines.join('\n').trim(),
+    whatThisMeans: get('What this means:'),
+    whyItMatters: get('Why it matters:'),
+    howToFix: get('How to fix:'),
     expected: get('Expected:'),
     actual: get('Actual:'),
     repro: get('Repro:') || get('Reproduce with Playwright:'),
@@ -170,6 +176,32 @@ export function DescriptionReport({ description }: { description: string }) {
         <p className="text-[14.5px] leading-7 text-slate-700">{parsed.summary}</p>
       )}
 
+      {(parsed.whatThisMeans || parsed.howToFix) && (
+        <div className="flex flex-col gap-3 rounded-xl bg-sky-50/70 p-5 ring-1 ring-inset ring-sky-600/20">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
+            For the developer
+          </p>
+          {parsed.whatThisMeans && (
+            <p className="text-[14px] leading-7 text-slate-700">
+              <span className="font-semibold text-slate-900">What this means. </span>
+              {parsed.whatThisMeans}
+            </p>
+          )}
+          {parsed.whyItMatters && (
+            <p className="text-[14px] leading-7 text-slate-700">
+              <span className="font-semibold text-slate-900">Why it matters. </span>
+              {parsed.whyItMatters}
+            </p>
+          )}
+          {parsed.howToFix && (
+            <p className="rounded-lg bg-white/80 p-3 text-[14px] leading-7 text-slate-800 ring-1 ring-inset ring-sky-600/20">
+              <span className="font-semibold text-sky-800">How to fix. </span>
+              {parsed.howToFix}
+            </p>
+          )}
+        </div>
+      )}
+
       {(parsed.expected || parsed.actual) && (
         <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
           {parsed.expected && (
@@ -177,10 +209,11 @@ export function DescriptionReport({ description }: { description: string }) {
               <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Expected
               </p>
-              {/* Fixed height: long values scroll inside; the panel never grows to swallow the page. */}
-              <p className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-emerald-900">
+              {/* Monospace + preserved whitespace so the bench's aligned `case → code` diff lines up;
+                  fixed height so long values scroll inside instead of swallowing the page. */}
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-emerald-900">
                 {parsed.expected}
-              </p>
+              </pre>
             </div>
           )}
           {parsed.actual && (
@@ -188,9 +221,9 @@ export function DescriptionReport({ description }: { description: string }) {
               <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Actual
               </p>
-              <p className="max-h-56 overflow-y-auto whitespace-pre-wrap break-all text-[13.5px] leading-relaxed text-rose-900">
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-rose-900">
                 {parsed.actual}
-              </p>
+              </pre>
             </div>
           )}
         </div>

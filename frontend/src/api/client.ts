@@ -39,6 +39,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+/**
+ * Fetches a file from the API as a Blob, with the server's suggested filename.
+ *
+ * A separate path from `request` because the success body is binary, not JSON -
+ * but the FAILURE body is still the API's JSON error, so a 401 or a 400 surfaces
+ * as a proper ApiError with its message instead of downloading an error page
+ * disguised as a spreadsheet.
+ */
+export async function downloadFile(path: string): Promise<{ blob: Blob; filename: string | null; rows: number | null }> {
+  const res = await fetch(`/api${path}`, { credentials: 'include' });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new ApiError(body ?? { error: true, status: res.status, code: 'INTERNAL', message: 'Download failed.' });
+  }
+
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const filename = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
+  const rowsHeader = res.headers.get('X-Export-Rows');
+  return { blob: await res.blob(), filename, rows: rowsHeader === null ? null : Number(rowsHeader) };
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
   post: <T>(path: string, data?: unknown) => request<T>(path, { method: 'POST', body: data !== undefined ? JSON.stringify(data) : undefined }),

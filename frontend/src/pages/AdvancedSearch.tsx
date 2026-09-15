@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useBugCounts, useBugs, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
+import { ExportButton } from '../components/bugs/ExportButton';
 import { FilterBar } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
 import { Button } from '../components/ui/Button';
@@ -26,7 +27,7 @@ export function AdvancedSearch() {
   const { data: productsData } = useProducts();
   const [params, setParams] = useSearchParams();
 
-  const controller = useBugFilters({ sortBy: 'importance', sortDir: 'asc' });
+  const controller = useBugFilters({ sortBy: 'id', sortDir: 'asc' });
   const { queryParams, sortBy, sortDir, toggleSort, offset, setOffset, clearAll } = controller;
 
   const assignedTo = params.get('assignedTo') ?? '';
@@ -71,7 +72,12 @@ export function AdvancedSearch() {
 
   return (
     <div className="mx-auto max-w-[1600px] px-8 py-8">
-      <PageHeader title="Advanced Search" description="Every axis at once — the resulting URL is the shareable query." />
+      <PageHeader
+        title="Advanced Search"
+        description="Every axis at once — the resulting URL is the shareable query."
+        // `scoped` includes the assignee/reporter fields, so the sheet matches the results.
+        actions={<ExportButton params={{ ...scoped, sortBy, sortDir }} count={scopedCount?.counts.total} />}
+      />
 
       <Card className="mt-6">
         <CardBody>

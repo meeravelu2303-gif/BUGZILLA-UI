@@ -118,7 +118,9 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     [params]
   );
 
-  const sortBy = params.get('sortBy') ?? defaults?.sortBy ?? 'importance';
+  // Default: by bug id ascending (KPA-001, 002, 003…). A stable, sequential order rather than
+  // "importance", which interleaves ids and reads as scrambled.
+  const sortBy = params.get('sortBy') ?? defaults?.sortBy ?? 'id';
   const sortDir = (params.get('sortDir') as 'asc' | 'desc') ?? defaults?.sortDir ?? 'asc';
   const offset = Number(params.get('offset') ?? 0);
 

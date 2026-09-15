@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useBugCounts, useBugs, useMe, useMeta, useProducts } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
+import { ExportButton } from '../components/bugs/ExportButton';
 import { FilterBar } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
 import { Card } from '../components/ui/Card';
@@ -34,7 +35,7 @@ export function MyBugs() {
    * The same filter controller and URL contract as the bug list - MyBugs is the
    * same table with one extra scoping clause, not a second implementation.
    */
-  const controller = useBugFilters({ sortBy: 'importance', sortDir: 'asc' });
+  const controller = useBugFilters({ sortBy: 'id', sortDir: 'asc' });
   const { queryParams, sortBy, sortDir, toggleSort, offset, setOffset } = controller;
 
   /** The tab is a scope, not a filter, so it is applied on top of the shared params. */
@@ -71,8 +72,14 @@ export function MyBugs() {
   return (
     <div className="mx-auto max-w-[1600px] px-8 py-8">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">My Bugs</h1>
-        <p className="mt-1 text-sm text-slate-600">Everything that lands on your desk — assigned, reported, or watched.</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">My Bugs</h1>
+            <p className="mt-1 text-sm text-slate-600">Everything that lands on your desk — assigned, reported, or watched.</p>
+          </div>
+          {/* `scoped` carries the active tab (assigned / reported / CC), so the sheet matches it. */}
+          <ExportButton params={{ ...scoped, sortBy, sortDir }} count={scopedCount?.counts.total} />
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
