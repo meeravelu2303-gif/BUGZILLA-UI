@@ -337,6 +337,13 @@ function chartWriter(query: BugzillaQuery) {
       query[`o${row}`] = 'substring';
       query[`v${row}`] = value;
     },
+    /** A row with an explicit operator, for fields a substring cannot match (bug_id). */
+    pushWith(field: string, operator: string, value: string): void {
+      row += 1;
+      query[`f${row}`] = field;
+      query[`o${row}`] = operator;
+      query[`v${row}`] = value;
+    },
     /** A single NOT'd condition, for "does not contain". */
     pushNegated(field: string, value: string): void {
       row += 1;
@@ -364,7 +371,56 @@ function chartWriter(query: BugzillaQuery) {
  * break it, which is the standing reason to keep BROWSERS in step with the
  * bench's Playwright projects.
  */
-function whiteboardCharts(filters: BugFilters, query: BugzillaQuery): void {
+/**
+ * A search term that names a bug by its id: `KPA-494`, `kpa494`, `#494`,
+ * `bug 494` or a bare `494`.
+ *
+ * `KPA` is required as a prefix when letters are present, and `KP` deliberately
+ * is NOT accepted: the bench writes a per-failure hash into every summary as
+ * `[KP-024859]`, so treating `KP-…` as an id would parse that hash's digits as
+ * a bug number and lose the summary match the user actually wanted.
+ */
+const BUG_ID_TERM = /^(?:kpa[-\s]?|#|bug[-\s]?)?0*(\d{1,7})$/i;
+
+export function bugIdFromSearch(term: string): number | null {
+  const m = BUG_ID_TERM.exec(term.trim());
+  if (!m) return null;
+  const id = Number(m[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * The free-text search box.
+ *
+ * `KPA-494` is the label the UI shows, derived from the bug id - it appears in
+ * no summary, so matching only `summary` meant searching for the id a reader
+ * can see on screen returned nothing. Now an id-shaped term ALSO matches that
+ * bug directly.
+ *
+ * Written as an OR group rather than replacing the summary match: a bare `494`
+ * is a plausible id and a plausible piece of text (an error code, a count), and
+ * silently dropping the text half would hide real matches. The alias is in the
+ * group too, for bugs that carry a real Bugzilla alias.
+ */
+function searchChart(filters: BugFilters, query: BugzillaQuery, chart: ReturnType<typeof chartWriter>): void {
+  const term = filters.search?.trim();
+  if (!term) return;
+
+  const bugId = bugIdFromSearch(term);
+  if (bugId === null) {
+    // Plain text: the native parameter is enough, and keeps the query readable.
+    query.summary = term;
+    return;
+  }
+
+  chart.open();
+  chart.pushWith('bug_id', 'equals', String(bugId));
+  chart.push('short_desc', term);
+  chart.push('alias', term);
+  chart.close();
+}
+
+function whiteboardCharts(filters: BugFilters, chart: ReturnType<typeof chartWriter>): void {
   const selected = filters.category ?? [];
   const named = selected.filter((c) => c !== 'Unclassified');
   /*
@@ -377,8 +433,6 @@ function whiteboardCharts(filters: BugFilters, query: BugzillaQuery): void {
   const wantsUnclassified = selected.includes('Unclassified');
   const browsers = filters.browser ?? [];
   if (selected.length === 0 && browsers.length === 0) return;
-
-  const chart = chartWriter(query);
 
   if (selected.length > 0) {
     /*
@@ -499,12 +553,19 @@ export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
   if (filters.resolution?.length) {
     query.resolution = filters.resolution.map((r) => (r === '' || r === 'Unresolved' ? '---' : r));
   }
-  if (filters.search) query.summary = filters.search;
   if (filters.assignedTo) query.assigned_to = filters.assignedTo;
   if (filters.creator) query.creator = filters.creator;
   if (filters.cc) query.cc = filters.cc;
 
-  whiteboardCharts(filters, query);
+  /*
+   * ONE writer for every chart group. Chart rows are numbered across the whole
+   * query, so a second `chartWriter(query)` would restart at row 1 and
+   * overwrite the first group's rows - the category filter would simply vanish
+   * whenever a search was also active.
+   */
+  const chart = chartWriter(query);
+  whiteboardCharts(filters, chart);
+  searchChart(filters, query, chart);
 
   return query;
 }

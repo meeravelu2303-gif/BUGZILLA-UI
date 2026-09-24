@@ -16,37 +16,122 @@ import type { BugzillaClient } from './bugzillaClient';
 const ADMIN_GROUPS = new Set(['admin', 'editusers']);
 
 /**
+ * How long a user's product access is trusted before it is re-read.
+ *
+ * Measured against this instance: Bugzilla runs under Apache `mod_cgi` with no
+ * mod_perl, so EVERY REST call forks a Perl interpreter and loads Bugzilla's
+ * modules - a bare `/version` costs ~630ms against ~56ms for a static file from
+ * the same server. Latency is therefore a function of how many upstream calls
+ * we make, not how much data we ask for.
+ *
+ * This helper made three of them, SEQUENTIALLY, on every list, count, stats and
+ * export request - roughly 1.9s of pure overhead before a single bug was
+ * fetched, repeated for each of the half-dozen requests a screen fires. The
+ * answer is the same every time: group membership changes when an admin edits a
+ * user, not between two requests one second apart.
+ *
+ * Five minutes rather than the 60s used for bug data, because this is
+ * configuration rather than content - and because the paths that CHANGE it
+ * (creating a product, editing a user's groups) call `clearAccessScope()`, so
+ * the TTL is a backstop, not the mechanism.
+ */
+const ACCESS_TTL_MS = 5 * 60_000;
+
+/**
+ * Everything the access rules need, read once: the products this user may
+ * enter, and whether they administer the instance.
+ *
+ * Shared by `GET /products` and by query scoping so the two cannot disagree -
+ * and so a screen that asks for both pays for one lookup, not two.
+ */
+export interface AccessSnapshot {
+  /** Raw Bugzilla product objects the user may enter, before any filtering. */
+  products: Array<Record<string, unknown> & { name: string }>;
+  /** Product names after group filtering, or `null` for "do not scope". */
+  names: string[] | null;
+  isAdmin: boolean;
+}
+
+interface ScopeEntry {
+  builtAt: number;
+  /** The in-flight promise, so a burst of parallel requests shares ONE lookup. */
+  promise: Promise<AccessSnapshot>;
+}
+
+const scopeCache = new Map<number, ScopeEntry>();
+
+/**
+ * Drop cached access, for everyone or one user.
+ *
+ * Called wherever group membership or the product set changes, so an admin's
+ * edit takes effect on the next request instead of up to five minutes later.
+ */
+export function clearAccessScope(bzUserId?: number): void {
+  if (bzUserId === undefined) scopeCache.clear();
+  else scopeCache.delete(bzUserId);
+}
+
+/**
  * The product names the user may see, or `null` meaning "do not scope" — the caller is an
  * instance admin, or their group membership could not be read (fall back to unscoped, exactly
  * as `GET /products` does: an over-broad list is recoverable, an empty one blocks the page).
  */
+export function accessSnapshot(client: BugzillaClient, bzUserId: number): Promise<AccessSnapshot> {
+  const hit = scopeCache.get(bzUserId);
+  if (hit && Date.now() - hit.builtAt < ACCESS_TTL_MS) return hit.promise;
+
+  const entry: ScopeEntry = { builtAt: Date.now(), promise: readAccess(client, bzUserId) };
+  scopeCache.set(bzUserId, entry);
+  // A failed read is evicted so the next request retries instead of caching an
+  // error for five minutes.
+  entry.promise.catch(() => scopeCache.delete(bzUserId));
+  return entry.promise;
+}
+
+async function readAccess(client: BugzillaClient, bzUserId: number): Promise<AccessSnapshot> {
+  /*
+   * The membership lookup does not depend on the product lookup, so the two run
+   * CONCURRENTLY. Awaited one after the other - which is how this read - they
+   * cost two CGI startups end to end instead of one.
+   */
+  const [enterable, groups] = await Promise.all([
+    client.get<{ ids: number[] }>('/product_enterable'),
+    client
+      .get<{ users: Array<{ groups?: Array<{ name: string }> }> }>('/user', {
+        ids: bzUserId,
+        groups_membership: 1,
+      })
+      .then((me) => (me.users[0]?.groups ?? []).map((g) => g.name))
+      // Membership unavailable: fall through to unscoped rather than hiding everything.
+      .catch((): string[] | null => null),
+  ]);
+
+  const isAdmin = !groups || groups.some((g) => ADMIN_GROUPS.has(g));
+  if (!enterable.ids?.length) return { products: [], names: [], isAdmin };
+
+  const full = await client.get<{ products: Array<Record<string, unknown> & { name: string }> }>('/product', {
+    ids: enterable.ids,
+  });
+  const products = full.products ?? [];
+
+  if (isAdmin) return { products, names: null, isAdmin };
+
+  const names = products.map((p) => p.name);
+  const member = new Set(groups);
+  const scoped = names.filter((n) => member.has(n));
+  /*
+   * Nothing matched means the one-group-per-product convention does not hold
+   * for this user; showing everything they can enter beats showing nothing.
+   */
+  return { products, names: scoped.length > 0 ? scoped : names, isAdmin };
+}
+
+/** The product names the user may see, or `null` meaning "do not scope". */
 export async function accessibleProductNames(
   client: BugzillaClient,
   bzUserId: number
 ): Promise<string[] | null> {
-  const enterable = await client.get<{ ids: number[] }>('/product_enterable');
-  if (!enterable.ids?.length) return [];
-  const full = await client.get<{ products: Array<{ name: string }> }>('/product', {
-    ids: enterable.ids,
-  });
-  const names = (full.products ?? []).map((p) => p.name);
-
-  let groups: string[] | null = null;
-  try {
-    const me = await client.get<{ users: Array<{ groups?: Array<{ name: string }> }> }>('/user', {
-      ids: bzUserId,
-      groups_membership: 1,
-    });
-    groups = (me.users[0]?.groups ?? []).map((g) => g.name);
-  } catch {
-    // Membership unavailable: fall through to unscoped rather than hiding everything.
-    groups = null;
-  }
-  if (!groups || groups.some((g) => ADMIN_GROUPS.has(g))) return null;
-
-  const member = new Set(groups);
-  const scoped = names.filter((n) => member.has(n));
-  return scoped.length > 0 ? scoped : names;
+  return (await accessSnapshot(client, bzUserId)).names;
 }
 
 /**

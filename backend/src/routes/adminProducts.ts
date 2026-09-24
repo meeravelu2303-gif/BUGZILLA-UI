@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { Env } from '../config/env';
+import { clearAccessScope } from '../lib/access';
 import { requireAuth, requirePermission } from '../middleware/auth';
 import { parseInput } from '../lib/validate';
 import { AppError } from '../lib/errors';
@@ -52,6 +53,10 @@ export function adminProductsRouter(env: Env): Router {
         description: input.description,
         version: input.version,
       });
+
+      // A new product changes what every user may enter, so the cached access
+      // snapshots are stale for everyone, not just the caller.
+      clearAccessScope();
 
       const product = await fetchProduct(client, created.id);
       res.status(201).json({ product });

@@ -62,27 +62,37 @@ async function build(client: BugzillaClient): Promise<CategoryIndex> {
    * Resolving tags first restores one rule everywhere: an explicit tag wins,
    * and the description is consulted only for bugs that carry no tag.
    */
-  const tagged = await Promise.all(
-    SEARCHABLE.map(async (category) => {
-      const params = {
-        f1: 'status_whiteboard',
-        o1: 'substring',
-        v1: `[cat:${category}]`,
-        limit: 0,
-        include_fields: 'id',
-      };
-      const raw = await client.get<{ bugs: { id: number }[] }>('/bug', params);
-      return [category, raw.bugs.map((b) => b.id)] as const;
-    })
-  );
-
-  const legacy = await Promise.all(
-    SEARCHABLE.map(async (category) => {
-      const params = { ...toBugzillaQuery({ category: [category] }), limit: 0, include_fields: 'id' };
-      const raw = await client.get<{ bugs: { id: number }[] }>('/bug', params);
-      return [category, raw.bugs.map((b) => b.id)] as const;
-    })
-  );
+  /*
+   * All eight queries in ONE wave, not four then four.
+   *
+   * Bugzilla runs under `mod_cgi` on this instance: every REST call forks a
+   * Perl interpreter and costs ~630ms whatever it asks for. The legacy queries
+   * do not depend on the tagged ones - only the RESOLUTION below is ordered -
+   * so awaiting them as two batches doubled the wall time of every cold rebuild
+   * for no reason.
+   */
+  const [tagged, legacy] = await Promise.all([
+    Promise.all(
+      SEARCHABLE.map(async (category) => {
+        const params = {
+          f1: 'status_whiteboard',
+          o1: 'substring',
+          v1: `[cat:${category}]`,
+          limit: 0,
+          include_fields: 'id',
+        };
+        const raw = await client.get<{ bugs: { id: number }[] }>('/bug', params);
+        return [category, raw.bugs.map((b) => b.id)] as const;
+      })
+    ),
+    Promise.all(
+      SEARCHABLE.map(async (category) => {
+        const params = { ...toBugzillaQuery({ category: [category] }), limit: 0, include_fields: 'id' };
+        const raw = await client.get<{ bugs: { id: number }[] }>('/bug', params);
+        return [category, raw.bugs.map((b) => b.id)] as const;
+      })
+    ),
+  ]);
 
   /*
    * Resolve each bug to ONE category, tags before legacy lines.

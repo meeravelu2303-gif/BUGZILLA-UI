@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Env } from '../config/env';
+import { accessSnapshot } from '../lib/access';
 import { requireAuth } from '../middleware/auth';
 import { normalizeProduct, rawProductSchema } from '../schemas/product';
 
@@ -29,49 +30,28 @@ import { normalizeProduct, rawProductSchema } from '../schemas/product';
  * read, so the worst case is an option that returns nothing — never data they should not see.
  */
 
-/** Groups whose holders administer the whole instance rather than one product. */
-const ADMIN_GROUPS = new Set(['admin', 'editusers']);
-
 export function productsRouter(env: Env): Router {
   const router = Router();
 
+  /*
+   * Served from the shared per-user access snapshot (lib/access.ts), which also
+   * decides the rule described above - so the dropdown and query scoping can
+   * never disagree about which products a user has.
+   *
+   * This route used to repeat the very three upstream calls that scoping makes
+   * (`/product_enterable`, `/product`, `/user`), so opening a list page paid
+   * for the same lookup twice. Bugzilla runs under `mod_cgi` here, where every
+   * call costs ~630ms of Perl startup whatever it asks for, so the duplicate
+   * was close to two seconds of wall time for an answer already in hand.
+   */
   router.get('/', requireAuth(env), async (req, res, next) => {
     try {
-      const client = req.bugzilla!;
-      const enterable = await client.get<{ ids: number[] }>('/product_enterable');
-      if (enterable.ids.length === 0) {
-        res.json({ products: [] });
-        return;
-      }
-      const full = await client.get<{ products: unknown[] }>('/product', { ids: enterable.ids });
-      const products = full.products.map((p) => normalizeProduct(rawProductSchema.parse(p)));
-
-      let groups: string[] | null = null;
-      try {
-        const me = await client.get<{ users: Array<{ groups?: Array<{ name: string }> }> }>('/user', {
-          ids: req.sessionUser!.bzUserId,
-          groups_membership: 1,
-        });
-        groups = (me.users[0]?.groups ?? []).map((g) => g.name);
-      } catch {
-        // Membership unavailable: fall through to the unscoped list rather than showing nothing.
-        groups = null;
-      }
-
-      if (!groups || groups.some((g) => ADMIN_GROUPS.has(g))) {
-        res.json({ products });
-        return;
-      }
-
-      const member = new Set(groups);
-      const scoped = products.filter((p) => member.has(p.name));
-
-      /*
-       * If nothing matched, the naming convention does not hold for this user and filtering
-       * would leave them unable to select anything at all. An over-broad list is recoverable;
-       * an empty one blocks the page.
-       */
-      res.json({ products: scoped.length > 0 ? scoped : products });
+      const { products, names } = await accessSnapshot(req.bugzilla!, req.sessionUser!.bzUserId);
+      const normalized = products.map((p) => normalizeProduct(rawProductSchema.parse(p)));
+      // `names === null` means an instance admin, or membership that could not
+      // be read: show everything enterable rather than nothing.
+      const visible = names === null ? normalized : normalized.filter((p) => names.includes(p.name));
+      res.json({ products: visible });
     } catch (err) {
       next(err);
     }
