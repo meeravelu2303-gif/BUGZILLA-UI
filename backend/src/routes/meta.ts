@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Env } from '../config/env';
 import { BugzillaClient } from '../lib/bugzillaClient';
+import { groupNameForProduct } from '../lib/productGroups';
 import { requireAuth } from '../middleware/auth';
 import { extractBugMeta } from '../schemas/meta';
 
@@ -70,7 +71,13 @@ export function metaRouter(env: Env): Router {
        * domain-agnostic "everyone who can work a bug" list, and the reason this
        * no longer depends on what a login's email happens to end in.
        */
-      const gating = products.filter((p) => available.has(p));
+      // Case-insensitive, and reduced to the group's own spelling: Bugzilla
+      // matches these names case-insensitively, so a group created as
+      // `Kpost Admin UI` does gate the product `KPost Admin UI`. Comparing
+      // exactly treated it as ungated and widened the pool to everyone.
+      const gating = products
+        .map((p) => groupNameForProduct(p, available))
+        .filter((g): g is string => g !== undefined);
       const poolNames = gating.length > 0 ? gating : ['editbugs'];
 
       const resp = await directory.get<{

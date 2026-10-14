@@ -1,4 +1,5 @@
 import {
+  Accessibility,
   AlertOctagon,
   AlertTriangle,
   Bug,
@@ -165,6 +166,7 @@ const CATEGORY_STYLE: Record<Category, { tone: Tone; icon: ComponentType<{ class
   Performance: { tone: 'purple', icon: Gauge },
   Security: { tone: 'purple', icon: Lock },
   Compatibility: { tone: 'purple', icon: MonitorSmartphone },
+  Accessibility: { tone: 'purple', icon: Accessibility },
   Unclassified: { tone: 'slate', icon: CircleHelp },
 };
 

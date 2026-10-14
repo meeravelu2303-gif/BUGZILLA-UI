@@ -1,4 +1,5 @@
 import type { BugzillaClient } from './bugzillaClient';
+import { holdsProductGroup } from './productGroups';
 
 /**
  * Product-access scoping, shared by the bug list / count / stats endpoints so that the
@@ -117,8 +118,14 @@ async function readAccess(client: BugzillaClient, bzUserId: number): Promise<Acc
   if (isAdmin) return { products, names: null, isAdmin };
 
   const names = products.map((p) => p.name);
-  const member = new Set(groups);
-  const scoped = names.filter((n) => member.has(n));
+  /*
+   * Case-insensitive: Bugzilla stores product and group names in a
+   * case-insensitive collation, so `Kpost Admin UI` IS the group for the
+   * product `KPost Admin UI` as far as Bugzilla is concerned. An exact match
+   * here - which is what this did - decided that product had no group, quietly
+   * dropped it from the user's scope, and reported nothing.
+   */
+  const scoped = names.filter((n) => holdsProductGroup(n, groups));
   /*
    * Nothing matched means the one-group-per-product convention does not hold
    * for this user; showing everything they can enter beats showing nothing.

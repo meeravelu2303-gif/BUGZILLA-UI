@@ -18,6 +18,8 @@ export interface ExportBug extends NormalizedBug {
   triage: { severity: Severity; priority: Priority; category: Category; browsers: string[] };
   /** Endpoints and Expected/Actual, parsed from the bug's description. */
   report: DefectReport;
+  /** The bug's most recent comment - identical to the description when nothing has been added since. */
+  lastComment?: { text: string; author: string; createdAt: string };
 }
 
 /** Excel refuses a cell over 32,767 characters and reports the whole file as corrupt. */
@@ -121,6 +123,7 @@ export async function buildBugWorkbook(bugs: ExportBug[], ctx: ExportContext): P
   sheet.columns = [
     { header: 'Bug ID', key: 'displayId', width: 12 },
     { header: 'Summary', key: 'summary', width: 55 },
+    { header: 'Narrative', key: 'narrative', width: 50 },
     { header: 'Product', key: 'product', width: 14 },
     { header: 'Component', key: 'component', width: 24 },
     { header: 'Endpoints', key: 'endpoints', width: 44 },
@@ -129,11 +132,13 @@ export async function buildBugWorkbook(bugs: ExportBug[], ctx: ExportContext): P
     { header: 'Severity', key: 'severity', width: 11 },
     { header: 'Priority', key: 'priority', width: 9 },
     { header: 'Category', key: 'category', width: 13 },
+    { header: 'Steps to Reproduce', key: 'steps', width: 50 },
     { header: 'Expected Status', key: 'expectedStatus', width: 11 },
     { header: 'Actual Status', key: 'actualStatus', width: 11 },
     { header: 'Expected', key: 'expected', width: 42 },
     { header: 'Actual', key: 'actual', width: 42 },
     { header: 'Browsers', key: 'browsers', width: 16 },
+    { header: 'Last Comment', key: 'lastComment', width: 50 },
     { header: 'Status', key: 'status', width: 13 },
     { header: 'Resolution', key: 'resolution', width: 12 },
     { header: 'Assignee', key: 'assignee', width: 22 },
@@ -143,7 +148,16 @@ export async function buildBugWorkbook(bugs: ExportBug[], ctx: ExportContext): P
     { header: `Last Changed (${tz})`, key: 'changed', width: 18 },
   ];
 
-  const WRAPPED = ['summary', 'endpoints', 'classification', 'expected', 'actual'] as const;
+  const WRAPPED = [
+    'summary',
+    'narrative',
+    'endpoints',
+    'classification',
+    'steps',
+    'expected',
+    'actual',
+    'lastComment',
+  ] as const;
   const widthOf = (key: string) => sheet.getColumn(key).width ?? 10;
 
   for (const bug of bugs) {
@@ -151,6 +165,8 @@ export async function buildBugWorkbook(bugs: ExportBug[], ctx: ExportContext): P
     const values = {
       displayId: bugDisplayId(bug),
       summary: bug.summary,
+      // The bug's own plain-English narrative - the first thing a developer should read.
+      narrative: fitCell(report.narrative),
       product: bug.product,
       component: bug.component,
       // One endpoint per line: a comma-joined list of URL paths is unreadable.
@@ -160,11 +176,18 @@ export async function buildBugWorkbook(bugs: ExportBug[], ctx: ExportContext): P
       severity: bug.triage.severity,
       priority: bug.triage.priority,
       category: bug.triage.category,
+      // Numbered repro steps - the only detail some UI bugs have (no Expected/Actual pair).
+      steps: fitCell(report.steps),
       expectedStatus: report.expectedStatus,
       actualStatus: report.actualStatus,
       expected: fitCell(report.expected),
       actual: fitCell(report.actual),
       browsers: bug.triage.browsers.join(', '),
+      // Whoever last commented, so "what did the developer actually say" doesn't need a trip
+      // back into Bugzilla - blank only for the handful of bugs with no readable comment at all.
+      lastComment: bug.lastComment
+        ? fitCell(`${bug.lastComment.author}:\n${bug.lastComment.text}`)
+        : '',
       status: bug.status,
       resolution: bug.resolution,
       assignee: bug.assignedTo?.name ?? '',
@@ -254,11 +277,23 @@ export async function buildBugWorkbook(bugs: ExportBug[], ctx: ExportContext): P
     ...ctx.filters.map((f): [string, string] => [`  ${f.label}`, f.value]),
     ['', ''],
     ['About the columns', ''],
+    [
+      '  Narrative',
+      'The bug\'s own plain-English description - its "Summary:" paragraph, or the opening prose when there is no explicit Summary label. Read this first.',
+    ],
     ['  Endpoints', 'Every endpoint the failure affects, one per line. Blank for UI bugs.'],
+    [
+      '  Steps to Reproduce',
+      'Numbered repro steps, verbatim from the bug. The main detail for UI bugs that have no Expected/Actual status pair (e.g. a missing control or a silent no-op).',
+    ],
     ['  Expected / Actual', 'Taken from the bug description, one check per line as "check → value".'],
     [
       '  Expected / Actual Status',
       'Filled only when the checks are HTTP status codes. Blank when a bug checks something else (e.g. response headers) - see Expected / Actual.',
+    ],
+    [
+      '  Last Comment',
+      'The most recent comment on the bug and who wrote it - the latest word on where things stand, straight from Bugzilla. Identical to the Narrative when nothing has been added since the bug was filed.',
     ],
   ];
   for (const [label, value] of infoRows) info.addRow({ label, value });

@@ -14,6 +14,14 @@ export interface DefectReport {
   classification: string;
   /** Every affected endpoint, e.g. "POST /v2/dashboard/homeDashboardMsgs/". Empty for UI bugs. */
   endpoints: string[];
+  /**
+   * Numbered reproduction steps, verbatim, one per line. Present on the newer,
+   * narrative-style UI filings ("Summary: … / Steps to reproduce: … / Expected: …
+   * / Actual: …") - this is the single most load-bearing field for those bugs,
+   * since many of them have no Expected/Actual pair at all (a missing control, a
+   * silent no-op) and would otherwise export with every detail column blank.
+   */
+  steps: string;
   /** Expected block, one `check → value` per line. */
   expected: string;
   actual: string;
@@ -25,20 +33,33 @@ export interface DefectReport {
    */
   expectedStatus: string;
   actualStatus: string;
+  /**
+   * The bug's own free-text narrative (its "Summary:" paragraph, or - failing
+   * that - the raw description up to the first recognised section heading).
+   * Populated ALWAYS, not just as a fallback: even a fully-structured bench
+   * filing usually opens with a one-paragraph plain-English narrative that is
+   * worth a developer's first read before the Expected/Actual pair.
+   */
+  narrative: string;
 }
 
 export const EMPTY_REPORT: DefectReport = {
   classification: '',
   endpoints: [],
+  steps: '',
   expected: '',
   actual: '',
   expectedStatus: '',
   actualStatus: '',
+  narrative: '',
 };
 
-/** Lines that start a new section and so end an Expected/Actual block. */
+/** Lines that start a new section and so end an Expected/Actual/Steps/Summary block. */
 const SECTION_START =
-  /^(Expected|Actual|Response body[^:\n]*|Repro|Reproduce with Playwright|curl|Owner|Environment|Run date|Filed by|Correlation ID[^:\n]*|Browsers affected|Screenshot[^:\n]*|Trace[^:\n]*|Steps[^:\n]*)\s*:/i;
+  /^(Expected|Actual|Response body[^:\n]*|Repro|Reproduce with Playwright|curl|Owner|Environment|Run date|Filed by|Correlation ID[^:\n]*|Browsers affected|Screenshot[^:\n]*|Trace[^:\n]*|Steps[^:\n]*|Summary|What this means|Why it matters|How to fix|Classification|Category|Endpoint|Module|Representative endpoint)\s*:/i;
+
+/** The narrative-style filings' own leading header block - never part of the narrative itself. */
+const LEADING_LABEL = /^\s*(Classification|Category|Endpoint|Module|Representative endpoint)\s*:/i;
 
 const METHOD_PATH = /^([A-Z]{3,7})\s+(\/\S*)/;
 const NOT_APPLICABLE = /^\(?\s*(not applicable|n\/?a|none)\s*\)?$/i;
@@ -121,6 +142,42 @@ function endpointsOf(text: string, lines: string[]): string[] {
   return [...new Set(found)];
 }
 
+/** The numbered repro steps under a "Steps[ to reproduce][ (…)]:" heading, verbatim. */
+function stepsBlock(lines: string[]): string {
+  const start = lines.findIndex((l) => /^\s*Steps[^:\n]*:/i.test(l));
+  if (start === -1) return '';
+
+  const out: string[] = [];
+  const inline = lines[start].replace(/^\s*Steps[^:\n]*:/i, '').trim();
+  if (inline) out.push(inline);
+
+  for (const line of lines.slice(start + 1)) {
+    if (SECTION_START.test(line.trim())) break;
+    out.push(line);
+  }
+  return out.join('\n').trim();
+}
+
+/**
+ * The bug's own plain-English narrative: an explicit `Summary:` block when present,
+ * else the leading prose paragraph - everything after the leading `Label: value`
+ * header lines and before the first recognised section heading.
+ */
+function narrativeOf(lines: string[]): string {
+  const summary = block(lines, 'Summary');
+  if (summary) return summary;
+
+  let i = 0;
+  while (i < lines.length && (LEADING_LABEL.test(lines[i]) || lines[i].trim() === '')) i++;
+
+  const out: string[] = [];
+  for (const line of lines.slice(i)) {
+    if (SECTION_START.test(line.trim())) break;
+    out.push(line);
+  }
+  return out.join('\n').trim();
+}
+
 export function parseDefectReport(description: string | undefined): DefectReport {
   if (!description) return EMPTY_REPORT;
   const text = normaliseDescription(description);
@@ -132,9 +189,11 @@ export function parseDefectReport(description: string | undefined): DefectReport
   return {
     classification: labelled(text, 'Classification'),
     endpoints: endpointsOf(text, lines),
+    steps: stepsBlock(lines),
     expected,
     actual,
     expectedStatus: statusCodes(expected),
     actualStatus: statusCodes(actual),
+    narrative: narrativeOf(lines),
   };
 }

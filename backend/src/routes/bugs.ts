@@ -280,8 +280,14 @@ const DESCRIPTION_BATCH = 100;
 /** Comment requests in flight at once - enough to be quick, not enough to swamp Bugzilla. */
 const DESCRIPTION_CONCURRENCY = 4;
 
+/** A bug's description plus its most recent comment, as pulled for the export sheet. */
+export interface BugCommentInfo {
+  description?: string;
+  lastComment?: { text: string; author: string; createdAt: string };
+}
+
 /**
- * Each bug's description (its first comment), keyed by bug id.
+ * Each bug's description (its first comment) AND its most recent comment, keyed by bug id.
  *
  * A bug search never returns comment text, and the endpoints and Expected /
  * Actual columns live only there. Bugzilla's comment call takes many bug ids
@@ -289,32 +295,47 @@ const DESCRIPTION_CONCURRENCY = 4;
  * requests rather than one per bug. It still enforces access per bug and hides
  * private comments from non-insiders, so nothing leaks into the sheet that the
  * user could not read in the app.
+ *
+ * The "last comment" is whichever comment is chronologically newest for that bug -
+ * when a bug has no comments beyond its own description, that description IS the
+ * last comment, so the two fields end up identical rather than one being blank.
  */
-async function fetchDescriptions(client: BugzillaClient, ids: number[]): Promise<Map<number, string>> {
+async function fetchDescriptions(client: BugzillaClient, ids: number[]): Promise<Map<number, BugCommentInfo>> {
   const batches: number[][] = [];
   for (let i = 0; i < ids.length; i += DESCRIPTION_BATCH) batches.push(ids.slice(i, i + DESCRIPTION_BATCH));
 
-  const descriptions = new Map<number, string>();
+  const info = new Map<number, BugCommentInfo>();
   let next = 0;
 
   async function worker(): Promise<void> {
     while (next < batches.length) {
       const [first, ...rest] = batches[next++];
-      const resp = await client.get<{ bugs: Record<string, { comments: Array<{ count?: number; text?: string }> }> }>(
-        `/bug/${first}/comment`,
-        rest.length > 0 ? { ids: rest.map(String) } : {}
-      );
+      const resp = await client.get<{
+        bugs: Record<
+          string,
+          { comments: Array<{ count?: number; text?: string; creator?: string; creation_time?: string }> }
+        >;
+      }>(`/bug/${first}/comment`, rest.length > 0 ? { ids: rest.map(String) } : {});
       for (const [bugId, { comments }] of Object.entries(resp.bugs ?? {})) {
         // `count` 0 is the description; fall back to the oldest visible comment
         // when the description itself is private and was filtered out.
         const description = comments.find((c) => c.count === 0) ?? comments[0];
-        if (description?.text) descriptions.set(Number(bugId), description.text);
+        // The newest visible comment, by Bugzilla's own comment ordering (the API
+        // already returns them oldest-first) - not necessarily the description.
+        const last = comments[comments.length - 1];
+        info.set(Number(bugId), {
+          description: description?.text,
+          lastComment:
+            last?.text && last.creator && last.creation_time
+              ? { text: last.text, author: last.creator, createdAt: last.creation_time }
+              : undefined,
+        });
       }
     }
   }
 
   await Promise.all(Array.from({ length: Math.min(DESCRIPTION_CONCURRENCY, batches.length) }, worker));
-  return descriptions;
+  return info;
 }
 
 /** The web app's origin, from the requesting page - used only to link ids back to it. */
@@ -458,14 +479,14 @@ export function bugsRouter(env: Env): Router {
        * Bugzilla hiccup would read as "these bugs have no endpoints". Better to
        * fail loudly and let the user retry.
        */
-      const descriptions = await fetchDescriptions(
+      const commentInfo = await fetchDescriptions(
         req.bugzilla!,
         normalized.map((b) => b.id)
       );
 
       const bugs: ExportBug[] = normalized.map((bug) => {
         const triage = classify({ severity: bug.severity, priority: bug.priority, whiteboard: bug.whiteboard });
-        const description = descriptions.get(bug.id);
+        const info = commentInfo.get(bug.id);
         return {
           ...bug,
           triage: {
@@ -474,7 +495,8 @@ export function bugsRouter(env: Env): Router {
             category: index?.categoryOf(bug.id) ?? 'Unclassified',
             browsers: triage.browsers,
           },
-          report: description ? parseDefectReport(description) : EMPTY_REPORT,
+          report: info?.description ? parseDefectReport(info.description) : EMPTY_REPORT,
+          lastComment: info?.lastComment,
         };
       });
 

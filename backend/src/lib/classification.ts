@@ -34,7 +34,7 @@ export type Severity = (typeof SEVERITIES)[number];
 export const PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'Unclassified'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
-export const CATEGORIES = ['Functional', 'Performance', 'Security', 'Compatibility', 'Unclassified'] as const;
+export const CATEGORIES = ['Functional', 'Performance', 'Security', 'Compatibility', 'Accessibility', 'Unclassified'] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 /**
@@ -72,6 +72,7 @@ export const CATEGORY_MEANING: Record<Category, string> = {
   Performance: 'Slow responses, excessive resource use, or degradation under stress',
   Security: 'Vulnerability, data leak, or authorization flaw',
   Compatibility: 'Behaviour specific to certain clients, versions, devices or environments',
+  Accessibility: 'A WCAG/assistive-technology violation - screen readers, keyboard-only use, or similar',
   Unclassified: 'No category tag, and no recognised classification in the description',
 };
 

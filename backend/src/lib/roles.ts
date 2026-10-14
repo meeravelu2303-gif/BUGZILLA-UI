@@ -1,3 +1,5 @@
+import { groupIndex } from './productGroups';
+
 /**
  * Roles, as a shorthand for the Bugzilla groups behind them.
  *
@@ -64,8 +66,26 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
  */
 export function groupsForRole(role: Role, products: string[], availableGroups: Set<string>) {
   const wanted = [...new Set([...ROLE_GROUPS[role], ...products])];
-  const granted = wanted.filter((g) => availableGroups.has(g));
-  const skipped = wanted.filter((g) => !availableGroups.has(g));
+
+  /*
+   * Resolved case-insensitively, and granted under the group's OWN spelling.
+   *
+   * Bugzilla compares these names case-insensitively, so the product
+   * `KPost Admin UI` is gated by a group an admin created as `Kpost Admin UI`.
+   * An exact match treated that as "no such group" and silently granted the
+   * user nothing for that product - the account was created, the role applied,
+   * and the product access just never happened. Sending the instance's own
+   * spelling matters too: Bugzilla rejects the whole update on a name it does
+   * not recognise.
+   */
+  const index = groupIndex(availableGroups);
+  const granted: string[] = [];
+  const skipped: string[] = [];
+  for (const name of wanted) {
+    const actual = index.get(name.toLowerCase());
+    if (actual) granted.push(actual);
+    else skipped.push(name);
+  }
   return { granted, skipped };
 }
 
@@ -91,8 +111,17 @@ export function roleFromGroups(groups: string[]): Role {
  * far beyond what the form said it was doing.
  */
 export function managedGroups(availableGroups: Set<string>, productGroups: string[]): Set<string> {
+  // Same case-insensitive resolution as `groupsForRole`: a product group this
+  // could not resolve would be left OUT of the managed set, and a role change
+  // would then never remove it - the user would keep access to a product the
+  // admin just took away from them.
+  const index = groupIndex(availableGroups);
   const managed = new Set<string>();
-  for (const role of ROLES) for (const g of ROLE_GROUPS[role]) if (availableGroups.has(g)) managed.add(g);
-  for (const g of productGroups) if (availableGroups.has(g)) managed.add(g);
+  const add = (name: string) => {
+    const actual = index.get(name.toLowerCase());
+    if (actual) managed.add(actual);
+  };
+  for (const role of ROLES) for (const g of ROLE_GROUPS[role]) add(g);
+  for (const g of productGroups) add(g);
   return managed;
 }
