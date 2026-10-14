@@ -11,6 +11,7 @@ import { authRouter } from './routes/auth';
 import { bugsRouter } from './routes/bugs';
 import { metaRouter } from './routes/meta';
 import { productsRouter } from './routes/products';
+import { proofRouter } from './routes/proof';
 
 const env = loadEnv();
 const app = express();
@@ -56,6 +57,8 @@ app.use('/api/auth', authRouter(env));
 app.use('/api/bugs', bugsRouter(env));
 app.use('/api/products', productsRouter(env));
 app.use('/api/meta', metaRouter(env));
+// No login on purpose: opened from links in an exported sheet; every link is signed and expires.
+app.use('/api/proof', proofRouter(env));
 app.use('/api/admin/users', adminUsersRouter(env));
 app.use('/api/admin/products', adminProductsRouter(env));
 app.use('/api/admin/meta', adminMetaRouter(env));

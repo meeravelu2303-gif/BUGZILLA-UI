@@ -41,6 +41,14 @@ export interface DefectReport {
    * worth a developer's first read before the Expected/Actual pair.
    */
   narrative: string;
+  /**
+   * The runnable `curl` reproduction, verbatim, when the bench filed one (API
+   * bugs only - UI bugs have no curl, they have `steps`). This is the single
+   * most actionable field on an API bug: a developer (or Claude, working from
+   * the exported sheet rather than Bugzilla itself) can run it directly
+   * without first opening the ticket to find it.
+   */
+  curl: string;
 }
 
 export const EMPTY_REPORT: DefectReport = {
@@ -52,6 +60,7 @@ export const EMPTY_REPORT: DefectReport = {
   expectedStatus: '',
   actualStatus: '',
   narrative: '',
+  curl: '',
 };
 
 /** Lines that start a new section and so end an Expected/Actual/Steps/Summary block. */
@@ -195,5 +204,10 @@ export function parseDefectReport(description: string | undefined): DefectReport
     expectedStatus: statusCodes(expected),
     actualStatus: statusCodes(actual),
     narrative: narrativeOf(lines),
+    // `block()` strips the `check → value` padding via `tidyChecks`, which is a no-op on a curl
+    // command (it only rewrites arrow separators), so it is safe to reuse here unchanged. The bench
+    // only ever files the initial description with a bare "curl:" heading (never "curl (current
+    // host):" — that phrasing is a later COMMENT, not the description this parser reads).
+    curl: block(lines, 'curl'),
   };
 }

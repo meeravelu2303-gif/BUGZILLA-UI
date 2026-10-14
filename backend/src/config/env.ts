@@ -23,6 +23,18 @@ const envSchema = z.object({
    * 0 to disable caching entirely (useful when debugging against a live bench run).
    */
   STATS_CACHE_TTL_MS: z.coerce.number().int().min(0).default(60_000),
+  /**
+   * The address other machines use to reach this app (e.g. http://192.168.0.50:5175). Links written
+   * into an exported sheet use it, so they work on a developer's machine - not "localhost", which
+   * only ever means the machine the link is opened on.
+   */
+  PUBLIC_APP_URL: z
+    .string()
+    .url()
+    .optional()
+    .transform((v) => v?.replace(/\/+$/, '')),
+  /** How long a proof link in an exported sheet keeps working without a login. */
+  PROOF_LINK_DAYS: z.coerce.number().int().min(1).max(365).default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;

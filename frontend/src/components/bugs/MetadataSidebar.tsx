@@ -21,12 +21,15 @@ interface FormState {
   version: string;
   targetMilestone: string;
   whiteboard: string;
+  /** The bug this one duplicates. Kept as text so a half-typed number is editable. */
+  dupeOf: string;
 }
 
 function toFormState(bug: Bug): FormState {
   return {
     status: bug.status,
     resolution: bug.resolution,
+    dupeOf: bug.dupeOf === null ? '' : String(bug.dupeOf),
     priority: bug.priority,
     severity: bug.severity,
     assignedTo: bug.assignedTo?.email ?? '',
@@ -65,6 +68,21 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
    * Reassign first, save, then close.
    */
   const lockAssignee = isClosed || needsResolution;
+  /**
+   * DUPLICATE is the one resolution that needs a second value: which bug.
+   * Bugzilla refuses the update without it, so the field appears the moment
+   * DUPLICATE is chosen and Save is blocked until it is filled - the error it
+   * used to produce named no field and gave the reader nothing to act on.
+   */
+  const isDuplicate = needsResolution && form.resolution === 'DUPLICATE';
+  const dupeOfError = (() => {
+    if (!isDuplicate) return '';
+    const raw = form.dupeOf.trim().replace(/^(?:kpa[-\s]?|#|bug[-\s]?)/i, '');
+    if (!raw) return 'Enter the bug this one duplicates.';
+    if (!/^\d+$/.test(raw)) return 'Enter a bug number, for example 806 or KPA-806.';
+    if (Number(raw) === bug.id) return 'A bug cannot be a duplicate of itself.';
+    return '';
+  })();
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => {
@@ -80,6 +98,21 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
   async function onSave() {
     const payload: Record<string, string> = {};
     for (const key of dirty) payload[key] = form[key];
+
+    if (isDuplicate) {
+      /*
+       * Sent whenever the resolution is DUPLICATE, even if the id itself was
+       * not edited: Bugzilla requires the pair together, so a bug being closed
+       * as a duplicate of the id it already carries must still name it.
+       * Accepts "KPA-806", "#806" or "806" - the label people read on screen is
+       * the one they will type.
+       */
+      payload.dupeOf = form.dupeOf.trim().replace(/^(?:kpa[-\s]?|#|bug[-\s]?)/i, '');
+    } else {
+      // Contradictory otherwise: Bugzilla would flip the resolution back to
+      // DUPLICATE rather than reject it.
+      delete payload.dupeOf;
+    }
 
     try {
       await updateBug.mutateAsync(payload);
@@ -98,7 +131,15 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
       <CardHeader>
         <CardTitle>Details</CardTitle>
         {isDirty && (
-          <Button size="sm" onClick={onSave} loading={updateBug.isPending}>
+          <Button
+            size="sm"
+            onClick={onSave}
+            loading={updateBug.isPending}
+            // Blocked rather than letting the save fail upstream: Bugzilla's
+            // refusal names no field, so the reader is told here instead.
+            disabled={dupeOfError !== ''}
+            title={dupeOfError || undefined}
+          >
             <Save className="h-3.5 w-3.5" /> Save
           </Button>
         )}
@@ -120,6 +161,19 @@ export function MetadataSidebar({ bug, meta, product }: { bug: Bug; meta?: BugMe
               </option>
             ))}
           </Select>
+        )}
+
+        {/* Only DUPLICATE needs a second value, so the field appears with it. */}
+        {isDuplicate && (
+          <Input
+            label="Duplicate of"
+            value={form.dupeOf}
+            onChange={(e) => set('dupeOf', e.target.value)}
+            placeholder="e.g. 806 or KPA-806"
+            inputMode="numeric"
+            error={dupeOfError || undefined}
+            hint={dupeOfError ? undefined : 'The bug this one duplicates.'}
+          />
         )}
 
         <Select label="Priority" value={form.priority} onChange={(e) => set('priority', e.target.value)}>

@@ -346,6 +346,14 @@ export const updateBugSchema = z
     assignedTo: z.string().email().optional(),
     targetMilestone: z.string().optional(),
     whiteboard: z.string().optional(),
+    /**
+     * The bug this one duplicates. Required by Bugzilla whenever the resolution
+     * is DUPLICATE - without it the update is rejected with "You must specify a
+     * bug id to mark this bug as a duplicate of", which is what the Resolution
+     * dropdown used to produce, since it could set DUPLICATE but never name a
+     * target.
+     */
+    dupeOf: z.coerce.number().int().positive().optional(),
   })
   .refine((obj) => Object.keys(obj).length > 0, { message: 'At least one field must be provided' });
 
