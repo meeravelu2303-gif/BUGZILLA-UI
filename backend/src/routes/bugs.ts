@@ -33,6 +33,7 @@ import {
   addCommentSchema,
   bugCountRowSchema,
   countBugsQuerySchema,
+  createAttachmentSchema,
   createBugSchema,
   exportBugsQuerySchema,
   listBugsQuerySchema,
@@ -1165,6 +1166,24 @@ export function bugsRouter(env: Env): Router {
     }
   });
 
+  // POST /api/bugs/:id/attachments  - one evidence file (screenshot, video, log) per request.
+  router.post('/:id/attachments', auth, async (req, res, next) => {
+    try {
+      const { id } = parseInput(z.object({ id: z.coerce.number().int().positive() }), req.params);
+      const input = parseInput(createAttachmentSchema, req.body);
+      const created = await req.bugzilla!.post<{ ids: number[] }>(`/bug/${id}/attachment`, {
+        ids: [id],
+        data: input.data,
+        file_name: input.fileName,
+        content_type: input.contentType,
+        summary: input.summary || input.fileName,
+      });
+      res.status(201).json({ ids: created.ids });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // POST /api/bugs
   router.post('/', auth, async (req, res, next) => {
     try {
@@ -1182,6 +1201,7 @@ export function bugsRouter(env: Env): Router {
         platform: input.platform ?? 'All',
         ...(input.severity ? { severity: input.severity } : {}),
         ...(input.priority ? { priority: input.priority } : {}),
+        ...(input.whiteboard ? { status_whiteboard: input.whiteboard } : {}),
       };
 
       const created = await client.post<{ id: number }>('/bug', payload);

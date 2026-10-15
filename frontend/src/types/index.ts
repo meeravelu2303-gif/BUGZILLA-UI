@@ -269,6 +269,8 @@ export interface CreateBugInput {
   platform?: string;
   severity?: string;
   priority?: string;
+  /** `[cat:Xxx]` (+ `[browser:…]`), the tags the test bench writes. */
+  whiteboard?: string;
 }
 
 export interface UpdateBugInput {

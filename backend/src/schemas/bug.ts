@@ -328,6 +328,22 @@ export const createBugSchema = z.object({
   platform: z.string().optional(),
   severity: z.string().optional(),
   priority: z.string().optional(),
+  /** `[cat:Xxx]` (+ `[browser:…]`) - the same tags the test bench writes. */
+  whiteboard: z.string().max(255).optional(),
+});
+
+/**
+ * One evidence file for a bug, base64-encoded. 15 MB decoded keeps the JSON body under the route's
+ * 25 MB limit; Bugzilla itself accepts up to 50 MB here (maxattachmentsize).
+ */
+export const createAttachmentSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(100),
+  data: z
+    .string()
+    .min(1)
+    .refine((d) => Math.floor((d.length * 3) / 4) <= 15 * 1024 * 1024, 'Attachments are limited to 15 MB each.'),
+  summary: z.string().max(255).optional(),
 });
 
 export type CreateBugInput = z.infer<typeof createBugSchema>;

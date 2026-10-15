@@ -22,6 +22,11 @@ interface Sections {
   actual: string;
   repro: string;
   curl: string;
+  preconditions: string;
+  steps: string;
+  responseBody: string;
+  /** "HTTP 500" when the Response body heading names a status. */
+  responseLabel: string;
 }
 
 const META_LINE: Record<string, string> = {
@@ -30,10 +35,36 @@ const META_LINE: Record<string, string> = {
   'Representative endpoint:': 'Endpoint',
   'Endpoint:': 'Endpoint',
   'Module:': 'Module',
+  'Severity:': 'Severity / Priority',
 };
 
-/** Ordered anchors that begin a multi-line block; text runs until the next anchor. */
-const BLOCK_ANCHORS = ['What this means:', 'Why it matters:', 'How to fix:', 'Expected:', 'Actual:', 'Repro:', 'Reproduce with Playwright:', 'curl:', 'Owner:', 'Environment:', 'Run date:'];
+/**
+ * Anchors that begin a multi-line block; text runs until the next anchor. Some are listed only so
+ * their text stops the block above them (Owner, Environment, Filed by …) - without them a trailing
+ * "Filed by:" line would read as part of the curl.
+ */
+const BLOCK_ANCHORS = [
+  'Summary:',
+  'Preconditions:',
+  'What this means:',
+  'Why it matters:',
+  'How to fix:',
+  'Expected:',
+  'Actual:',
+  'Response body',
+  'Steps to reproduce:',
+  'Repro:',
+  'Reproduce with Playwright:',
+  'curl:',
+  'Browsers affected:',
+  'Correlation ID',
+  'Owner:',
+  'Environment:',
+  'Run date:',
+  'Filed by:',
+  'Tested by:',
+  'Evidence attached:',
+];
 
 function parse(raw: string): Sections | null {
   const lines = raw.replace(/\r/g, '').split('\n');
@@ -42,6 +73,7 @@ function parse(raw: string): Sections | null {
   const blocks: Record<string, string[]> = {};
   let current: string | null = null;
   let seenAnchor = false;
+  let responseLabel = '';
 
   for (const line of lines) {
     const metaKey = Object.keys(META_LINE).find((k) => line.startsWith(k));
@@ -54,7 +86,12 @@ function parse(raw: string): Sections | null {
       seenAnchor = true;
       current = anchor;
       blocks[anchor] = [];
-      const inline = line.slice(line.indexOf(anchor) + anchor.length).trim();
+      let inline = line.slice(line.indexOf(anchor) + anchor.length).trim();
+      // "Response body (HTTP 500):" / "Correlation ID (search …): abc" - the heading runs to the colon.
+      if (!anchor.endsWith(':')) {
+        if (anchor === 'Response body') responseLabel = /\((HTTP [^)]*)\)/.exec(inline)?.[1] ?? '';
+        inline = inline.includes(':') ? inline.slice(inline.indexOf(':') + 1).trim() : '';
+      }
       if (inline) blocks[anchor].push(inline);
       continue;
     }
@@ -66,7 +103,7 @@ function parse(raw: string): Sections | null {
   const get = (a: string) => (blocks[a] ?? []).join('\n').trim();
   const sections: Sections = {
     meta,
-    summary: summaryLines.join('\n').trim(),
+    summary: [summaryLines.join('\n').trim(), get('Summary:')].filter(Boolean).join('\n\n'),
     whatThisMeans: get('What this means:'),
     whyItMatters: get('Why it matters:'),
     howToFix: get('How to fix:'),
@@ -74,6 +111,10 @@ function parse(raw: string): Sections | null {
     actual: get('Actual:'),
     repro: get('Repro:') || get('Reproduce with Playwright:'),
     curl: get('curl:'),
+    preconditions: get('Preconditions:'),
+    steps: get('Steps to reproduce:'),
+    responseBody: get('Response body'),
+    responseLabel,
   };
 
   // If we recognised essentially nothing, signal a fallback to raw.
@@ -176,7 +217,14 @@ export function DescriptionReport({ description }: { description: string }) {
         <p className="text-[14.5px] leading-7 text-slate-700">{parsed.summary}</p>
       )}
 
-      {(parsed.whatThisMeans || parsed.howToFix) && (
+      {parsed.preconditions && (
+        <p className="text-[13.5px] leading-6 text-slate-600">
+          <span className="font-semibold text-slate-800">Preconditions. </span>
+          {parsed.preconditions}
+        </p>
+      )}
+
+      {(parsed.whatThisMeans || parsed.whyItMatters || parsed.howToFix) && (
         <div className="flex flex-col gap-3 rounded-xl bg-sky-50/70 p-5 ring-1 ring-inset ring-sky-600/20">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
             For the developer
@@ -229,10 +277,22 @@ export function DescriptionReport({ description }: { description: string }) {
         </div>
       )}
 
-      {(parsed.curl || parsed.repro) && (
+      {parsed.steps && (
+        <div className="flex flex-col gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Steps to reproduce</p>
+          <pre className="whitespace-pre-wrap break-words rounded-xl bg-white/70 p-4 font-sans text-[14px] leading-7 text-slate-800 ring-1 ring-inset ring-slate-200">
+            {parsed.steps}
+          </pre>
+        </div>
+      )}
+
+      {(parsed.curl || parsed.repro || parsed.responseBody) && (
         <div className="flex flex-col gap-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reproduce</p>
           {parsed.curl && <CodeBlock title="curl" code={parsed.curl} />}
+          {parsed.responseBody && (
+            <CodeBlock title={parsed.responseLabel ? `Response body (${parsed.responseLabel})` : 'Response body'} code={parsed.responseBody} />
+          )}
           {parsed.repro && <CodeBlock title="Playwright" code={parsed.repro} />}
         </div>
       )}

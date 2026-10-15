@@ -29,6 +29,9 @@ app.use(
     credentials: true,
   })
 );
+// Evidence uploads arrive base64-encoded in JSON, so that one route gets a larger body limit;
+// mounted first, it parses the body and the global parser below then leaves it alone.
+app.use('/api/bugs/:id/attachments', express.json({ limit: '25mb' }));
 app.use(express.json());
 // Sessions live server-side in the default in-memory MemoryStore, so the cookie
 // carries only an opaque signed session id - never the user's Bugzilla token.
