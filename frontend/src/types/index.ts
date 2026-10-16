@@ -177,6 +177,58 @@ export interface GroupUsage {
   deletable: boolean;
 }
 
+export type EditableField = 'bug_severity' | 'priority' | 'bug_status' | 'resolution' | 'op_sys' | 'rep_platform';
+
+export interface FieldValue {
+  id: number;
+  name: string;
+  sortkey: number;
+  isActive: boolean;
+  bugCount: number;
+  /** Named by a default-value parameter (defaultseverity, ...). */
+  isDefault: boolean;
+  /** Built into Bugzilla (UNCONFIRMED, FIXED, DUPLICATE, ...). */
+  isStatic: boolean;
+  /** Why Bugzilla would refuse a delete; '' when it would not. */
+  deleteBlock: string;
+  /** Status only. */
+  isOpen?: boolean;
+}
+
+export interface FieldValueList {
+  field: EditableField;
+  label: string;
+  values: FieldValue[];
+}
+
+export interface WorkflowStatus {
+  id: number;
+  name: string;
+  isOpen: boolean;
+  isActive: boolean;
+}
+
+export interface WorkflowTransition {
+  /** 0 = a new bug. */
+  from: number;
+  to: number;
+  requireComment: boolean;
+}
+
+export interface WorkflowData {
+  statuses: WorkflowStatus[];
+  transitions: WorkflowTransition[];
+  /** duplicate_or_move_bug_status: every status must be able to reach it. */
+  duplicateStatus: string;
+  applied?: string[];
+}
+
+export interface WorkflowDiff {
+  add: Array<{ from: number; to: number; requireComment?: boolean }>;
+  remove: Array<{ from: number; to: number }>;
+  comment: Array<{ from: number; to: number; requireComment: boolean }>;
+}
+
 export interface MembershipChangeResult {
   group: AdminGroupDetail;
   failed?: Array<{ userId: number; message: string }>;
@@ -213,6 +265,8 @@ export interface Permissions {
   canTriage?: boolean;
   /** Create/edit groups and their membership (Bugzilla's `creategroups`). Optional for older backends. */
   canManageGroups?: boolean;
+  /** Bugzilla's `admin` group: field values and the status workflow. */
+  isBugzillaAdmin?: boolean;
 }
 
 export interface AuthUser {

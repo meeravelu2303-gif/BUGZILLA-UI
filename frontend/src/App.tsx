@@ -80,8 +80,26 @@ export function App() {
           </Protected>
         }
       />
-      <Route path="/admin/field-values" element={<Protected><FieldValues /></Protected>} />
-      <Route path="/admin/workflow" element={<Protected><Workflow /></Protected>} />
+      <Route
+        path="/admin/field-values"
+        element={
+          <Protected>
+            <PermissionGate permission="isBugzillaAdmin">
+              <FieldValues />
+            </PermissionGate>
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/workflow"
+        element={
+          <Protected>
+            <PermissionGate permission="isBugzillaAdmin">
+              <Workflow />
+            </PermissionGate>
+          </Protected>
+        }
+      />
       <Route
         path="/admin/groups"
         element={

@@ -3,6 +3,8 @@ dist/
 build/
 .env
 .env.local
+# Staging backend config holds a real API key + session secret.
+backend/.env.staging
 *.log
 .DS_Store
 coverage/

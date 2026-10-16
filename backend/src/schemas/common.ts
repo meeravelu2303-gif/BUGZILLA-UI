@@ -33,6 +33,8 @@ export interface Permissions {
   canTriage: boolean;
   /** Create and edit groups and their membership - Bugzilla's `creategroups`. */
   canManageGroups: boolean;
+  /** Bugzilla's `admin` group - what editvalues.cgi and editworkflow.cgi require. */
+  isBugzillaAdmin: boolean;
 }
 
 /**
@@ -51,5 +53,6 @@ export function derivePermissions(groups: { name: string }[]): Permissions {
     // blocked from routing work between them.
     canTriage: names.has('canconfirm') || names.has('editusers'),
     canManageGroups: names.has('creategroups'),
+    isBugzillaAdmin: names.has('admin'),
   };
 }

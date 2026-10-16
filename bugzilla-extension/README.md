@@ -12,8 +12,18 @@ No core file is modified, and it adds no database tables.
 | `/ueducate/component/{id}` | GET / PUT (edit) / DELETE (only with 0 bugs) | `editcomponents` (for that product) |
 | `/ueducate/group/{id}/usage` | GET — what blocks a delete | `creategroups` |
 | `/ueducate/group/{id}` | DELETE — not system groups; not while bugs, products or flag types use it | `creategroups` |
+| `/ueducate/field/{field}/values` | GET (with bug counts and delete blockers) / POST (add) | `admin` |
+| `/ueducate/field/{field}/values/{id}` | PUT (rename, sortkey, active) / DELETE (refused if default, built-in, in use, or controlling) | `admin` |
+| `/ueducate/field/{field}/order` | PUT — reorder, reusing the field's own sortkeys | `admin` |
+| `/ueducate/workflow` | GET / PUT — an explicit add/remove/comment diff; transitions into `duplicate_or_move_bug_status` cannot be removed | `admin` |
+
+`{field}` is one of `bug_severity`, `priority`, `bug_status`, `resolution`, `op_sys`, `rep_platform`.
+Workflow changes are written with the same SQL `editworkflow.cgi` uses (Bugzilla has no object class
+for transitions), plus an `audit_log` row per change, class `Bugzilla::Extension::UeducateAdmin::Workflow`.
 
 ## Deploy
+
+Test on staging first (`ops/staging/README.md`), then take a live backup.
 
 Copy this folder's `UeducateAdmin` directory to `D:\Bugzilla\extensions\UeducateAdmin`.
 Bugzilla runs under mod_cgi and loads extensions on every request: no Apache restart and no

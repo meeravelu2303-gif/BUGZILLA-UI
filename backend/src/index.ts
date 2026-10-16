@@ -1,4 +1,5 @@
-import 'dotenv/config';
+// Must stay the first import: it fills process.env before any module reads it.
+import './loadEnvFile';
 import cors from 'cors';
 import express from 'express';
 import session from 'express-session';
@@ -6,7 +7,9 @@ import { loadEnv, SESSION_COOKIE_NAME } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { adminMetaRouter } from './routes/adminMeta';
 import { adminComponentsRouter } from './routes/adminComponents';
+import { adminFieldValuesRouter } from './routes/adminFieldValues';
 import { adminGroupsRouter } from './routes/adminGroups';
+import { adminWorkflowRouter } from './routes/adminWorkflow';
 import { adminProductsRouter } from './routes/adminProducts';
 import { adminUsersRouter } from './routes/adminUsers';
 import { authRouter } from './routes/auth';
@@ -55,7 +58,8 @@ app.use(
 );
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true });
+  // `env` drives the UI's STAGING banner, so a staging tab can never pass for live.
+  res.json({ ok: true, env: env.APP_ENV });
 });
 
 app.use('/api/auth', authRouter(env));
@@ -68,6 +72,8 @@ app.use('/api/admin/users', adminUsersRouter(env));
 app.use('/api/admin/products', adminProductsRouter(env));
 app.use('/api/admin/groups', adminGroupsRouter(env));
 app.use('/api/admin/components', adminComponentsRouter(env));
+app.use('/api/admin/field-values', adminFieldValuesRouter(env));
+app.use('/api/admin/workflow', adminWorkflowRouter(env));
 app.use('/api/admin/meta', adminMetaRouter(env));
 
 app.use(notFoundHandler);

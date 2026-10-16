@@ -36,6 +36,7 @@ export function requireAuth(env: Env) {
         canManageProducts: false,
         canTriage: false,
         canManageGroups: false,
+        isBugzillaAdmin: false,
         ...(session.permissions ?? {}),
       },
     };

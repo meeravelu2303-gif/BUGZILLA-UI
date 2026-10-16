@@ -13,11 +13,16 @@ import type {
   AdminGroupDetail,
   AdminGroupSummary,
   CreateGroupInput,
+  EditableField,
+  FieldValue,
+  FieldValueList,
   GroupUsage,
   GroupMember,
   MembershipChangeResult,
   UpdateComponentInput,
   UpdateGroupInput,
+  WorkflowData,
+  WorkflowDiff,
   CreateBugInput,
   CreateComponentInput,
   CreateProductInput,
@@ -357,6 +362,76 @@ export function useDeleteGroup(id: number) {
   return useMutation({
     mutationFn: () => api.delete<{ deleted: true; name: string }>(`/admin/groups/${id}`),
     onSuccess: () => invalidateGroups(qc),
+  });
+}
+
+// ---- Admin: field values & workflow (UeducateAdmin extension) ----
+
+export function useFieldValues(field: EditableField) {
+  return useQuery({
+    queryKey: ['admin', 'field-values', field],
+    queryFn: () => api.get<FieldValueList>(`/admin/field-values/${field}`),
+    retry: false,
+  });
+}
+
+function invalidateFieldValues(qc: ReturnType<typeof useQueryClient>, field: EditableField) {
+  qc.invalidateQueries({ queryKey: ['admin', 'field-values', field] });
+  // The bug forms and filters read their dropdowns from /meta.
+  qc.invalidateQueries({ queryKey: ['meta'] });
+  if (field === 'bug_status') qc.invalidateQueries({ queryKey: ['admin', 'workflow'] });
+}
+
+export function useCreateFieldValue(field: EditableField) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { value: string; sortkey?: number; isOpen?: boolean }) =>
+      api.post<{ value: FieldValue }>(`/admin/field-values/${field}`, input),
+    onSuccess: () => invalidateFieldValues(qc, field),
+  });
+}
+
+export function useUpdateFieldValue(field: EditableField) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: number; value?: string; sortkey?: number; isActive?: boolean }) =>
+      api.patch<{ value: FieldValue; changes: string[] }>(`/admin/field-values/${field}/${id}`, input),
+    onSuccess: () => invalidateFieldValues(qc, field),
+  });
+}
+
+export function useDeleteFieldValue(field: EditableField) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<{ deleted: true; name: string }>(`/admin/field-values/${field}/${id}`),
+    onSuccess: () => invalidateFieldValues(qc, field),
+  });
+}
+
+export function useReorderFieldValues(field: EditableField) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => api.put<FieldValueList>(`/admin/field-values/${field}/order`, { ids }),
+    onSuccess: () => invalidateFieldValues(qc, field),
+  });
+}
+
+export function useWorkflowAdmin() {
+  return useQuery({
+    queryKey: ['admin', 'workflow'],
+    queryFn: () => api.get<WorkflowData>('/admin/workflow'),
+    retry: false,
+  });
+}
+
+export function useUpdateWorkflow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (diff: WorkflowDiff) => api.patch<WorkflowData>('/admin/workflow', diff),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'workflow'] });
+      qc.invalidateQueries({ queryKey: ['meta'] });
+    },
   });
 }
 

@@ -1,10 +1,18 @@
 import { z } from 'zod';
 
-/** Shared by the session middleware (index.ts) and logout's clearCookie (routes/auth.ts). */
-export const SESSION_COOKIE_NAME = 'bzui_session';
+/**
+ * Shared by the session middleware (index.ts) and logout's clearCookie (routes/auth.ts).
+ *
+ * Staging gets its own name: browsers share cookies across ports of one host, so the live UI on
+ * :5175 and the staging UI on :5176 would otherwise overwrite each other's session. Read straight
+ * from process.env because it is a module constant; loadEnvFile.ts has run before this module.
+ */
+export const SESSION_COOKIE_NAME = process.env.APP_ENV === 'staging' ? 'bzui_session_staging' : 'bzui_session';
 
 const envSchema = z.object({
   BUGZILLA_URL: z.string().url(),
+  /** `staging` shows a STAGING banner in the UI and isolates the session cookie. */
+  APP_ENV: z.enum(['live', 'staging']).default('live'),
   BUGZILLA_API_KEY: z.string().min(1, 'BUGZILLA_API_KEY must be set'),
   PORT: z.coerce.number().int().positive().default(4000),
   SESSION_SECRET: z.string().min(16, 'SESSION_SECRET should be at least 16 characters'),
