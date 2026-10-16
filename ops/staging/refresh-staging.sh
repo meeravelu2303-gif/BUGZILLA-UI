@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Refreshes the STAGING database from a fresh dump of LIVE. Run in Git Bash on the server.
 #
+# >>> CURRENTLY DISABLED BY DESIGN (2026-10-16) <<<
+# Staging now runs on bugs_preview - the Mantis data migrated into Bugzilla - not on a copy of
+# live. That data must never be overwritten with live's, so this script refuses to run unless
+# staging's localconfig points at bugs_staging (the old copy-of-live database), and it can only
+# ever write to bugs_staging. bugs_preview is backed up by _backups/backup-databases.ps1 instead.
+#
 #   ops/staging/refresh-staging.sh            # dumps live now, then restores it into bugs_staging
 #   ops/staging/refresh-staging.sh dump.sql   # restores an existing live dump instead
 #
@@ -16,7 +22,13 @@ PERL=/c/Strawberry/perl/bin/perl.exe
 # Reads one value from a Bugzilla localconfig: cfg <file> <name>  ("$db_name = 'x';" -> x)
 cfg() { grep -E "^.$2 = " "$1" | sed -E "s/.*'(.*)'.*/\1/"; }
 
-[ "$(cfg $STAGING_DIR/localconfig db_name)" = bugs_staging ] || { echo "REFUSING: $STAGING_DIR/localconfig is not bugs_staging"; exit 1; }
+STAGING_DB=$(cfg $STAGING_DIR/localconfig db_name)
+if [ "$STAGING_DB" = bugs_preview ]; then
+  echo "REFUSING: staging runs on bugs_preview (the Mantis-migrated data). It must not be overwritten"
+  echo "with a copy of live. Nothing was changed. See the note at the top of this script."
+  exit 1
+fi
+[ "$STAGING_DB" = bugs_staging ] || { echo "REFUSING: $STAGING_DIR/localconfig points at '$STAGING_DB', not bugs_staging"; exit 1; }
 SP=$(cfg $STAGING_DIR/localconfig db_pass)
 
 DUMP="${1:-}"

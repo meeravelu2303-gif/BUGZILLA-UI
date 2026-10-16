@@ -7,7 +7,7 @@ BEGIN {
 use lib qw(. lib);
 use Bugzilla;
 # Local databases staging may point at. Never `bugs` (live).
-my %STAGING_DBS = map { $_ => 1 } qw(bugs_staging bugs_preview_copy);
+my %STAGING_DBS = map { $_ => 1 } qw(bugs_staging bugs_preview_copy bugs_preview);
 die "REFUSING: localconfig db_name is not a staging database\n" unless $STAGING_DBS{Bugzilla->localconfig->{db_name}};
 my ($db) = Bugzilla->dbh->selectrow_array('SELECT DATABASE()');
 die "REFUSING: connected to '$db', not a staging database\n" unless $STAGING_DBS{$db};

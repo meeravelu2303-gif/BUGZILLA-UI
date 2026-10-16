@@ -1,5 +1,13 @@
 # Bugzilla staging
 
+> **Since 2026-10-16 staging runs on `bugs_preview`** — the Mantis data migrated into Bugzilla —
+> on the same MariaDB server as live (127.0.0.1:3307), with its own account `bugs_preview`
+> (rights on `bugs_preview` only; password only in `D:Bugzilla-staginglocalconfig`).
+> It is **not** a copy of live any more, so `refresh-staging.sh` refuses to run while staging
+> points at it. `bugs_preview` is backed up nightly-style by `_backups/backup-databases.ps1`.
+> Rollback to the MySQL 8 copy: restore `D:Bugzilla-staginglocalconfig.bak-mysql8-20261016-173611`.
+> The table below describes the original copy-of-live layout (`bugs_staging`), kept for reference.
+
 A full copy of live Bugzilla for testing. **All test changes happen here, never on live.**
 
 | | Live | Staging |
