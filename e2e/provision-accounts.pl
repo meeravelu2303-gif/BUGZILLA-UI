@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # Creates the two accounts the E2E suite signs in as.
 #
-#   perl provision-accounts.pl            (run from C:\Bugzilla)
+#   perl provision-accounts.pl            (run from D:\Bugzilla)
 #
 # These are deliberately NOT left on the instance between runs: they are robot
 # accounts, and a bug tracker's user list should contain people. They hold no

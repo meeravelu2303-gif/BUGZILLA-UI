@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # Removes the E2E robot accounts again, so the user list holds only people.
 #
-#   perl purge-accounts.pl                (run from C:\Bugzilla)
+#   perl purge-accounts.pl                (run from D:\Bugzilla)
 #
 # Bugzilla has allowuserdeletion=0 and no User->remove_from_db, so the rows are
 # deleted directly. That is only safe because these accounts never author
