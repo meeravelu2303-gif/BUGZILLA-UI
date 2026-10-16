@@ -25,7 +25,6 @@ before anything is applied to the app.
 |---|---|---|---|
 | `frontend/src/assets/brand/ueducate-logo.png` | Decoded from the header's embedded base64 PNG (webpack module id 2128, the exact image rendered in `ueHeader` → `HLogoD`) | 159×49, transparent background | Sidebar/topbar wordmark (shield + "UEDUCATE" text), login page |
 | `frontend/public/favicon.png` | `https://www.ueducate.in/favicon.png`, referenced by their own `<link rel="icon">` | 100×105, transparent | Browser tab favicon |
-| `frontend/src/assets/brand/ueducate-mark-512.png` | `https://www.ueducate.in/logo512.png`, their PWA icon | 512×512, transparent | Spare high-res shield-only mark, kept in case a larger icon is needed anywhere (not required by the current plan) |
 
 The shield mark is a monogram: a navy shield divided into four quadrants forming "UC"
 twice (mirrored), with one letter picked out in the brand's light-blue accent.
