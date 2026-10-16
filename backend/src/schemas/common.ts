@@ -31,6 +31,8 @@ export interface Permissions {
    * movable, but cannot reach across and reassign a colleague's.
    */
   canTriage: boolean;
+  /** Create and edit groups and their membership - Bugzilla's `creategroups`. */
+  canManageGroups: boolean;
 }
 
 /**
@@ -48,5 +50,6 @@ export function derivePermissions(groups: { name: string }[]): Permissions {
     // `editusers` implies it: an admin who can create the accounts should not be
     // blocked from routing work between them.
     canTriage: names.has('canconfirm') || names.has('editusers'),
+    canManageGroups: names.has('creategroups'),
   };
 }

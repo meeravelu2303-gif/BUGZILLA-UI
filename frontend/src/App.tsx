@@ -12,6 +12,7 @@ import { Preferences } from './pages/Preferences';
 import { Reports } from './pages/Reports';
 import { CreateUser } from './pages/admin/CreateUser';
 import { FieldValues } from './pages/admin/FieldValues';
+import { GroupDetail } from './pages/admin/GroupDetail';
 import { Groups } from './pages/admin/Groups';
 import { Parameters } from './pages/admin/Parameters';
 import { Products } from './pages/admin/Products';
@@ -81,7 +82,26 @@ export function App() {
       />
       <Route path="/admin/field-values" element={<Protected><FieldValues /></Protected>} />
       <Route path="/admin/workflow" element={<Protected><Workflow /></Protected>} />
-      <Route path="/admin/groups" element={<Protected><Groups /></Protected>} />
+      <Route
+        path="/admin/groups"
+        element={
+          <Protected>
+            <PermissionGate permission="canManageGroups">
+              <Groups />
+            </PermissionGate>
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/groups/:id"
+        element={
+          <Protected>
+            <PermissionGate permission="canManageGroups">
+              <GroupDetail />
+            </PermissionGate>
+          </Protected>
+        }
+      />
       <Route path="/admin/parameters" element={<Protected><Parameters /></Protected>} />
       <Route path="/admin/sanity-check" element={<Protected><SanityCheck /></Protected>} />
 

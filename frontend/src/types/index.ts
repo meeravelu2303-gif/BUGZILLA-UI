@@ -101,6 +101,49 @@ export interface AdminGroup {
   description: string;
 }
 
+export interface GroupMember {
+  id: number;
+  email: string;
+  name: string;
+  isEnabled: boolean;
+  /** Holds this group only through `admin` (Bugzilla grants admin every group), so not removable. */
+  inheritedVia?: 'admin';
+}
+
+export interface AdminGroupSummary {
+  id: number;
+  name: string;
+  description: string;
+  /** Bugzilla's one `isactive` flag - shown on editgroups.cgi as "Use For Bugs". */
+  isActive: boolean;
+  /** False for Bugzilla's built-in system groups, which are read-only here. */
+  isBugGroup: boolean;
+  userRegexp: string;
+  /** Gates the product of the same name, so it cannot be renamed here. */
+  isProductGroup: boolean;
+  memberCount: number;
+}
+
+export interface AdminGroupDetail extends AdminGroupSummary {
+  members: GroupMember[];
+}
+
+export interface CreateGroupInput {
+  name: string;
+  description: string;
+  userRegexp?: string;
+  isActive?: boolean;
+}
+
+export type UpdateGroupInput = Partial<CreateGroupInput>;
+
+export interface MembershipChangeResult {
+  group: AdminGroupDetail;
+  failed?: Array<{ userId: number; message: string }>;
+  /** Removed but still members - they match the user regexp or inherit it from another group. */
+  notRemoved?: string[];
+}
+
 export interface PageInfo {
   limit: number;
   offset: number;
@@ -128,6 +171,8 @@ export interface Permissions {
    * restrictive behaviour rather than assuming the permission.
    */
   canTriage?: boolean;
+  /** Create/edit groups and their membership (Bugzilla's `creategroups`). Optional for older backends. */
+  canManageGroups?: boolean;
 }
 
 export interface AuthUser {

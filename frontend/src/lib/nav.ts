@@ -72,7 +72,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/admin/products', label: 'Products', icon: Boxes, permission: 'canManageProducts', description: 'Manage products and their components' },
       { to: '/admin/field-values', label: 'Field Values', icon: Tags, description: 'Allowed values for status, severity, priority and more' },
       { to: '/admin/workflow', label: 'Status Workflow', icon: Workflow, description: 'The allowed status transitions, visualized' },
-      { to: '/admin/groups', label: 'Groups & Permissions', icon: ShieldCheck, description: 'Group memberships for your account' },
+      { to: '/admin/groups', label: 'Groups & Permissions', icon: ShieldCheck, permission: 'canManageGroups', description: 'Create and edit groups and manage who belongs to them' },
       { to: '/admin/parameters', label: 'Parameters', icon: SlidersHorizontal, description: 'Instance-wide configuration parameters' },
       { to: '/admin/sanity-check', label: 'Sanity Check', icon: Stethoscope, description: 'Run Bugzilla database consistency checks' },
     ],

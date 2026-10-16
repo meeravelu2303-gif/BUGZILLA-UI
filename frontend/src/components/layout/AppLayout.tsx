@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useLogout, useMe } from '../../api/hooks';
 import { NAV_SECTIONS, type NavSection } from '../../lib/nav';
+import type { Permissions } from '../../types';
 import { cn, initials } from '../../lib/utils';
 import { UEducateLogo } from '../brand/UEducateLogo';
 import { CommandPalette } from './CommandPalette';
@@ -65,8 +66,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const user = data?.user;
   const permissions = user?.permissions;
-  const canSeeAdmin = Boolean(permissions?.canManageUsers || permissions?.canManageProducts);
-  const hasPermission = (p?: string) => !p || Boolean(permissions?.[p as 'canManageUsers' | 'canManageProducts']);
+  const canSeeAdmin = Boolean(permissions?.canManageUsers || permissions?.canManageProducts || permissions?.canManageGroups);
+  const hasPermission = (p?: string) => !p || Boolean(permissions?.[p as keyof Permissions]);
 
   // ⌘K / Ctrl-K opens the command palette anywhere in the app.
   useEffect(() => {

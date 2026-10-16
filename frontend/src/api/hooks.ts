@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, buildQuery } from './client';
 import type { BugQueryParams } from '../lib/useBugFilters';
 import type {
-  AdminGroup,
   AdminUser,
   AuthUser,
   BugCounts,
@@ -10,6 +9,12 @@ import type {
   BugStats,
   BugListResponse,
   BugMeta,
+  AdminGroupDetail,
+  AdminGroupSummary,
+  CreateGroupInput,
+  GroupMember,
+  MembershipChangeResult,
+  UpdateGroupInput,
   CreateBugInput,
   CreateComponentInput,
   CreateProductInput,
@@ -262,7 +267,7 @@ export function useUpdateProduct(id: number) {
   });
 }
 
-// ---- Admin: read-only metadata (parameters, groups) ----
+// ---- Admin: read-only metadata (parameters) ----
 
 export function useAdminParameters() {
   return useQuery({
@@ -273,12 +278,64 @@ export function useAdminParameters() {
   });
 }
 
-export function useAdminGroups() {
+// ---- Admin: Groups ----
+
+export function useAdminGroupList() {
   return useQuery({
-    queryKey: ['admin', 'groups'],
-    queryFn: () => api.get<{ groups: AdminGroup[] }>('/admin/meta/groups'),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
+    queryKey: ['admin', 'group-list'],
+    queryFn: () => api.get<{ groups: AdminGroupSummary[] }>('/admin/groups'),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useAdminGroup(id: number) {
+  return useQuery({
+    queryKey: ['admin', 'group', id],
+    queryFn: () => api.get<{ group: AdminGroupDetail }>(`/admin/groups/${id}`),
+    enabled: Number.isFinite(id) && id > 0,
+  });
+}
+
+function invalidateGroups(qc: ReturnType<typeof useQueryClient>, id?: number) {
+  qc.invalidateQueries({ queryKey: ['admin', 'group-list'] });
+  if (id) qc.invalidateQueries({ queryKey: ['admin', 'group', id] });
+  // Membership is shown on the Users pages too.
+  qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+}
+
+export function useCreateGroup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateGroupInput) => api.post<{ group: AdminGroupDetail }>('/admin/groups', input),
+    onSuccess: () => invalidateGroups(qc),
+  });
+}
+
+export function useUpdateGroup(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateGroupInput) => api.patch<{ group: AdminGroupDetail }>(`/admin/groups/${id}`, input),
+    onSuccess: () => invalidateGroups(qc, id),
+  });
+}
+
+export function useChangeGroupMembers(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { add?: number[]; remove?: number[] }) =>
+      api.post<MembershipChangeResult>(`/admin/groups/${id}/members`, input),
+    onSuccess: () => invalidateGroups(qc, id),
+  });
+}
+
+export function useGroupUserSearch(q: string) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: ['admin', 'group-user-search', term],
+    queryFn: () => api.get<{ users: GroupMember[] }>(`/admin/groups/user-search${buildQuery({ q: term })}`),
+    enabled: term.length >= 2,
+    placeholderData: (prev) => prev,
+    staleTime: 30 * 1000,
   });
 }
 
