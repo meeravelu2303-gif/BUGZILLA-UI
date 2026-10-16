@@ -1,7 +1,7 @@
 import { AlertCircle, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../api/client';
-import { useAdminProducts, useCreateProduct, useMeta } from '../../api/hooks';
+import { useAdminProducts, useCreateProduct } from '../../api/hooks';
 import { ProductAdminCard } from '../../components/admin/ProductAdminCard';
 import { Button } from '../../components/ui/Button';
 import { Card, CardBody, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -12,7 +12,6 @@ import { useToast } from '../../context/ToastContext';
 
 export function Products() {
   const { data, isLoading, isError, error } = useAdminProducts();
-  const { data: meta } = useMeta();
   const createProduct = useCreateProduct();
   const { toast } = useToast();
 
@@ -94,7 +93,7 @@ export function Products() {
       ) : (
         <div className="flex flex-col gap-4">
           {data?.products.map((p) => (
-            <ProductAdminCard key={p.id} product={p} bugzillaWebUrl={meta?.bugzillaWebUrl ?? ''} />
+            <ProductAdminCard key={p.id} product={p} />
           ))}
         </div>
       )}

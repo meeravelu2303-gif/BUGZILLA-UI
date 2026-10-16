@@ -9,11 +9,14 @@ import type {
   BugStats,
   BugListResponse,
   BugMeta,
+  AdminComponent,
   AdminGroupDetail,
   AdminGroupSummary,
   CreateGroupInput,
+  GroupUsage,
   GroupMember,
   MembershipChangeResult,
+  UpdateComponentInput,
   UpdateGroupInput,
   CreateBugInput,
   CreateComponentInput,
@@ -336,6 +339,56 @@ export function useGroupUserSearch(q: string) {
     enabled: term.length >= 2,
     placeholderData: (prev) => prev,
     staleTime: 30 * 1000,
+  });
+}
+
+export function useGroupUsage(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin', 'group-usage', id],
+    queryFn: () => api.get<{ usage: GroupUsage }>(`/admin/groups/${id}/usage`),
+    enabled: enabled && id > 0,
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+export function useDeleteGroup(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<{ deleted: true; name: string }>(`/admin/groups/${id}`),
+    onSuccess: () => invalidateGroups(qc),
+  });
+}
+
+// ---- Admin: component edit/delete (UeducateAdmin extension) ----
+
+export function useAdminComponents(productId: number) {
+  return useQuery({
+    queryKey: ['admin', 'components', productId],
+    queryFn: () => api.get<{ components: AdminComponent[] }>(`/admin/components/by-product/${productId}`),
+    retry: false,
+  });
+}
+
+function invalidateComponents(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['admin', 'components'] });
+  invalidateProductLists(qc);
+}
+
+export function useUpdateComponent(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateComponentInput) =>
+      api.patch<{ component: AdminComponent; changes: string[] }>(`/admin/components/${id}`, input),
+    onSuccess: () => invalidateComponents(qc),
+  });
+}
+
+export function useDeleteComponent(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<{ deleted: true; name: string }>(`/admin/components/${id}`),
+    onSuccess: () => invalidateComponents(qc),
   });
 }
 

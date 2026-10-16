@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../config/env';
 import { clearAccessScope } from '../lib/access';
 import { BugzillaClient } from '../lib/bugzillaClient';
+import { adminExtension } from '../lib/adminExtension';
 import { AppError } from '../lib/errors';
 import { parseInput } from '../lib/validate';
 import { requireAuth, requirePermission } from '../middleware/auth';
@@ -178,6 +179,50 @@ export function adminGroupsRouter(env: Env): Router {
       // A regexp change alters who is a member, and so who can see which product's bugs.
       clearAccessScope();
       res.json({ group: await fetchGroup(client, env, id) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/admin/groups/:id/usage  - what would block a delete (UeducateAdmin extension).
+  router.get('/:id/usage', ...gate, async (req, res, next) => {
+    try {
+      const { id } = parseInput(idParamSchema, req.params);
+      const u = await adminExtension(req.bugzilla!).get<{
+        is_system: boolean;
+        special_roles: string[];
+        bug_count: number;
+        products: string[];
+        flag_types: string[];
+        member_count: number;
+        deletable: boolean;
+      }>(`/group/${id}/usage`);
+      res.json({
+        usage: {
+          isSystem: u.is_system,
+          specialRoles: u.special_roles,
+          bugCount: u.bug_count,
+          products: u.products,
+          flagTypes: u.flag_types,
+          memberCount: u.member_count,
+          deletable: u.deletable,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // DELETE /api/admin/groups/:id  - only when no bug, product or flag type uses it; never a system group.
+  router.delete('/:id', ...gate, async (req, res, next) => {
+    try {
+      const { id } = parseInput(idParamSchema, req.params);
+      const client = req.bugzilla!;
+      // Refused here first so the message is ours; the extension (Group->check_remove) re-checks.
+      assertEditable(await fetchGroup(client, env, id));
+      const resp = await adminExtension(client).delete<{ name: string }>(`/group/${id}`);
+      clearAccessScope();
+      res.json({ deleted: true, name: resp.name });
     } catch (err) {
       next(err);
     }

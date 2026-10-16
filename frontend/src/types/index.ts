@@ -137,6 +137,46 @@ export interface CreateGroupInput {
 
 export type UpdateGroupInput = Partial<CreateGroupInput>;
 
+/** A component as the admin extension reports it - with the bug count that gates delete. */
+export interface AdminComponent {
+  id: number;
+  name: string;
+  productId: number;
+  product: string;
+  description: string;
+  defaultAssignee: string;
+  defaultQaContact: string;
+  defaultCc: string[];
+  isActive: boolean;
+  bugCount: number;
+  /** A product's only component - Bugzilla never deletes it. */
+  isLast: boolean;
+  /** Bugzilla's useqacontact parameter; when off the QA contact is ignored. */
+  qaContactEnabled: boolean;
+}
+
+export interface UpdateComponentInput {
+  name?: string;
+  description?: string;
+  defaultAssignee?: string;
+  defaultQaContact?: string;
+  defaultCc?: string[];
+  isActive?: boolean;
+}
+
+/** What blocks deleting a group (UeducateAdmin extension). */
+export interface GroupUsage {
+  isSystem: boolean;
+  /** Parameters naming this group (insidergroup, debug_group, ...). */
+  specialRoles: string[];
+  bugCount: number;
+  products: string[];
+  flagTypes: string[];
+  /** Direct members - released when the group is deleted. */
+  memberCount: number;
+  deletable: boolean;
+}
+
 export interface MembershipChangeResult {
   group: AdminGroupDetail;
   failed?: Array<{ userId: number; message: string }>;

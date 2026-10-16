@@ -5,6 +5,7 @@ import session from 'express-session';
 import { loadEnv, SESSION_COOKIE_NAME } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { adminMetaRouter } from './routes/adminMeta';
+import { adminComponentsRouter } from './routes/adminComponents';
 import { adminGroupsRouter } from './routes/adminGroups';
 import { adminProductsRouter } from './routes/adminProducts';
 import { adminUsersRouter } from './routes/adminUsers';
@@ -66,6 +67,7 @@ app.use('/api/proof', proofRouter(env));
 app.use('/api/admin/users', adminUsersRouter(env));
 app.use('/api/admin/products', adminProductsRouter(env));
 app.use('/api/admin/groups', adminGroupsRouter(env));
+app.use('/api/admin/components', adminComponentsRouter(env));
 app.use('/api/admin/meta', adminMetaRouter(env));
 
 app.use(notFoundHandler);

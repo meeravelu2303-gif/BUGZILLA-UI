@@ -33,7 +33,7 @@ function buildUrl(base: string, path: string, params: QueryParams, credential: B
 
 async function request<T>(
   base: string,
-  method: 'GET' | 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   credential: BugzillaCredential,
   options: { params?: QueryParams; body?: unknown } = {}
@@ -88,5 +88,9 @@ export class BugzillaClient {
 
   put<T>(path: string, body: unknown, params: QueryParams = {}): Promise<T> {
     return request<T>(this.baseUrl, 'PUT', path, this.credential, { params, body });
+  }
+
+  delete<T>(path: string, params: QueryParams = {}): Promise<T> {
+    return request<T>(this.baseUrl, 'DELETE', path, this.credential, { params });
   }
 }

@@ -1,16 +1,22 @@
-import { ExternalLink, Plus } from 'lucide-react';
+import { Bug, ChevronDown, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../api/client';
-import { useCreateComponent, useUpdateProduct } from '../../api/hooks';
+import { useAdminComponents, useCreateComponent, useUpdateProduct } from '../../api/hooks';
 import { useToast } from '../../context/ToastContext';
 import type { Product } from '../../types';
+import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
+import { ComponentEditor } from './ComponentEditor';
 import { Card, CardBody, CardHeader, CardTitle } from '../ui/Card';
 import { Input } from '../ui/Field';
 import { Pill } from '../ui/Pill';
 
-export function ProductAdminCard({ product, bugzillaWebUrl }: { product: Product; bugzillaWebUrl: string }) {
+export function ProductAdminCard({ product }: { product: Product }) {
   const updateProduct = useUpdateProduct(product.id);
+  // Ids, bug counts and active flags come from the admin extension; Bugzilla's REST product call
+  // has only names. If the extension is off, the plain list still renders, without editing.
+  const { data: adminData, error: adminError } = useAdminComponents(product.id);
+  const [editing, setEditing] = useState<number | null>(null);
   const createComponent = useCreateComponent(product.id);
   const { toast } = useToast();
 
@@ -77,24 +83,47 @@ export function ProductAdminCard({ product, bugzillaWebUrl }: { product: Product
 
           {product.components.length === 0 && !showAddComponent ? (
             <p className="px-4 py-3 text-sm text-slate-600">No components yet.</p>
-          ) : (
+          ) : adminData ? (
             <ul className="divide-y divide-white/30">
-              {product.components.map((c) => (
-                <li key={c.name} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                  <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{c.name}</span>
-                  <span className="truncate text-xs text-slate-600">{c.defaultAssignee}</span>
-                  <a
-                    href={`${bugzillaWebUrl}/editcomponents.cgi?product=${encodeURIComponent(product.name)}&action=edit&component=${encodeURIComponent(c.name)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="focus-ring flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-600 hover:bg-white/60 hover:text-brand-700"
-                    title="Edit in Bugzilla (component editing isn't available via REST)"
-                  >
-                    Edit <ExternalLink className="h-3 w-3" />
-                  </a>
+              {adminData.components.map((c) => (
+                <li key={c.id}>
+                  <div className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                    <span className={cn('min-w-0 flex-1 truncate font-medium', c.isActive ? 'text-slate-800' : 'text-slate-500')}>{c.name}</span>
+                    {!c.isActive && <Pill tone="slate">Inactive</Pill>}
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-slate-500" title="Bugs in this component">
+                      <Bug className="h-3 w-3" aria-hidden />
+                      {c.bugCount}
+                    </span>
+                    <span className="hidden truncate text-xs text-slate-600 sm:inline">{c.defaultAssignee}</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(editing === c.id ? null : c.id)}
+                      aria-expanded={editing === c.id}
+                      className="focus-ring flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-brand-700 hover:bg-white/60"
+                    >
+                      Edit <ChevronDown className={cn('h-3 w-3 transition-transform', editing === c.id && 'rotate-180')} aria-hidden />
+                    </button>
+                  </div>
+                  {editing === c.id && <ComponentEditor component={c} onClose={() => setEditing(null)} />}
                 </li>
               ))}
             </ul>
+          ) : (
+            <>
+              {adminError && (
+                <p className="border-b border-white/30 px-4 py-2 text-xs text-amber-700">
+                  {adminError instanceof ApiError ? adminError.message : 'Component editing is unavailable.'}
+                </p>
+              )}
+              <ul className="divide-y divide-white/30">
+                {product.components.map((c) => (
+                  <li key={c.name} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                    <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{c.name}</span>
+                    <span className="truncate text-xs text-slate-600">{c.defaultAssignee}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
 
           {showAddComponent && (

@@ -1,8 +1,8 @@
-import { AlertCircle, ArrowLeft, Lock, Save, Search, UserMinus, UserPlus, Users } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowLeft, Lock, Save, Search, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
-import { useAdminGroup, useChangeGroupMembers, useGroupUserSearch, useUpdateGroup } from '../../api/hooks';
+import { useAdminGroup, useChangeGroupMembers, useDeleteGroup, useGroupUsage, useGroupUserSearch, useUpdateGroup } from '../../api/hooks';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Card, CardBody, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -280,6 +280,90 @@ function MembersCard({ group }: { group: AdminGroupDetail }) {
   );
 }
 
+/**
+ * Delete, for bug groups only. Asks the extension what still uses the group first, and either
+ * lists the blockers (bugs, products, flag types, a parameter naming it) or confirms with the
+ * number of direct members who will lose it. Bugzilla's check_remove re-checks on delete.
+ */
+function DeleteGroupCard({ group }: { group: AdminGroupDetail }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, error } = useGroupUsage(group.id, open);
+  const del = useDeleteGroup(group.id);
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const usage = data?.usage;
+
+  async function onDelete() {
+    try {
+      await del.mutateAsync();
+      toast({ variant: 'success', title: `Group "${group.name}" deleted` });
+      navigate('/admin/groups');
+    } catch (err) {
+      toast({ variant: 'error', title: 'Delete failed', description: err instanceof ApiError ? err.message : 'Please try again.' });
+    }
+  }
+
+  const blockers: string[] = usage
+    ? [
+        ...(usage.specialRoles.length ? [`Named in the ${usage.specialRoles.join(', ')} parameter${usage.specialRoles.length > 1 ? 's' : ''}`] : []),
+        ...(usage.bugCount ? [`Restricts ${usage.bugCount} bug${usage.bugCount === 1 ? '' : 's'}`] : []),
+        ...(usage.products.length ? [`Controls access to: ${usage.products.join(', ')}`] : []),
+        ...(usage.flagTypes.length ? [`Used by flag types: ${usage.flagTypes.join(', ')}`] : []),
+      ]
+    : [];
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-rose-800">
+          <Trash2 className="h-4 w-4" aria-hidden /> Delete group
+        </CardTitle>
+      </CardHeader>
+      <CardBody className="flex flex-col gap-3 text-sm">
+        {!open ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-slate-600">Only possible when no bug, product or flag type uses it. Deactivating keeps everything instead.</p>
+            <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
+              Check if it can be deleted
+            </Button>
+          </div>
+        ) : isLoading ? (
+          <p className="text-slate-500">Checking what uses this group…</p>
+        ) : error ? (
+          <p className="text-rose-700">{error instanceof ApiError ? error.message : 'Could not check this group.'}</p>
+        ) : usage && !usage.deletable ? (
+          <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-amber-900 ring-1 ring-inset ring-amber-600/20">
+            <p className="font-medium">This group can't be deleted while it is in use:</p>
+            <ul className="mt-1 list-disc pl-5">
+              {blockers.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+            <p className="mt-1.5 text-xs">Remove those uses first, or untick "Active" to retire it.</p>
+          </div>
+        ) : usage ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-rose-50 px-3 py-2.5 text-rose-900 ring-1 ring-inset ring-rose-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            <span>
+              Nothing uses <span className="font-semibold">{group.name}</span>.{' '}
+              {usage.memberCount > 0
+                ? `Its ${usage.memberCount} direct member${usage.memberCount === 1 ? '' : 's'} will lose it.`
+                : 'It has no direct members.'}{' '}
+              This can't be undone.
+            </span>
+            <Button size="sm" variant="danger" onClick={onDelete} loading={del.isPending}>
+              Delete group
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              Keep
+            </Button>
+          </div>
+        ) : null}
+      </CardBody>
+    </Card>
+  );
+}
+
 export function GroupDetail() {
   const { id } = useParams<{ id: string }>();
   const groupId = Number(id);
@@ -333,6 +417,9 @@ export function GroupDetail() {
         <SettingsCard group={group} />
         <MembersCard group={group} />
       </div>
+
+      {/* System groups can never be deleted - not offered at all. */}
+      {group.isBugGroup && <DeleteGroupCard group={group} />}
     </div>
   );
 }
