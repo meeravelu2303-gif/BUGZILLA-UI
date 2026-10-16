@@ -29,8 +29,8 @@ if [ -z "$DUMP" ]; then
 fi
 tail -c 200 "$DUMP" | grep -q "Dump completed" || { echo "REFUSING: $DUMP is incomplete"; exit 1; }
 
-echo "2/5 recreating bugs_staging (root, Windows authentication)"
-"$MYSQL/mysql.exe" -uroot -P3307 -h127.0.0.1 </dev/null -e \
+echo "2/5 recreating bugs_staging (as the staging user - its DROP/CREATE rights cover only that database)"
+"$MYSQL/mysql.exe" -ubugs_staging -p"$SP" -P3307 -h127.0.0.1 </dev/null -e \
   "DROP DATABASE IF EXISTS bugs_staging; CREATE DATABASE bugs_staging DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 echo "3/5 restoring into bugs_staging as the staging user (it has no rights on live)"
@@ -43,7 +43,9 @@ echo "4/5 checksetup.pl + staging parameters + robot account"
   && GUARD_DIR="$HERE" "$PERL" "$HERE/staging-params.pl" \
   && GUARD_DIR="$HERE" "$PERL" "$HERE/staging-robot.pl" )
 
-echo "5/5 check"
-"$MYSQL/mysql.exe" -uroot -P3307 -h127.0.0.1 -N </dev/null -e \
-  "select concat('live bugs=',(select count(*) from bugs.bugs),'  staging bugs=',(select count(*) from bugs_staging.bugs));"
+echo "5/5 check (each database read by its own least-privileged user; no root anywhere)"
+LP=${LP:-$(cfg /d/Bugzilla/localconfig db_pass)}
+LIVE_N=$("$MYSQL/mysql.exe" -ubugs -p"$LP" -P3307 -h127.0.0.1 -N bugs </dev/null -e "select count(*) from bugs")
+STAGING_N=$("$MYSQL/mysql.exe" -ubugs_staging -p"$SP" -P3307 -h127.0.0.1 -N bugs_staging </dev/null -e "select count(*) from bugs")
+echo "live bugs=$LIVE_N  staging bugs=$STAGING_N"
 echo "Done. Staging: http://127.0.0.1:8081/   UI: npm run dev:staging -> http://localhost:5176/"
