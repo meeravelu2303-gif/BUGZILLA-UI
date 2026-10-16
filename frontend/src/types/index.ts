@@ -229,6 +229,50 @@ export interface WorkflowDiff {
   comment: Array<{ from: number; to: number; requireComment: boolean }>;
 }
 
+export type ParamValue = string | boolean | string[];
+
+export interface BugzillaParam {
+  name: string;
+  /** Bugzilla's param type: t text, l long text, b boolean, s select, m multi-select, o ordered list, p password, r read-only. */
+  type: string;
+  value: ParamValue;
+  default: ParamValue;
+  description: string;
+  /** Can lock users out or take the site down - needs a typed confirmation. */
+  dangerous: boolean;
+  noReset: boolean;
+  choices?: string[];
+  /** Passwords/credentials: the value is never sent, only whether one is set. */
+  secret?: boolean;
+  isSet?: boolean;
+}
+
+export interface ParamPanel {
+  name: string;
+  title: string;
+  description: string;
+  params: BugzillaParam[];
+}
+
+export interface ParamsData {
+  panels: ParamPanel[];
+  shutdownActive: boolean;
+  changed?: string[];
+}
+
+export interface SanityCheckResult {
+  checks: Array<{
+    title: string;
+    steps: string[];
+    alerts: Array<{ text: string; bugIds: number[] }>;
+    fixes: Array<{ action: string; label: string }>;
+  }>;
+  problemsFound: boolean;
+  fixApplied: string | null;
+  durationMs: number;
+  ranAt: string;
+}
+
 export interface MembershipChangeResult {
   group: AdminGroupDetail;
   failed?: Array<{ userId: number; message: string }>;
@@ -267,6 +311,8 @@ export interface Permissions {
   canManageGroups?: boolean;
   /** Bugzilla's `admin` group: field values and the status workflow. */
   isBugzillaAdmin?: boolean;
+  /** Bugzilla's `tweakparams` group: instance parameters. */
+  canEditParameters?: boolean;
 }
 
 export interface AuthUser {

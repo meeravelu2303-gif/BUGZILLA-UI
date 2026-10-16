@@ -120,8 +120,26 @@ export function App() {
           </Protected>
         }
       />
-      <Route path="/admin/parameters" element={<Protected><Parameters /></Protected>} />
-      <Route path="/admin/sanity-check" element={<Protected><SanityCheck /></Protected>} />
+      <Route
+        path="/admin/parameters"
+        element={
+          <Protected>
+            <PermissionGate permission="canEditParameters">
+              <Parameters />
+            </PermissionGate>
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/sanity-check"
+        element={
+          <Protected>
+            <PermissionGate permission="canManageProducts">
+              <SanityCheck />
+            </PermissionGate>
+          </Protected>
+        }
+      />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

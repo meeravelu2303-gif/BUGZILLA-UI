@@ -24,7 +24,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navCommands = useMemo<Command[]>(() => {
     const out: Command[] = [];
     for (const section of NAV_SECTIONS) {
-      if (section.adminOnly && !(permissions?.canManageUsers || permissions?.canManageProducts || permissions?.canManageGroups || permissions?.isBugzillaAdmin)) continue;
+      if (section.adminOnly && !(permissions?.canManageUsers || permissions?.canManageProducts || permissions?.canManageGroups || permissions?.isBugzillaAdmin || permissions?.canEditParameters)) continue;
       for (const item of section.items) {
         if (item.permission && !permissions?.[item.permission]) continue;
         if (!item.to) continue;

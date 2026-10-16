@@ -19,7 +19,7 @@ use parent qw(Bugzilla::WebService);
 
 use Bugzilla::Constants;
 use Bugzilla::Error;
-use Bugzilla::Util qw(detaint_natural trim);
+use Bugzilla::Util qw(detaint_natural trim get_text);
 use Bugzilla::Component;
 use Bugzilla::Field;
 use Bugzilla::Field::Choice;
@@ -27,6 +27,7 @@ use Bugzilla::Group;
 use Bugzilla::Product;
 use Bugzilla::Status;
 use Bugzilla::User;
+use Bugzilla::Config qw(SetParam write_params);
 use Bugzilla::WebService::Constants;
 
 use constant READ_ONLY => qw(
@@ -35,6 +36,7 @@ use constant READ_ONLY => qw(
   group_usage
   field_values
   workflow_get
+  params_get
 );
 
 use constant PUBLIC_METHODS => qw(
@@ -51,6 +53,9 @@ use constant PUBLIC_METHODS => qw(
   field_values_reorder
   workflow_get
   workflow_update
+  params_get
+  params_update
+  sanity_check
 );
 
 # The standard single-select fields the admin UI manages. Anything else (custom
@@ -76,6 +81,10 @@ sub rest_resources {
     {PUT => {method => 'field_values_reorder', params => $field}},
     qr{^/ueducate/workflow$},
     {GET => {method => 'workflow_get'}, PUT => {method => 'workflow_update'}},
+    qr{^/ueducate/params$},
+    {GET => {method => 'params_get'}, PUT => {method => 'params_update'}},
+    qr{^/ueducate/sanitycheck$},
+    {POST => {method => 'sanity_check'}},
     qr{^/ueducate/component/(\d+)$},
     {
       GET    => {method => 'component_get',    params => $id},
@@ -540,6 +549,354 @@ sub workflow_update {
   my $result = $self->workflow_get();
   $result->{applied} = [map { $self->type('string', $_) } @applied];
   return $result;
+}
+
+###############################################################################
+# Parameters (editparams.cgi)
+###############################################################################
+
+# Settings that can lock everyone out or take the site down. The whole Email
+# (mta) panel counts too. Changing any of them needs `confirm => [name]`, which
+# the UI only sends after the admin has typed the parameter's name.
+use constant DANGEROUS_PARAMS => qw(
+  urlbase sslbase ssl_redirect shutdownhtml user_verify_class user_info_class
+  cookiepath cookiedomain requirelogin emailregexp utf8 utf8_collate
+);
+
+# Credentials stored as plain-text parameters. Like the one password-type
+# parameter (smtp_password), their values never leave the server and are
+# masked in the audit log - only whether one is set is reported.
+use constant SECRET_PARAMS => qw(RADIUS_secret LDAPbinddn);
+
+sub _is_secret {
+  my ($name, $type) = @_;
+  return 1 if $type eq 'p';
+  return scalar grep { $_ eq $name } SECRET_PARAMS;
+}
+
+sub _is_dangerous {
+  my ($name, $panel) = @_;
+  return 1 if $panel eq 'mta';
+  return scalar grep { $_ eq $name } DANGEROUS_PARAMS;
+}
+
+sub _tweakparams {
+  Bugzilla->login(LOGIN_REQUIRED);
+  Bugzilla->user->in_group('tweakparams')
+    || ThrowUserError('auth_failure', {group => 'tweakparams', action => 'modify', object => 'parameters'});
+}
+
+# The panels exactly as editparams.cgi builds them, including the
+# config_modify_panels hook, sorted by each panel's own sortkey.
+sub _panels {
+  my $modules = Bugzilla::Config::param_panels();
+  my (@panels, %hook);
+  foreach my $panel (keys %$modules) {
+    my $module = $modules->{$panel};
+    eval("require $module") || die $@;
+    my @list = $module->get_param_list();
+    no strict 'refs';
+    my $sortkey = ${"${module}::sortkey"} // 100000;
+    push @panels, {name => lc($panel), sortkey => $sortkey};
+    $hook{lc $panel} = {params => \@list};
+  }
+  Bugzilla::Hook::process('config_modify_panels', {panels => \%hook});
+  $_->{params} = $hook{$_->{name}}{params} for @panels;
+  return sort { $a->{sortkey} <=> $b->{sortkey} } @panels;
+}
+
+sub _plain {
+  my $s = shift // '';
+  $s =~ s/<[^>]+>//g;
+  $s =~ s/&lt;/</g; $s =~ s/&gt;/>/g; $s =~ s/&quot;/"/g; $s =~ s/&#0?39;/'/g; $s =~ s/&amp;/&/g;
+  $s =~ s/\s+/ /g;
+  return trim($s);
+}
+
+# Title, description and per-parameter help, rendered from Bugzilla's own
+# admin/params/<panel>.html.tmpl so the wording matches the native page.
+sub _panel_text {
+  my ($panel) = @_;
+  my $src = '[% PROCESS "admin/params/' . $panel . '.html.tmpl" %][% title %]' . "\x1E" . '[% desc %]' . "\x1E"
+    . '[% FOREACH k = param_descs.keys %][% k %]' . "\x1F" . '[% param_descs.$k %]' . "\x1E" . '[% END %]';
+  my $out = '';
+  Bugzilla->template->process(\$src, {}, \$out) || return ($panel, '', {});
+  my ($title, $desc, @pairs) = split /\x1E/, $out;
+  my %d;
+  foreach (@pairs) {
+    my ($k, $v) = split /\x1F/, $_, 2;
+    $d{$k} = _plain($v) if defined $k && length $k;
+  }
+  return (_plain($title) || $panel, _plain($desc), \%d);
+}
+
+sub _param_value_out {
+  my ($self, $type, $value) = @_;
+  return [map { $self->type('string', $_) } @{$value || []}] if $type eq 'm';
+  return $self->type('boolean', $value ? 1 : 0) if $type eq 'b';
+  return $self->type('string', $value // '');
+}
+
+sub params_get {
+  my ($self) = @_;
+  _tweakparams();
+  my $current = Bugzilla->params;
+  my @out;
+  foreach my $panel (_panels()) {
+    my ($title, $desc, $help) = _panel_text($panel->{name});
+    my @params;
+    foreach my $i (@{$panel->{params}}) {
+      my $type = $i->{type};
+      my %p = (
+        name        => $self->type('string',  $i->{name}),
+        type        => $self->type('string',  $type),
+        description => $self->type('string',  $help->{$i->{name}} // ''),
+        dangerous   => $self->type('boolean', _is_dangerous($i->{name}, $panel->{name}) ? 1 : 0),
+        no_reset    => $self->type('boolean', $i->{no_reset} ? 1 : 0),
+      );
+      if (_is_secret($i->{name}, $type)) {
+        # Passwords never leave the server - only whether one is set.
+        $p{value}   = $self->type('string', '');
+        $p{is_set}  = $self->type('boolean', length($current->{$i->{name}} // '') ? 1 : 0);
+        $p{default} = $self->type('string', '');
+      }
+      else {
+        $p{value}   = $self->_param_value_out($type, $current->{$i->{name}});
+        $p{default} = $self->_param_value_out($type, $i->{default});
+      }
+      $p{choices} = [map { $self->type('string', $_) } @{$i->{choices}}] if ref $i->{choices} eq 'ARRAY';
+      push @params, \%p;
+    }
+    push @out, {
+      name   => $self->type('string', $panel->{name}),
+      title  => $self->type('string', $title),
+      desc   => $self->type('string', $desc),
+      params => \@params,
+    };
+  }
+  return {panels => \@out, shutdown_active => $self->type('boolean', length($current->{shutdownhtml} // '') ? 1 : 0)};
+}
+
+sub _audit_text {
+  my ($name, $type, $value) = @_;
+  return '********' if _is_secret($name, $type) && length($value // '');
+  return join(', ', @{$value || []}) if $type eq 'm';
+  return $value // '';
+}
+
+# { changes => {name => value}, reset => [names], confirm => [names] }
+#
+# The same normalisation and checker calls as editparams.cgi's save, but every
+# change is validated before ANY is written, so one bad value changes nothing.
+# Each change is written to audit_log with its old and new value (passwords
+# masked) - editparams.cgi itself records nothing.
+sub params_update {
+  my ($self, $params) = @_;
+  _tweakparams();
+
+  my (%item, %panel_of);
+  foreach my $panel (_panels()) {
+    foreach my $i (@{$panel->{params}}) {
+      $item{$i->{name}} = $i;
+      $panel_of{$i->{name}} = $panel->{name};
+    }
+  }
+
+  my %changes = %{ref $params->{changes} eq 'HASH' ? $params->{changes} : {}};
+  foreach my $name (@{$params->{reset} || []}) {
+    my $i = $item{$name} or ThrowUserError('invalid_parameter', {name => $name, err => 'no such parameter'});
+    $i->{no_reset} && ThrowUserError('invalid_parameter', {name => $name, err => 'this parameter cannot be reset'});
+    $changes{$name} = $i->{default};
+  }
+  my %confirmed = map { $_ => 1 } @{$params->{confirm} || []};
+
+  my @apply;
+  foreach my $name (sort keys %changes) {
+    my $i = $item{$name} or ThrowUserError('invalid_parameter', {name => $name, err => 'no such parameter'});
+    my $type  = $i->{type};
+    my $value = $changes{$name};
+
+    if ($type eq 'm') {
+      $value = [ref $value eq 'ARRAY' ? @$value : grep { length } split(/\s*,\s*/, $value // '')];
+    }
+    else {
+      $value = ref $value eq 'JSON::PP::Boolean' ? ($value ? 1 : 0) : ($value // '');
+      $value = "$value";
+      $value =~ s/\r\n?/\n/g;    # editparams.cgi: windows/mac line endings
+      $value =~ s/^\n$//;
+      $value = $value ? 1 : 0 if $type eq 'b';
+      # editparams.cgi: *base URLs always end in a slash.
+      $value = "$value/" if $name =~ /(?<!webdot)base$/ && $value && $value !~ m#/$#;
+    }
+
+    my $old = Bugzilla->params->{$name};
+    my $changed
+      = $type eq 'm'
+      ? join("\0", sort @$value) ne join("\0", sort @{$old || []})
+      : $value ne ($old // '');
+    next unless $changed;
+
+    if (_is_dangerous($name, $panel_of{$name}) && !$confirmed{$name}) {
+      ThrowUserError('invalid_parameter', {name => $name,
+        err => 'it can lock users out or take the site down, so it must be confirmed explicitly'});
+    }
+    if (exists $i->{checker}) {
+      my $ok = $i->{checker}->($value, $i);
+      ThrowUserError('invalid_parameter', {name => $name, err => $ok}) if $ok ne '';
+    }
+    elsif ($name eq 'globalwatchers') {
+      foreach my $watcher (split(/[,\s]+/, $value)) {
+        ThrowUserError('invalid_parameter', {name => $name, err => "no such user $watcher"})
+          unless login_to_id($watcher);
+      }
+    }
+    push @apply, [$name, $type, $old, $value];
+  }
+
+  my $dbh = Bugzilla->dbh;
+  my $now = $dbh->selectrow_array('SELECT LOCALTIMESTAMP(0)');
+  my $uid = Bugzilla->user->id;
+  # DBI runs with taint checks: request data is laundered here, as data only.
+  my $clean = sub { my ($v) = (shift // '') =~ /^(.*)\z/s; return $v };
+
+  foreach my $c (@apply) {
+    my ($name, $type, $old, $value) = @$c;
+    SetParam($name, $value);
+    Bugzilla::Status::add_missing_bug_status_transitions($value) if $name eq 'duplicate_or_move_bug_status';
+  }
+  write_params() if @apply;
+  foreach my $c (@apply) {
+    my ($name, $type, $old, $value) = @$c;
+    $dbh->do('INSERT INTO audit_log (user_id, class, object_id, field, removed, added, at_time) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      undef, $uid, 'Bugzilla::Extension::UeducateAdmin::Param', 0, $clean->(substr($name, 0, 64)),
+      $clean->(_audit_text($name, $type, $old)), $clean->(_audit_text($name, $type, $value)), $now);
+  }
+
+  my $result = $self->params_get();
+  $result->{changed} = [map { $self->type('string', $_->[0]) } @apply];
+  return $result;
+}
+
+###############################################################################
+# Sanity check (sanitycheck.cgi)
+###############################################################################
+
+# The repair actions sanitycheck.cgi offers. Only these may be passed as `fix`.
+use constant SANITY_FIXES => qw(
+  createmissinggroupcontrolmapentries repair_creation_date repair_everconfirmed
+  repair_bugs_fulltext rescanallBugMail remove_invalid_bug_references
+  remove_invalid_attach_references remove_old_whine_targets remove_invalid_flags
+);
+
+# The message sanitycheck.cgi prints next to each repair, and the repair it
+# links to. In command-line mode those messages are plain text with the link
+# dropped, so a repair is recognised by its exact (rendered) wording instead.
+use constant SANITY_FIX_MESSAGES => {
+  bug_check_creation_date_repair_text   => 'repair_creation_date',
+  bug_check_bugs_fulltext_repair_text   => 'repair_bugs_fulltext',
+  repair_bugs                           => 'repair_everconfirmed',    # the only BugCheck using the default text
+  bug_check_control_values_repair_text  => 'createmissinggroupcontrolmapentries',
+  cross_check_bug_has_references        => 'remove_invalid_bug_references',
+  cross_check_attachment_has_references => 'remove_invalid_attach_references',
+  flag_fix                              => 'remove_invalid_flags',
+  unsent_bugmail_fix                    => 'rescanallBugMail',
+  whines_obsolete_target_fix            => 'remove_old_whine_targets',
+};
+
+# Compares repair messages ignoring case and trailing punctuation: the output
+# wraps the message as "<a ...>text</a>." and so adds a full stop.
+sub _fix_key { my $t = lc _plain(shift); $t =~ s/[.!\s]+\z//; return $t }
+
+# Runs Bugzilla's own sanitycheck.cgi - the way its command-line wrapper
+# sanitycheck.pl does: command-line mode, verbose, output collected as text -
+# and returns it grouped by check. Without `fix` it only reads. With `fix`, that
+# one repair runs first (exactly as clicking its link on the native page), then
+# every check runs again.
+sub sanity_check {
+  my ($self, $params) = @_;
+  Bugzilla->login(LOGIN_REQUIRED);
+  Bugzilla->user->in_group('editcomponents')
+    || ThrowUserError('auth_failure', {group => 'editcomponents', action => 'run', object => 'sanity_check'});
+
+  my $fix = $params->{fix} // '';
+  if (length $fix) {
+    ($fix) = grep { $_ eq $fix } SANITY_FIXES
+      or ThrowCodeError('param_invalid', {param => 'fix', function => 'UeducateAdmin.sanity_check'});
+  }
+
+  # A scratch CGI object carries sanitycheck.cgi's input and output, so the
+  # REST request's own one is left exactly as it was.
+  require Bugzilla::CGI;
+  my $cache   = Bugzilla->request_cache;
+  my $orig    = $cache->{cgi};
+  # Built empty and filled explicitly: inside a web request Bugzilla::CGI->new
+  # ignores a query-string argument and reads the live request instead.
+  my $scratch = Bugzilla::CGI->new('');
+  $scratch->delete_all;
+  $scratch->param('verbose', 1);
+  $scratch->param($fix, 1) if length $fix;
+  # libpath is the absolute install directory; cgi_path is a relative "." that
+  # depends on the working directory the web server happens to use.
+  my ($file)  = (bz_locations()->{libpath} . '/sanitycheck.cgi') =~ /^(.*)$/s;
+  my $mode    = Bugzilla->usage_mode;
+  my %fix_by_text;
+
+  $cache->{cgi} = $scratch;
+  Bugzilla->usage_mode(USAGE_MODE_CMDLINE);
+  my $ok = eval {
+    local *STDOUT;
+    open(STDOUT, '>', \my $sink) or die "cannot redirect STDOUT: $!";
+    my $ran = do $file;
+    die $@ if $@;
+    die "cannot run $file: $!\n" unless defined $ran;
+    # Rendered while still in command-line mode, so the wording matches the output.
+    my $msgs = SANITY_FIX_MESSAGES;
+    foreach my $tag (keys %$msgs) {
+      my $text = eval { _plain(get_text('sanitycheck', {san_tag => $tag})) } // '';
+      $fix_by_text{_fix_key($text)} = $msgs->{$tag} if length $text;
+    }
+    1;
+  };
+  my $error = $@;
+  Bugzilla->usage_mode($mode);
+  $cache->{cgi} = $orig;
+  die $error unless $ok;
+
+  my $output = $scratch->param('output') // '';
+  my (@checks, $current);
+  foreach my $line (split /\n/, $output) {
+    next unless $line =~ /\S/;
+    my $alert = $line =~ s/^ALERT:\s*//;
+    if (!$alert && (my $action = $fix_by_text{_fix_key($line)})) {
+      push @{$current->{fixes}}, {action => $self->type('string', $action), label => $self->type('string', _plain($line))}
+        if $current;
+      next;
+    }
+    # "Bugs with no creation date: 1369, 1370 (as bug list)."
+    my %ids;
+    if ($line =~ /:\s*([\d,\s]+?)\s*\(as\b/) { $ids{$_} = 1 for grep { length } split /[,\s]+/, $1 }
+    if ($alert) {
+      $current ||= {title => 'General', alerts => [], fixes => [], steps => []};
+      push @{$current->{alerts}}, {
+        text    => $self->type('string', _plain($line)),
+        bug_ids => [map { $self->type('int', $_) } sort { $a <=> $b } keys %ids],
+      };
+    }
+    elsif ($current && $line =~ /^\s*\.\.\./) {
+      # "... from bugs.reporter." - a step of the check above, not a check of its own.
+      push @{$current->{steps}}, $self->type('string', _plain($line));
+    }
+    else {
+      $current = {title => $self->type('string', _plain($line)), alerts => [], fixes => [], steps => []};
+      push @checks, $current;
+    }
+  }
+
+  return {
+    checks      => \@checks,
+    error_found => $self->type('boolean', $scratch->param('error_found') ? 1 : 0),
+    fix_applied => $self->type('string', $fix),
+  };
 }
 
 1;

@@ -9,6 +9,8 @@ import { adminMetaRouter } from './routes/adminMeta';
 import { adminComponentsRouter } from './routes/adminComponents';
 import { adminFieldValuesRouter } from './routes/adminFieldValues';
 import { adminGroupsRouter } from './routes/adminGroups';
+import { adminParametersRouter } from './routes/adminParameters';
+import { adminSanityCheckRouter } from './routes/adminSanityCheck';
 import { adminWorkflowRouter } from './routes/adminWorkflow';
 import { adminProductsRouter } from './routes/adminProducts';
 import { adminUsersRouter } from './routes/adminUsers';
@@ -74,6 +76,8 @@ app.use('/api/admin/groups', adminGroupsRouter(env));
 app.use('/api/admin/components', adminComponentsRouter(env));
 app.use('/api/admin/field-values', adminFieldValuesRouter(env));
 app.use('/api/admin/workflow', adminWorkflowRouter(env));
+app.use('/api/admin/parameters', adminParametersRouter(env));
+app.use('/api/admin/sanity-check', adminSanityCheckRouter(env));
 app.use('/api/admin/meta', adminMetaRouter(env));
 
 app.use(notFoundHandler);

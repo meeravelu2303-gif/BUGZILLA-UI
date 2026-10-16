@@ -35,6 +35,8 @@ export interface Permissions {
   canManageGroups: boolean;
   /** Bugzilla's `admin` group - what editvalues.cgi and editworkflow.cgi require. */
   isBugzillaAdmin: boolean;
+  /** Bugzilla's `tweakparams` group - what editparams.cgi requires. */
+  canEditParameters: boolean;
 }
 
 /**
@@ -54,5 +56,6 @@ export function derivePermissions(groups: { name: string }[]): Permissions {
     canTriage: names.has('canconfirm') || names.has('editusers'),
     canManageGroups: names.has('creategroups'),
     isBugzillaAdmin: names.has('admin'),
+    canEditParameters: names.has('tweakparams'),
   };
 }

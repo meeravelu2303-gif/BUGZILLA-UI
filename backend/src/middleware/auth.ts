@@ -37,6 +37,7 @@ export function requireAuth(env: Env) {
         canTriage: false,
         canManageGroups: false,
         isBugzillaAdmin: false,
+        canEditParameters: false,
         ...(session.permissions ?? {}),
       },
     };

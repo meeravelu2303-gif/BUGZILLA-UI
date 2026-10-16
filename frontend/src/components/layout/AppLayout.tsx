@@ -66,7 +66,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const user = data?.user;
   const permissions = user?.permissions;
-  const canSeeAdmin = Boolean(permissions?.canManageUsers || permissions?.canManageProducts || permissions?.canManageGroups || permissions?.isBugzillaAdmin);
+  const canSeeAdmin = Boolean(permissions?.canManageUsers || permissions?.canManageProducts || permissions?.canManageGroups || permissions?.isBugzillaAdmin || permissions?.canEditParameters);
   const hasPermission = (p?: string) => !p || Boolean(permissions?.[p as keyof Permissions]);
 
   // ⌘K / Ctrl-K opens the command palette anywhere in the app.

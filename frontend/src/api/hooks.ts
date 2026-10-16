@@ -19,6 +19,9 @@ import type {
   GroupUsage,
   GroupMember,
   MembershipChangeResult,
+  ParamValue,
+  ParamsData,
+  SanityCheckResult,
   UpdateComponentInput,
   UpdateGroupInput,
   WorkflowData,
@@ -275,17 +278,6 @@ export function useUpdateProduct(id: number) {
   });
 }
 
-// ---- Admin: read-only metadata (parameters) ----
-
-export function useAdminParameters() {
-  return useQuery({
-    queryKey: ['admin', 'parameters'],
-    queryFn: () => api.get<{ parameters: Record<string, unknown> }>('/admin/meta/parameters'),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-}
-
 // ---- Admin: Groups ----
 
 export function useAdminGroupList() {
@@ -432,6 +424,35 @@ export function useUpdateWorkflow() {
       qc.invalidateQueries({ queryKey: ['admin', 'workflow'] });
       qc.invalidateQueries({ queryKey: ['meta'] });
     },
+  });
+}
+
+// ---- Admin: parameters & sanity check (UeducateAdmin extension) ----
+
+export function useBugzillaParams() {
+  return useQuery({
+    queryKey: ['admin', 'params'],
+    queryFn: () => api.get<ParamsData>('/admin/parameters'),
+    retry: false,
+  });
+}
+
+export function useUpdateBugzillaParams() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { changes: Record<string, ParamValue>; reset: string[]; confirm: string[] }) =>
+      api.patch<ParamsData>('/admin/parameters', input),
+    onSuccess: (data) => {
+      qc.setQueryData(['admin', 'params'], data);
+      qc.invalidateQueries({ queryKey: ['meta'] });
+    },
+  });
+}
+
+/** Never runs on its own - only when the admin presses Run (or confirms a fix). */
+export function useSanityCheck() {
+  return useMutation({
+    mutationFn: (fix?: string) => api.post<SanityCheckResult>('/admin/sanity-check', fix ? { fix } : {}),
   });
 }
 

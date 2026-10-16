@@ -73,8 +73,8 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/admin/field-values', label: 'Field Values', icon: Tags, permission: 'isBugzillaAdmin', description: 'Add, rename, reorder and retire values for status, severity, priority and more' },
       { to: '/admin/workflow', label: 'Status Workflow', icon: Workflow, permission: 'isBugzillaAdmin', description: 'Edit which status changes are allowed' },
       { to: '/admin/groups', label: 'Groups & Permissions', icon: ShieldCheck, permission: 'canManageGroups', description: 'Create and edit groups and manage who belongs to them' },
-      { to: '/admin/parameters', label: 'Parameters', icon: SlidersHorizontal, description: 'Instance-wide configuration parameters' },
-      { to: '/admin/sanity-check', label: 'Sanity Check', icon: Stethoscope, description: 'Run Bugzilla database consistency checks' },
+      { to: '/admin/parameters', label: 'Parameters', icon: SlidersHorizontal, permission: 'canEditParameters', description: 'Instance-wide settings, with confirmation for risky ones' },
+      { to: '/admin/sanity-check', label: 'Sanity Check', icon: Stethoscope, permission: 'canManageProducts', description: 'Check the database for consistency problems' },
     ],
   },
 ];
