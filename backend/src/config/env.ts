@@ -69,6 +69,19 @@ const envSchema = z
     PROOF_LINK_SECRET: z.string().min(16).optional(),
     /** Enables the HSTS header. Set only once the site is served over HTTPS end to end. */
     HSTS: bool('false'),
+    /**
+     * Which products a bug may be transferred between by someone who cannot
+     * enter the target product (lib/productTransfer.ts). `A<->B` both ways,
+     * `A->B` one way, separated by `;`. Empty disables transfers.
+     */
+    PRODUCT_TRANSFER_ROUTES: z.string().default('KPost UI<->KPost API; KPost Admin UI<->KPost Admin'),
+    /**
+     * API key of the account that carries out transfers. Should be a dedicated,
+     * NON-admin account in every product group plus editbugs/canconfirm
+     * (ops/bugzilla/setup-transfer-account.pl), so the history names it rather
+     * than a person. Falls back to BUGZILLA_API_KEY, with a startup warning.
+     */
+    TRANSFER_API_KEY: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.SESSION_STORE === 'redis' && !env.REDIS_URL) {

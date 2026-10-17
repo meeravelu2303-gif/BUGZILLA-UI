@@ -140,6 +140,29 @@ export interface BugMeta {
   features: BugFeatures;
   currentUser: string;
   bugzillaWebUrl: string;
+  /** Lower-cased source product -> products its bugs may be transferred to. */
+  transferRoutes?: Record<string, string[]>;
+}
+
+export interface TransferTarget {
+  product: string;
+  components: { name: string; defaultAssignee: string; defaultAssigneeName: string }[];
+  versions: string[];
+  defaultMilestone: string | null;
+  people: { email: string; name: string }[];
+}
+
+export interface TransferOptions {
+  from: { product: string; component: string };
+  targets: TransferTarget[];
+}
+
+export interface TransferBugInput {
+  product: string;
+  component: string;
+  version?: string;
+  assignee?: string;
+  reason: string;
 }
 
 /** Optional Bugzilla bug fields, as switched on for this instance. */

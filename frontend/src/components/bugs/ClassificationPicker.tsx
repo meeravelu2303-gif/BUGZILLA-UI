@@ -1,4 +1,5 @@
 import { Check, ChevronDown, Plus, Search, X } from 'lucide-react';
+import { RequiredMark } from '../ui/Field';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../lib/utils';
@@ -22,6 +23,8 @@ interface Props {
   error?: string;
   hint?: string;
   id?: string;
+  /** Shows the mandatory-field star after the label. */
+  required?: boolean;
 }
 
 interface Row {
@@ -44,7 +47,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
   );
 }
 
-export function ClassificationPicker({ label, value, onChange, options, placeholder, error, hint, id }: Props) {
+export function ClassificationPicker({ label, value, onChange, options, placeholder, error, hint, id, required }: Props) {
   const generated = useId();
   const baseId = id ?? generated;
   const listId = `${baseId}-list`;
@@ -188,6 +191,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
     <div ref={rootRef} className="relative flex flex-col gap-1.5">
       <label htmlFor={baseId} className="text-sm font-medium text-slate-700">
         {label}
+        {required && <RequiredMark />}
       </label>
 
       <button
@@ -350,7 +354,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
           document.body,
         )}
 
-      {error ? <p className="text-xs text-rose-600">{error}</p> : hint ? <p className="text-xs text-slate-600">{hint}</p> : null}
+      {error ? <p role="alert" className="text-xs font-medium text-rose-600">{error}</p> : hint ? <p className="text-xs text-slate-600">{hint}</p> : null}
     </div>
   );
 }

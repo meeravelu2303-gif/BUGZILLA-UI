@@ -8,7 +8,7 @@ import { DescriptionReport } from '../components/bugs/DescriptionReport';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Input, Select, Textarea } from '../components/ui/Field';
+import { Input, RequiredMark, Select, Textarea } from '../components/ui/Field';
 import { useToast } from '../context/ToastContext';
 import {
   BUG_BROWSERS,
@@ -118,6 +118,35 @@ const LEVEL_DOT: Record<SeverityLevel, string> = {
 };
 
 const MONO = 'font-mono text-[13px] leading-relaxed';
+
+/**
+ * What each validated field is called on screen - used in the error toast and
+ * the jump list. Written in the order the fields appear on the page, so the
+ * list reads top to bottom and "first missing" means the one nearest the top.
+ */
+const FIELD_LABELS: Partial<Record<keyof BugReportInput, string>> = {
+  product: 'Product',
+  component: 'Component',
+  path: 'Endpoint',
+  browsers: 'Browsers affected',
+  title: 'Title',
+  classification: 'Classification',
+  summary: 'Summary',
+  steps: 'Steps to reproduce',
+  expected: 'Expected',
+  actual: 'Actual',
+  curl: 'curl',
+  responseStatus: 'HTTP status',
+  environment: 'Environment',
+};
+
+/** Scrolls to a field and puts the cursor in it, so fixing it is one keystroke away. */
+function focusField(key: string) {
+  const wrap = document.querySelector<HTMLElement>(`[data-field="${key}"]`);
+  if (!wrap) return;
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  wrap.querySelector<HTMLElement>('input:not([type=hidden]), textarea, select, button')?.focus({ preventScroll: true });
+}
 
 export function CreateBug() {
   const navigate = useNavigate();
@@ -235,6 +264,8 @@ export function CreateBug() {
   const allErrors = validateReport(report);
   const errors = showErrors ? allErrors : {};
   const errorCount = Object.keys(allErrors).length;
+  /** Fields with an error, in page order. */
+  const missingKeys = (Object.keys(FIELD_LABELS) as (keyof BugReportInput)[]).filter((k) => allErrors[k]);
   const composedSummary = buildSummary(report);
   const whiteboard = buildWhiteboard(report);
   const description = buildDescription(report);
@@ -244,7 +275,14 @@ export function CreateBug() {
     setSubmitError(null);
     setShowErrors(true);
     if (errorCount > 0) {
-      document.querySelector('[data-invalid="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast({
+        variant: 'error',
+        title: `${errorCount} required field${errorCount === 1 ? '' : 's'} need${errorCount === 1 ? 's' : ''} attention`,
+        description: missingKeys.map((k) => FIELD_LABELS[k]).join(', '),
+      });
+      // Known from state, not read back from the DOM: the error marks only render
+      // after this handler returns, so querying for them here finds nothing.
+      if (missingKeys[0]) focusField(missingKeys[0]);
       return;
     }
 
@@ -314,9 +352,12 @@ export function CreateBug() {
 
       <form onSubmit={onSubmit} noValidate autoComplete="off" className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
         <div className="flex min-w-0 flex-col gap-6">
+          <p className="-mb-2 text-xs text-slate-600">
+            Fields marked <RequiredMark /> are required.
+          </p>
           <Section step={1} title="Where" subtitle="Product and module. The module's maintainer is assigned automatically.">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div data-invalid={invalid('product')}>
+              <div data-field="product" data-invalid={invalid('product')}>
                 <Select
                   label="Product"
                   placeholder={productsLoading ? 'Loading…' : 'Select a product'}
@@ -332,7 +373,7 @@ export function CreateBug() {
                   ))}
                 </Select>
               </div>
-              <div data-invalid={invalid('component')}>
+              <div data-field="component" data-invalid={invalid('component')}>
                 <Select
                   label="Component (module)"
                   placeholder={product ? 'Select a component' : 'Select a product first'}
@@ -421,7 +462,7 @@ export function CreateBug() {
 
           <Section step={2} title="The defect" subtitle="How it is titled, tagged and prioritised - the same fields the bench sets.">
             {kind === 'api' ? (
-              <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3" data-invalid={invalid('path')}>
+              <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3" data-field="path" data-invalid={invalid('path')}>
                 <Select label="Method" value={method} onChange={(e) => setMethod(e.target.value)}>
                   {HTTP_METHODS.map((m) => (
                     <option key={m} value={m}>
@@ -431,6 +472,7 @@ export function CreateBug() {
                 </Select>
                 <Input
                   id="new-bug-endpoint" autoComplete="off" label="Endpoint"
+                  required
                   value={path}
                   onChange={(e) => setPath(e.target.value.trim())}
                   placeholder="/v2/kmail/inboxMails/"
@@ -441,9 +483,10 @@ export function CreateBug() {
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input id="new-bug-page" autoComplete="off" label="Page / screen" value={page} onChange={(e) => setPage(e.target.value)} placeholder="/kmail/inbox or Write Mail" hint="Where in the app it happens." />
-                <div className="flex flex-col gap-1.5" data-invalid={invalid('browsers')}>
+                <div className="flex flex-col gap-1.5" data-field="browsers" data-invalid={invalid('browsers')}>
                   <span id="browsers-label" className="text-sm font-medium text-slate-700">
                     Browsers affected
+                    <RequiredMark />
                   </span>
                   <div role="group" aria-labelledby="browsers-label" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-900/[0.06] p-1">
                     {BUG_BROWSERS.map((b) => {
@@ -474,7 +517,7 @@ export function CreateBug() {
                     })}
                   </div>
                   {errors.browsers ? (
-                    <p className="text-xs text-rose-600">{errors.browsers}</p>
+                    <p role="alert" className="text-xs font-medium text-rose-600">{errors.browsers}</p>
                   ) : (
                     <p className="text-xs text-slate-600">Tick every browser it happens in.</p>
                   )}
@@ -482,9 +525,10 @@ export function CreateBug() {
               </div>
             )}
 
-            <div data-invalid={invalid('title')}>
+            <div data-field="title" data-invalid={invalid('title')}>
               <Input
                 id="new-bug-title" autoComplete="off" label="Title"
+                required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 error={errors.title}
@@ -506,10 +550,11 @@ export function CreateBug() {
                   </option>
                 ))}
               </Select>
-              <div data-invalid={invalid('classification')}>
+              <div data-field="classification" data-invalid={invalid('classification')}>
                 <ClassificationPicker
                   id="new-bug-classification"
                   label="Classification"
+                  required
                   value={classification}
                   onChange={setClassification}
                   options={classificationOptions(kind)}
@@ -541,9 +586,10 @@ export function CreateBug() {
           </Section>
 
           <Section step={3} title="Report" subtitle="What a developer needs to understand and reproduce it without asking.">
-            <div data-invalid={invalid('summary')}>
+            <div data-field="summary" data-invalid={invalid('summary')}>
               <Textarea
                 id="new-bug-summary" autoComplete="off" label="Summary"
+                required
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
                 error={errors.summary}
@@ -562,9 +608,10 @@ export function CreateBug() {
               }
               hint="Leave blank to use the standard wording shown."
             />
-            <div data-invalid={invalid('steps')}>
+            <div data-field="steps" data-invalid={invalid('steps')}>
               <Textarea
                 id="new-bug-steps" autoComplete="off" label="Steps to reproduce"
+                required
                 value={steps}
                 onChange={(e) => setSteps(e.target.value)}
                 error={errors.steps}
@@ -575,9 +622,10 @@ export function CreateBug() {
               />
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div data-invalid={invalid('expected')}>
+              <div data-field="expected" data-invalid={invalid('expected')}>
                 <Textarea
                   id="new-bug-expected" autoComplete="off" label="Expected"
+                  required
                   value={expected}
                   onChange={(e) => setExpected(e.target.value)}
                   error={errors.expected}
@@ -586,9 +634,10 @@ export function CreateBug() {
                   placeholder={kind === 'api' ? 'empty subject → 400\nbody: {"status":"error","message":…}' : 'All unread mails are marked as read.'}
                 />
               </div>
-              <div data-invalid={invalid('actual')}>
+              <div data-field="actual" data-invalid={invalid('actual')}>
                 <Textarea
                   id="new-bug-actual" autoComplete="off" label="Actual"
+                  required
                   value={actual}
                   onChange={(e) => setActual(e.target.value)}
                   error={errors.actual}
@@ -611,9 +660,12 @@ export function CreateBug() {
 
           {kind === 'api' && (
             <Section step={4} title="Reproduce" subtitle="A runnable command and the response it returned.">
-              <div data-invalid={invalid('curl')} className="flex flex-col gap-1.5">
+              <div data-field="curl" data-invalid={invalid('curl')} className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-700">curl</span>
+                  <span className="text-sm font-medium text-slate-700">
+                    curl
+                    <RequiredMark />
+                  </span>
                   <button
                     type="button"
                     onClick={() => setCurl(curlTemplate(method, path))}
@@ -625,6 +677,8 @@ export function CreateBug() {
                 {/* A raw textarea, not <Textarea>: its bg-white/80 would fight the dark terminal styling. */}
                 <textarea
                   aria-label="curl"
+                  aria-required="true"
+                  aria-invalid={errors.curl ? true : undefined}
                   value={curl}
                   onChange={(e) => setCurl(e.target.value)}
                   rows={5}
@@ -638,13 +692,13 @@ export function CreateBug() {
                   placeholder={"curl -X POST 'https://testingapi.kpostindia.com/v2/…' \\\n  -H 'Authorization: Bearer $KPOST_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  --data '{…}'"}
                 />
                 {errors.curl ? (
-                  <p className="text-xs text-rose-600">{errors.curl}</p>
+                  <p role="alert" className="text-xs font-medium text-rose-600">{errors.curl}</p>
                 ) : (
                   <p className="text-xs text-slate-600">Keep the token as $KPOST_TOKEN - never paste a live one.</p>
                 )}
               </div>
               <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
-                <div data-invalid={invalid('responseStatus')}>
+                <div data-field="responseStatus" data-invalid={invalid('responseStatus')}>
                   <Input
                     id="new-bug-http-status" autoComplete="off" label="HTTP status"
                     value={responseStatus}
@@ -670,8 +724,8 @@ export function CreateBug() {
           )}
 
           <Section step={kind === 'api' ? 5 : 4} title="Context & evidence" subtitle="Where it was seen, and the proof - screenshots, videos, logs.">
-            <div data-invalid={invalid('environment')}>
-              <Input id="new-bug-environment" autoComplete="off" label="Environment" value={environment} onChange={(e) => setEnvironment(e.target.value)} error={errors.environment} />
+            <div data-field="environment" data-invalid={invalid('environment')}>
+              <Input id="new-bug-environment" autoComplete="off" label="Environment" required value={environment} onChange={(e) => setEnvironment(e.target.value)} error={errors.environment} />
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">Evidence</span>
@@ -724,9 +778,21 @@ export function CreateBug() {
 
           <div className="flex flex-wrap items-center justify-end gap-3">
             {showErrors && errorCount > 0 && (
-              <p className="mr-auto text-sm text-rose-600">
-                {errorCount} field{errorCount === 1 ? '' : 's'} still need{errorCount === 1 ? 's' : ''} attention.
-              </p>
+              <div role="alert" className="mr-auto flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-rose-700">
+                <span className="font-medium">
+                  {errorCount} required field{errorCount === 1 ? '' : 's'} missing:
+                </span>
+                {missingKeys.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => focusField(k)}
+                    className="focus-ring rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-200 hover:bg-rose-100"
+                  >
+                    {FIELD_LABELS[k]}
+                  </button>
+                ))}
+              </div>
             )}
             <Button type="button" variant="secondary" onClick={() => navigate(-1)} disabled={busy}>
               Cancel

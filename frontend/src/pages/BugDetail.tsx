@@ -1,4 +1,5 @@
-import { AlertCircle, ArchiveRestore, ArrowLeft, ImagePlus, Layers, Pencil, Trash2, User } from 'lucide-react';
+import { AlertCircle, ArchiveRestore, ArrowLeft, ArrowRightLeft, ImagePlus, Layers, Pencil, Trash2, User } from 'lucide-react';
+import { TransferBugDialog } from '../components/bugs/TransferBugDialog';
 import { AttachmentUploader } from '../components/bugs/AttachmentUploader';
 import { ReportEditor } from '../components/bugs/ReportEditor';
 import { useCallback, useState } from 'react';
@@ -110,9 +111,20 @@ function BugDetailView({
   const { toast } = useToast();
   const [conflict, setConflict] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const [editingReport, setEditingReport] = useState(false);
   const [addingFiles, setAddingFiles] = useState(false);
   const isDeleted = Boolean(bug.isDeleted);
+  /*
+   * Offered on the same terms the server enforces (lib/productTransfer.ts), so
+   * the button never leads to a refusal: an open bug, its assignee or a tester,
+   * and a configured route out of this product.
+   */
+  const canTransfer =
+    !isDeleted &&
+    bug.isOpen &&
+    (canTriage || (!!currentUser && bug.assignedTo?.email.toLowerCase() === currentUser.toLowerCase())) &&
+    (meta?.transferRoutes?.[bug.product.toLowerCase()]?.length ?? 0) > 0;
 
   async function onRestore() {
     try {
@@ -204,14 +216,28 @@ function BugDetailView({
           <span className="font-medium text-slate-600">{bug.product}</span>
           <span className="text-slate-400">/</span>
           <span className="font-medium text-slate-600">{bug.component}</span>
-          {canTriage && !isDeleted && (
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="focus-ring ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700"
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete
-            </button>
+          {(canTransfer || (canTriage && !isDeleted)) && (
+            <span className="ml-auto flex items-center gap-1">
+              {canTransfer && (
+                <button
+                  type="button"
+                  onClick={() => setTransferring(true)}
+                  title="Move this bug to another team's product"
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-brand-50 hover:text-brand-800"
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden /> Transfer
+                </button>
+              )}
+              {canTriage && !isDeleted && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  className="focus-ring inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete
+                </button>
+              )}
+            </span>
           )}
         </div>
 
@@ -376,6 +402,9 @@ function BugDetailView({
       </div>
 
       <DeleteBugsDialog open={confirmDelete} ids={[bug.id]} onClose={() => setConfirmDelete(false)} />
+      {canTransfer && (
+        <TransferBugDialog open={transferring} bugId={bug.id} onClose={() => setTransferring(false)} onTransferred={() => void onReload()} />
+      )}
 
       {/* Room for the floating save bar, so it never covers the last comment. */}
       {(editor.dirty.length > 0 || conflict) && <div className="h-28" aria-hidden />}

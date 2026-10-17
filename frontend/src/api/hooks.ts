@@ -17,6 +17,8 @@ import type {
   CreateProductInput,
   CreateUserInput,
   Product,
+  TransferBugInput,
+  TransferOptions,
   UpdateAttachmentInput,
   UpdateBugInput,
   UpdateProductInput,
@@ -261,6 +263,26 @@ export function useDeleteBugs() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { ids: number[]; reason: string }) => api.post<{ deleted: number }>('/bugs/delete', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bugs'], exact: false }),
+  });
+}
+
+/** Loaded only when the transfer dialog opens - it costs several Bugzilla calls. */
+export function useTransferOptions(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['bugs', id, 'transfer-options'],
+    queryFn: () => api.get<TransferOptions>(`/bugs/${id}/transfer-options`),
+    enabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useTransferBug(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TransferBugInput) =>
+      api.post<{ id: number; product: string; component: string; assignee: string; ccAdded: string }>(`/bugs/${id}/transfer`, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bugs'], exact: false }),
   });
 }

@@ -10,16 +10,53 @@ import {
 } from 'react';
 import { cn } from '../../lib/utils';
 
-function FieldShell({ label, htmlFor, error, hint, children }: { label?: string; htmlFor?: string; error?: string; hint?: string; children: ReactNode }) {
+/**
+ * The red star after a mandatory field's label. Hidden from screen readers:
+ * the control itself carries `required`, which they already announce, and
+ * "star" read aloud after every label would be noise.
+ *
+ * Exported for the few labels that are not drawn by FieldShell (button
+ * groups, the curl editor, the classification picker).
+ */
+export function RequiredMark() {
+  return (
+    <span className="ml-0.5 font-semibold text-rose-600" aria-hidden>
+      *
+    </span>
+  );
+}
+
+function FieldShell({
+  label,
+  htmlFor,
+  error,
+  hint,
+  required,
+  children,
+}: {
+  label?: string;
+  htmlFor?: string;
+  error?: string;
+  hint?: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
         <label htmlFor={htmlFor} className="text-[13px] font-medium text-slate-700">
           {label}
+          {required && <RequiredMark />}
         </label>
       )}
       {children}
-      {error ? <p className="text-xs font-medium text-rose-600">{error}</p> : hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
+      {error ? (
+        <p role="alert" className="text-xs font-medium text-rose-600">
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="text-xs text-slate-500">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -31,7 +68,15 @@ function FieldShell({ label, htmlFor, error, hint, children }: { label?: string;
  */
 const inputClasses =
   'w-full rounded-xl border border-slate-900/10 bg-white/85 px-3 py-2 text-sm text-slate-900 shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] outline-none transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-slate-400 hover:border-slate-900/20 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-slate-100/70 disabled:text-slate-500 disabled:hover:border-slate-900/10';
-const errorClasses = 'border-rose-400 focus:border-rose-500 focus:ring-rose-500/15';
+/*
+ * `!` (important) on purpose. `cn` is plain clsx with no Tailwind conflict
+ * resolution, so these sit in the class list beside inputClasses' own
+ * `border-slate-900/10` / `hover:` / `focus:` colours, and stylesheet order -
+ * not class order - picks the winner. Without `!` the slate border won and an
+ * invalid field showed its red message under an ordinary grey box.
+ */
+const errorClasses =
+  '!border-rose-400 !bg-rose-50/40 hover:!border-rose-500 focus:!border-rose-500 focus:!ring-rose-500/15';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -43,8 +88,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, h
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   return (
-    <FieldShell label={label} htmlFor={fieldId} error={error} hint={hint}>
-      <input ref={ref} id={fieldId} className={cn(inputClasses, error && errorClasses, className)} {...props} />
+    <FieldShell label={label} htmlFor={fieldId} error={error} hint={hint} required={props.required}>
+      <input ref={ref} id={fieldId} aria-invalid={error ? true : undefined} className={cn(inputClasses, error && errorClasses, className)} {...props} />
     </FieldShell>
   );
 });
@@ -69,7 +114,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, InputProps>(
     const [visible, setVisible] = useState(false);
 
     return (
-      <FieldShell label={label} htmlFor={fieldId} error={error} hint={hint}>
+      <FieldShell label={label} htmlFor={fieldId} error={error} hint={hint} required={props.required}>
         <div className="relative">
           <input
             ref={ref}
@@ -120,8 +165,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({ label,
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   return (
-    <FieldShell label={label} htmlFor={fieldId} error={error} hint={hint}>
-      <textarea ref={ref} id={fieldId} className={cn(inputClasses, 'min-h-[6rem] resize-y leading-relaxed', error && errorClasses, className)} {...props} />
+    <FieldShell label={label} htmlFor={fieldId} error={error} hint={hint} required={props.required}>
+      <textarea ref={ref} id={fieldId} aria-invalid={error ? true : undefined} className={cn(inputClasses, 'min-h-[6rem] resize-y leading-relaxed', error && errorClasses, className)} {...props} />
     </FieldShell>
   );
 });
@@ -138,9 +183,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(({ label, error
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   return (
-    <FieldShell label={label} htmlFor={fieldId} error={error} hint={hint}>
+    <FieldShell label={label} htmlFor={fieldId} error={error} hint={hint} required={props.required}>
       {/* `app-select` paints the chevron (index.css); `appearance-none` removes the OS one. */}
-      <select ref={ref} id={fieldId} className={cn(inputClasses, 'app-select cursor-pointer appearance-none bg-no-repeat pr-9', error && errorClasses, className)} {...props}>
+      <select ref={ref} id={fieldId} aria-invalid={error ? true : undefined} className={cn(inputClasses, 'app-select cursor-pointer appearance-none bg-no-repeat pr-9', error && errorClasses, className)} {...props}>
         {placeholder && <option value="">{placeholder}</option>}
         {children}
       </select>

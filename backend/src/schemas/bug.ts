@@ -582,6 +582,17 @@ export const restoreSchema = z.object({
   ids: z.array(z.coerce.number().int().positive()).min(1).max(100),
 });
 
+/** Cross-product transfer (lib/productTransfer.ts). `.strict()` so nothing else rides along on the elevated call. */
+export const transferBugSchema = z
+  .object({
+    product: z.string().trim().min(1).max(200),
+    component: z.string().trim().min(1).max(200),
+    version: z.string().trim().min(1).max(64).optional(),
+    assignee: z.string().trim().email().max(255).optional(),
+    reason: z.string().trim().min(10, 'Say why it belongs to the other team - at least a short sentence.').max(2000),
+  })
+  .strict();
+
 /** Editable attachment properties - Bugzilla's `PUT /bug/attachment/{id}`. */
 export const updateAttachmentSchema = z
   .object({

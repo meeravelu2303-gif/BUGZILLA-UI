@@ -25,6 +25,8 @@ import { closedStatuses } from '../lib/bugStatus';
 import { allGroupNames, bugFeatures } from '../lib/bugFeatures';
 import { CURRENT_BUG_FIELDS, toBugzillaUpdate, validateBugUpdate, type CurrentBug } from '../lib/bugUpdate';
 import { groupNameForProduct } from '../lib/productGroups';
+import { describeTarget, directoryClient, loadTransferableBug, parseTransferRoutes, transferBug, transferTargetsFor } from '../lib/productTransfer';
+import { clearCategoryIndex } from '../lib/categoryIndex';
 import { DELETED_GROUP, DELETED_RESOLUTION, deletedInfoFrom, restoreBugs, softDeleteBugs } from '../lib/softDelete';
 import { effectiveReport, isReportRevision, normaliseReport, revisionComment, stripRevision, withCategoryTag } from '../lib/reportRevision';
 import { buildBugWorkbook, currentComments, type BugProof, type ExportBug, type ExportContext } from '../lib/bugExport';
@@ -52,6 +54,7 @@ import {
   updateReportSchema,
   restoreSchema,
   softDeleteSchema,
+  transferBugSchema,
   tallyBugCounts,
   updateAttachmentSchema,
   updateBugSchema,
@@ -1722,6 +1725,63 @@ export function bugsRouter(env: Env): Router {
         });
       });
       res.json({ restored });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /*
+   * Cross-product transfer - see lib/productTransfer.ts for why this exists and
+   * what each credential is used for. The options call answers only for a bug
+   * the caller can see and may hand on, so it cannot be used to read another
+   * product's component list or team on its own.
+   */
+  const transferRoutes = parseTransferRoutes(env.PRODUCT_TRANSFER_ROUTES);
+
+  router.get('/:id/transfer-options', auth, async (req, res, next) => {
+    try {
+      const { id } = parseInput(idParamSchema, req.params);
+      const user = req.sessionUser!;
+      const bug = await loadTransferableBug(req.bugzilla!, id, { email: user.email, canTriage: user.permissions.canTriage });
+      const names = transferTargetsFor(bug.product, transferRoutes);
+      const directory = directoryClient(env);
+      const targets = (
+        await Promise.all(
+          names.map((n) =>
+            describeTarget(directory, n).catch((err: unknown) => {
+              // Logged, not swallowed: an empty target list with no reason is undiagnosable.
+              console.error(`[transfer] could not describe target ${n} for bug ${id}:`, err instanceof Error ? err.message : err);
+              return null;
+            })
+          )
+        )
+      ).filter(
+        (t): t is NonNullable<typeof t> => t !== null
+      );
+      res.set('Cache-Control', 'no-store').json({ from: { product: bug.product, component: bug.component }, targets });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/:id/transfer', auth, async (req, res, next) => {
+    try {
+      const { id } = parseInput(idParamSchema, req.params);
+      const request = parseInput(transferBugSchema, req.body);
+      const user = req.sessionUser!;
+      const features = await bugFeatures(env);
+      const result = await transferBug({
+        env,
+        userClient: req.bugzilla!,
+        actor: { email: user.email, realName: user.realName, canTriage: user.permissions.canTriage },
+        id,
+        request,
+        routes: transferRoutes,
+        useTargetMilestone: features.targetMilestone,
+      });
+      // The bug changed product: per-user category / stats caches must not keep counting it where it was.
+      clearCategoryIndex();
+      res.json(result);
     } catch (err) {
       next(err);
     }

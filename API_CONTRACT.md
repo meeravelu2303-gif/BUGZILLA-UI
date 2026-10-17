@@ -32,6 +32,17 @@ Equivalently supported (not used, documented for completeness): `X-Bugzilla-API-
 | `login`/`password` invalid on `/login` | 200 (!) | `{"error":true,"code":300,"message":"The login or password you entered is not valid."}` — note: this endpoint returns HTTP 200 even on failure; only the JSON body's `error:true` signals failure. BFF must check body, not just status. |
 | `match` param on `/user` while logged out | 401 | `{"error":true,"code":505,"message":"Logged-out users cannot use the \"match\" argument..."}` |
 
+### BFF cross-product transfer (added 2026-10-17)
+
+Bugzilla 5.2 cannot grant "may move bugs into product X" without "may see every bug in X": `Bug::_check_product` requires `can_enter_product`, which for KPost UI / KPost API means membership of the product's Mandatory/Mandatory group, and a product's group-control `editbugs`/`canconfirm` columns only add requirements. The assignee itself is not restricted (`strict_isolation` = 0), and assignee / QA / CC (with `cclist_accessible`, on for every bug here) can always see a bug regardless of its groups. Hence:
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/bugs/:id/transfer-options` | – | `{ from: { product, component }, targets: [{ product, components: [{ name, defaultAssignee, defaultAssigneeName }], versions, defaultMilestone, people: [{ email, name }] }] }`. Answers only for a bug the caller can see (own token) **and** may hand on (assignee, or `canTriage`); otherwise 404 / 403. Target data is read on the transfer key and is directory data only - no bugs, counts or summaries. |
+| POST | `/api/bugs/:id/transfer` | `{ product, component, version?, assignee?, reason }` (`.strict()`) | **200** `{ id, product, component, assignee, ccAdded }`. Checks, in order: visible to the user (403 from Bugzilla is reported as 404, so this is not an existence oracle); not deleted, open; assignee or tester; `product` reachable from the bug's product in `PRODUCT_TRANSFER_ROUTES`; component active in the target; version valid (auto when the target has one); `assignee` a member of the target's product group (default: component owner). Then ONE elevated `PUT /bug/:id` with exactly `product, component, version, assigned_to, cc.add=[caller], is_cc_accessible, target_milestone?` - Bugzilla removes the old product group and adds the new mandatory one itself. The reason is posted as a comment with the **caller's** token (fallback: on the transfer key, naming the caller). |
+
+`GET /api/meta` carries `transferRoutes` (lower-cased source → targets) so the UI can offer **Transfer** without a Bugzilla round trip.
+
 ### BFF password-reset endpoints (added 2026-10-17)
 
 Bugzilla 5.2 has **no WebService method** for forgotten passwords; the only implementation is the HTML flow behind `token.cgi` (`a=reqpw` → emailed token → `a=cfmpw` / `a=chgpw`). The BFF drives it with form POSTs (nothing in query strings) and reads the outcome from the page `<title>` - the one stable marker Bugzilla's templates set per message/error (`backend/src/lib/passwordReset.ts` quotes each title it keys on). Outbound mail must be on (`setup-smtp.pl`); the link in the email points at this app once `setup-password-reset.pl` has installed the custom mail template.

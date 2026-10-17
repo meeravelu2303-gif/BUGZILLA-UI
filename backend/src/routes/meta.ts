@@ -3,11 +3,13 @@ import type { Env } from '../config/env';
 import { bugFeatures } from '../lib/bugFeatures';
 import { BugzillaClient } from '../lib/bugzillaClient';
 import { groupNameForProduct } from '../lib/productGroups';
+import { isServiceAccount, parseTransferRoutes } from '../lib/productTransfer';
 import { requireAuth } from '../middleware/auth';
 import { extractBugMeta } from '../schemas/meta';
 
 export function metaRouter(env: Env): Router {
   const router = Router();
+  const transferRoutes = parseTransferRoutes(env.PRODUCT_TRANSFER_ROUTES);
 
   router.get('/', requireAuth(env), async (req, res, next) => {
     try {
@@ -20,6 +22,9 @@ export function metaRouter(env: Env): Router {
         features,
         currentUser: req.sessionUser!.email,
         bugzillaWebUrl,
+        // Configuration only (which product may hand bugs to which), so the bug page
+        // can decide whether to offer "Transfer" without a Bugzilla round trip.
+        transferRoutes: Object.fromEntries([...transferRoutes].map(([from, to]) => [from, [...to]])),
       });
     } catch (err) {
       next(err);
@@ -95,7 +100,7 @@ export function metaRouter(env: Env): Router {
       for (const group of resp.groups ?? []) {
         const members = new Map<string, { email: string; name: string }>();
         for (const m of group.membership ?? []) {
-          if (!m.email || m.can_login === false) continue;
+          if (!m.email || m.can_login === false || isServiceAccount(m.email)) continue;
           members.set(m.email.toLowerCase(), { email: m.email, name: m.real_name || m.name || m.email });
         }
         if (pool === null) pool = members;

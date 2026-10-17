@@ -117,6 +117,12 @@ async function main(): Promise<void> {
     console.log(`BFF listening on http://localhost:${env.PORT}`);
     console.log(`Bugzilla at ${env.BUGZILLA_URL} (JSON-RPC transport, credentials in request bodies)`);
     console.log(`Sessions: ${env.SESSION_STORE} · cookie secure: ${env.COOKIE_SECURE} · trust proxy: ${env.TRUST_PROXY}`);
+    if (env.PRODUCT_TRANSFER_ROUTES.trim() && !env.TRANSFER_API_KEY) {
+      console.warn(
+        '[transfer] TRANSFER_API_KEY is not set: cross-product transfers run on BUGZILLA_API_KEY, so Bugzilla history ' +
+          'will show that account as the one who moved each bug. Create a dedicated account (ops/bugzilla/setup-transfer-account.pl).'
+      );
+    }
   });
 }
 

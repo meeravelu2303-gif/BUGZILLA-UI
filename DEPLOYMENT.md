@@ -96,6 +96,19 @@ Bugzilla's REST API cannot write, so they're set up once in Bugzilla's own admin
    email Bugzilla sends opens the app's **/reset-password** page instead of Bugzilla's own.
    The app's Forgot/Reset pages work without this step - the link just lands on
    Bugzilla's page instead. `--uninstall` restores the default email.
+11. **Cross-product transfer account** — run once, and again after adding a product:
+   ```
+   cd C:\Bugzilla
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-transfer-account.pl <admin login>
+   ```
+   Creates `bugtracker-transfer@kpost.in` (no mail, no usable password) in `editbugs`,
+   `canconfirm` and every product's same-named group - never `admin`/`editusers`/
+   `editcomponents` (the script refuses if it finds them) - and prints an API key once. Put
+   it in `backend\.env` as `TRANSFER_API_KEY=`. Without it, transfers run on
+   `BUGZILLA_API_KEY` and Bugzilla's history names that account as the mover.
+   Keep `strict_isolation` **off** (Parameters → Bug Change Policies): with it on, Bugzilla
+   refuses an assignee who cannot edit bugs in the product, which is exactly the hand-off this
+   is for.
 
 > You can view all of the above **inside this app** later (Administration →
 > Field Values / Status Workflow / Groups / Parameters) — read-only, with an
@@ -125,6 +138,8 @@ SESSION_STORE=file                             # file (survives restarts) | redi
 # SESSION_DIR=D:\bugtracker\sessions           # file store location (default: backend\.sessions)
 # REDIS_URL=redis://127.0.0.1:6379/0           # required for SESSION_STORE=redis
 CORS_ORIGIN=http://localhost:5175
+PRODUCT_TRANSFER_ROUTES=KPost UI<->KPost API; KPost Admin UI<->KPost Admin   # who may hand bugs to whom
+TRANSFER_API_KEY=<key from setup-transfer-account.pl>                         # the non-admin transfer account
 ```
 
 > **Credentials never travel in URLs.** The BFF talks to Bugzilla through its
@@ -247,6 +262,14 @@ Everything else (bugs, comments, user create/enable-disable, product/component
   failure. For an external monitor, poll `GET /api/health?deep=1` (200 healthy, 503 not).
   Quick manual check: `curl -s http://localhost:4000/api/health?deep=1`
 - **Access-log hardening** — `ops\apache\harden-access-log.ps1` (see Phase 2 note).
+- **Cross-product transfer** — a bug's assignee (or any tester) can move it to another
+  team's product from the bug page (**Transfer**), without being given access to that
+  product. The BFF checks on the user's own token that they can see the bug and may hand it
+  on, then performs only the product/component/version/assignee change with
+  `TRANSFER_API_KEY`, along `PRODUCT_TRANSFER_ROUTES` only. The user is CC'd so they keep
+  seeing that one bug; Bugzilla swaps the product groups itself. The reason is posted as a
+  comment under the user's name, and each transfer is logged (`[transfer] bug N: A -> B`).
+  Verify end to end with `ops\verify-transfer.ps1` (dry run by default; `-Execute` moves the bug).
 - **Password resets** — the app's `/forgot-password` and `/reset-password` pages drive
   Bugzilla's own `token.cgi` flow from the BFF (no WebService exists for it). Requests are
   capped at **3 emails per address per 24 hours** (the policy users are told), plus 3 per
