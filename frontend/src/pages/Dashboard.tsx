@@ -1,6 +1,6 @@
-import { AlertCircle, AlertOctagon, Bug as BugIcon, CheckCircle2, CircleDot, Loader2, Lock } from 'lucide-react';
+import { AlertCircle, AlertOctagon, Bug as BugIcon, CheckCircle2, CircleDot, Loader2, Lock, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useBugStats, useBugs } from '../api/hooks';
+import { useBugCounts, useBugStats, useBugs } from '../api/hooks';
 import { BarListChart, type BarListItem } from '../components/dashboard/BarListChart';
 import { SeverityCategoryMatrix } from '../components/dashboard/SeverityCategoryMatrix';
 import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
@@ -13,6 +13,7 @@ import { CATEGORIES, SEVERITIES, type Category, type Severity } from '../types';
 
 /** "Recently changed" is the only thing here needing bug records, and it shows six. */
 const RECENT_LIMIT = 6;
+const REOPENED_LIMIT = 8;
 
 export function Dashboard() {
   const { data: stats, isLoading, isError, error } = useBugStats();
@@ -23,6 +24,21 @@ export function Dashboard() {
     sortDir: 'desc',
   });
   const recent = recentData?.bugs ?? [];
+
+  /*
+   * Reopened: a fix that did not hold. Counted and listed on their own because they are the
+   * bugs a lead most needs to see - each one is work that was believed finished.
+   */
+  const { data: reopenedCount } = useBugCounts({ status: ['REOPENED'] });
+  const { data: reopenedData, isLoading: reopenedLoading } = useBugs({
+    status: ['REOPENED'],
+    limit: REOPENED_LIMIT,
+    offset: 0,
+    sortBy: 'last_change_time',
+    sortDir: 'desc',
+  });
+  const reopened = reopenedData?.bugs ?? [];
+  const reopenedTotal = reopenedCount?.counts.total;
 
   /*
    * This page reports *current defect load*, so every breakdown below counts open
@@ -77,17 +93,18 @@ export function Dashboard() {
       </div>
 
       {isLoading || !stats ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[84px] rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard icon={BugIcon} label="Total bugs" value={stats.total} tone="brand" />
           <StatCard icon={CircleDot} label="Open" value={stats.open} tone="amber" />
           <StatCard icon={CheckCircle2} label="Resolved" value={stats.resolved} tone="emerald" />
           <StatCard icon={AlertOctagon} label="Critical (P0) open" value={loadBySeverity?.Critical ?? 0} tone="rose" />
+          <StatCard icon={RotateCcw} label="Reopened" value={reopenedTotal ?? '…'} tone="rose" to="/bugs?status=REOPENED" hint="Fixes that didn't hold" />
         </div>
       )}
 
@@ -111,6 +128,50 @@ export function Dashboard() {
           <CardBody>{isLoading || !stats ? <ChartSkeleton /> : <BarListChart title="" items={categoryItems} />}</CardBody>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <div>
+            <CardTitle>
+              <span className="inline-flex items-center gap-2">
+                <RotateCcw className="h-4 w-4 text-rose-600" aria-hidden />
+                Reopened bugs{reopenedTotal ? ` (${reopenedTotal})` : ''}
+              </span>
+            </CardTitle>
+            <p className="mt-0.5 text-xs text-slate-600">Marked resolved, re-tested, and still failing - newest first.</p>
+          </div>
+          {(reopenedTotal ?? 0) > 0 && (
+            <Link to="/bugs?status=REOPENED" className="focus-ring rounded text-sm font-medium text-brand-800 hover:underline">
+              View all
+            </Link>
+          )}
+        </CardHeader>
+        <div className="divide-y divide-white/30">
+          {reopenedLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            </div>
+          ) : reopened.length === 0 ? (
+            <p className="flex items-center justify-center gap-2 px-5 py-6 text-sm text-slate-600">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden /> Nothing reopened - every fix has held.
+            </p>
+          ) : (
+            reopened.map((bug) => (
+              <Link key={bug.id} to={`/bugs/${bug.id}`} className="focus-ring flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
+                <span className="w-20 shrink-0 font-mono text-xs text-slate-600">{bugDisplayId(bug)}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900" title={bug.summary}>
+                  {bug.summary}
+                </span>
+                <span className="hidden w-40 shrink-0 truncate text-xs text-slate-600 md:block" title={bug.assignedTo?.email}>
+                  {bug.assignedTo?.name ?? 'Unassigned'}
+                </span>
+                {bug.triage && <SeverityPill severity={bug.triage.severity} />}
+                <span className="w-16 shrink-0 text-right text-xs text-slate-600">{timeAgo(bug.lastChangeTime)}</span>
+              </Link>
+            ))
+          )}
+        </div>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader>

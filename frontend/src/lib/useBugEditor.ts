@@ -80,7 +80,8 @@ export const FIELD_LABELS: Record<DraftKey, string> = {
   flags: 'Flags',
 };
 
-export const OPEN_STATUSES = new Set(['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS']);
+/** Fallback until Bugzilla's workflow has loaded; the live list comes from meta (is_open per status). */
+export const OPEN_STATUSES = new Set(['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS', 'REOPENED']);
 
 const LIST_KEYS = ['cc', 'dependsOn', 'blocks', 'seeAlso', 'alias', 'keywords', 'groups'] as const;
 type ListKey = (typeof LIST_KEYS)[number];
@@ -174,12 +175,18 @@ export interface BugEditor {
   /** The product the draft currently points at (for component/version choices). */
   draftProduct?: Product;
   needsResolution: boolean;
+  commentRequired: boolean;
   isDuplicate: boolean;
   lockAssignee: boolean;
   isClosed: boolean;
 }
 
-export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Product[] | undefined): BugEditor {
+export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Product[] | undefined, canTriage = false): BugEditor {
+  // Which statuses are open, per Bugzilla - so a status added later (REOPENED) needs no code change.
+  const openSet = useMemo(
+    () => (meta?.workflow.length ? new Set(meta.workflow.filter((w) => w.isOpen).map((w) => w.status)) : OPEN_STATUSES),
+    [meta]
+  );
   const baseline = useMemo(() => toDraft(bug), [bug]);
   const [draft, setDraft] = useState<BugDraft>(baseline);
   const [comment, setComment] = useState({ body: '', isPrivate: false });
@@ -211,11 +218,11 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
         const next = { ...prev, [key]: value };
         // Choosing a closing status drops a pending reassignment: the backend
         // refuses to change the assignee while closing (it records who fixed it).
-        if (key === 'status' && !OPEN_STATUSES.has(String(value))) {
+        if (key === 'status' && !openSet.has(String(value))) {
           next.assignedTo = baseline.assignedTo;
           next.resetAssignedTo = false;
         }
-        if (key === 'status' && OPEN_STATUSES.has(String(value))) next.resolution = '';
+        if (key === 'status' && openSet.has(String(value))) next.resolution = '';
         if (key === 'status' && String(value) === baseline.status) next.resolution = baseline.resolution;
         // A new product invalidates its dependants unless the same name exists there too.
         if (key === 'product') {
@@ -238,7 +245,7 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
         return next;
       });
     },
-    [baseline, products]
+    [baseline, products, openSet]
   );
 
   const dirty = useMemo(
@@ -247,7 +254,11 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
   );
 
   const isClosed = !bug.isOpen;
-  const needsResolution = !OPEN_STATUSES.has(draft.status);
+  const needsResolution = !openSet.has(draft.status);
+  /** Bugzilla requires a comment for this move (REOPENED: what still fails). */
+  const commentRequired =
+    draft.status !== baseline.status &&
+    Boolean(meta?.workflow.find((w) => w.status === bug.status)?.commentRequiredTo?.includes(draft.status));
   const isDuplicate = needsResolution && draft.resolution === 'DUPLICATE';
   const lockAssignee = isClosed || needsResolution;
 
@@ -256,6 +267,12 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
     if (!draft.summary.trim()) e.summary = 'A bug needs a summary.';
     else if (draft.summary.length > 255) e.summary = 'Keep the summary under 255 characters.';
     if (needsResolution && !draft.resolution) e.resolution = `Choose how this bug was resolved.`;
+    if (commentRequired && !comment.body.trim()) {
+      e.status =
+        draft.status === 'REOPENED'
+          ? 'Reopening needs a comment: say what still fails after the fix.'
+          : `Moving to ${draft.status.replace('_', ' ')} needs a comment.`;
+    }
     if (isDuplicate) {
       const ref = parseBugRef(draft.dupeOf);
       if (!draft.dupeOf.trim()) e.dupeOf = 'Enter the bug this one duplicates.';
@@ -276,13 +293,14 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
       }
     }
     return e;
-  }, [draft, baseline, bug.id, bug.timeTracking, needsResolution, isDuplicate]);
+  }, [draft, baseline, bug.id, bug.timeTracking, needsResolution, isDuplicate, commentRequired, comment.body]);
 
   const allowedStatuses = useMemo(() => {
     const node = meta?.workflow.find((w) => w.status === bug.status);
     const targets = node ? node.canChangeTo : (meta?.statuses ?? []);
-    return [bug.status, ...targets.filter((s) => s !== bug.status)];
-  }, [meta, bug.status]);
+    // Reopening is the tester's call (the backend enforces it too).
+    return [bug.status, ...targets.filter((s) => s !== bug.status && (canTriage || s !== 'REOPENED'))];
+  }, [meta, bug.status, canTriage]);
 
   const reset = useCallback(() => {
     setDraft(baseline);
@@ -360,6 +378,7 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
     allowedStatuses,
     draftProduct,
     needsResolution,
+    commentRequired,
     isDuplicate,
     lockAssignee,
     isClosed,

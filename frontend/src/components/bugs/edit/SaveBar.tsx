@@ -67,6 +67,11 @@ export function SaveBar({
     if (showComment) commentRef.current?.focus();
   }, [showComment]);
 
+  // A move that needs a comment (reopening) opens the comment box by itself.
+  useEffect(() => {
+    if (editor.commentRequired) setShowComment(true);
+  }, [editor.commentRequired]);
+
   if (!visible) return null;
 
   const count = labels.length;
@@ -94,7 +99,7 @@ export function SaveBar({
         {showComment && (
           <div className="border-b border-slate-200/70 px-4 pt-3">
             <label htmlFor="save-comment" className="text-xs font-medium text-slate-600">
-              Comment - saved with this change, so the history says why
+              {editor.commentRequired ? (editor.draft.status === 'REOPENED' ? 'Why reopen? What still fails after the fix - required' : 'Comment - required for this status change') : 'Comment - saved with this change, so the history says why'}
             </label>
             <textarea
               id="save-comment"

@@ -104,7 +104,7 @@ function BugDetailView({
   onReload: () => Promise<unknown>;
 }) {
   const { bug, comments, attachments } = data;
-  const editor = useBugEditor(bug, meta, products);
+  const editor = useBugEditor(bug, meta, products, canTriage);
   const updateBug = useUpdateBug(bug.id);
   const restore = useRestoreBugs();
   const { toast } = useToast();

@@ -122,7 +122,10 @@ export async function restoreBugs(
     const comment = { body: `Restored by ${actor}.` };
     const groups = { remove: [DELETED_GROUP] };
 
-    if (!previous || ['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS'].includes(previous.status)) {
+    if (previous?.status === 'REOPENED') {
+      // RESOLVED -> REOPENED is allowed directly (it needs a comment, which this carries).
+      await client.put(`/bug/${bug.id}`, { ids: [bug.id], status: 'REOPENED', groups, comment });
+    } else if (!previous || ['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS'].includes(previous.status)) {
       // Reopen. RESOLVED cannot jump straight to IN_PROGRESS in this workflow,
       // so an in-progress bug comes back via CONFIRMED in a second step.
       const target = previous?.status === 'UNCONFIRMED' ? 'UNCONFIRMED' : OPEN_FALLBACK;

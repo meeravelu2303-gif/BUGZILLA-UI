@@ -77,7 +77,14 @@ export function MetadataSidebar({
             label="Status"
             value={draft.status}
             onChange={(e) => set('status', e.target.value)}
-            hint={editor.allowedStatuses.length <= 1 ? 'No other status is allowed from here by the workflow.' : undefined}
+            error={editor.errors.status}
+            hint={
+              editor.allowedStatuses.length <= 1
+                ? 'No other status is allowed from here by the workflow.'
+                : !bug.isOpen && !editor.allowedStatuses.includes('REOPENED') && editor.draft.status === bug.status
+                  ? 'Still broken? Ask a tester to reopen it.'
+                  : undefined
+            }
           >
             {withCurrent(editor.allowedStatuses, draft.status).map((s) => (
               <option key={s} value={s}>

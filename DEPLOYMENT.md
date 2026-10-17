@@ -66,6 +66,14 @@ Bugzilla's REST API cannot write, so they're set up once in Bugzilla's own admin
    in `canconfirm`, i.e. testers and admins), and enables that group on every
    product. Idempotent — it only adds what is missing. Without it, Delete in the
    app is refused by Bugzilla.
+8. **REOPENED status** — run once:
+   ```
+   cd C:\Bugzilla
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-reopened-status.pl <admin login>
+   ```
+   Adds the open status `REOPENED` with RESOLVED/VERIFIED → REOPENED (comment
+   required) and REOPENED → CONFIRMED / IN_PROGRESS / RESOLVED. The app lets only
+   testers and admins reopen, and counts reopened bugs on the dashboard.
 
 > You can view all of the above **inside this app** later (Administration →
 > Field Values / Status Workflow / Groups / Parameters) — read-only, with an

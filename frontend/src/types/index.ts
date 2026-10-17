@@ -124,6 +124,8 @@ export interface WorkflowTransition {
   status: string;
   isOpen: boolean;
   canChangeTo: string[];
+  /** Targets that need a comment (Bugzilla's per-transition "comment required"). */
+  commentRequiredTo?: string[];
 }
 
 export interface BugMeta {

@@ -108,12 +108,29 @@ const sameInstant = (a: string, b: string) => Date.parse(a) === Date.parse(b);
  * Zod schema. Each one turns what would be a vague upstream refusal - or worse,
  * a silent wrong result - into a message naming the field to fix.
  */
+export const REOPENED = 'REOPENED';
+
 export async function validateBugUpdate(
   client: BugzillaClient,
   current: CurrentBug,
   input: UpdateBugInput,
-  features: BugFeatures
+  features: BugFeatures,
+  actor: { canTriage: boolean } = { canTriage: false }
 ): Promise<void> {
+  /*
+   * Reopening says "the fix did not work". That verdict belongs to whoever re-tested it - testers
+   * and admins - and it needs the evidence: what is still broken. Bugzilla requires the comment
+   * too (comment_required on the transition), but its refusal does not say which field is missing.
+   */
+  if (input.status === REOPENED && current.status !== REOPENED) {
+    if (!actor.canTriage) {
+      throw new AppError(403, 'FORBIDDEN', 'Only testers and admins can reopen a bug. Add a comment saying it still fails, and a tester will reopen it.');
+    }
+    if (!input.comment?.body.trim()) {
+      throw new AppError(400, 'VALIDATION', 'Say why you are reopening it - what still fails after the fix - in the comment.');
+    }
+  }
+
   // Mid-air collision: someone saved this bug after the editor loaded it.
   if (input.lastChangeTime && !sameInstant(input.lastChangeTime, current.last_change_time)) {
     throw new AppError(

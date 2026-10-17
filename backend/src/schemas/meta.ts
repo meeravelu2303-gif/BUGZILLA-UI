@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const canChangeToSchema = z.object({ name: z.string() }).passthrough();
+const canChangeToSchema = z.object({ name: z.string(), comment_required: z.boolean().optional() }).passthrough();
 
 const fieldValueSchema = z
   .object({
@@ -25,6 +25,8 @@ export interface WorkflowTransition {
   status: string;
   isOpen: boolean;
   canChangeTo: string[];
+  /** Targets Bugzilla refuses to move to without a comment (e.g. REOPENED: why is it still broken?). */
+  commentRequiredTo: string[];
 }
 
 export interface BugMeta {
@@ -62,6 +64,7 @@ function extractWorkflow(fields: z.infer<typeof fieldSchema>[]): WorkflowTransit
       status: v.name as string,
       isOpen: Boolean(v.is_open),
       canChangeTo: (v.can_change_to ?? []).map((c) => c.name),
+      commentRequiredTo: (v.can_change_to ?? []).filter((c) => c.comment_required).map((c) => c.name),
     }));
 }
 

@@ -1740,7 +1740,7 @@ export function bugsRouter(env: Env): Router {
       const current = currentResp.bugs[0];
       if (!current) throw new AppError(404, 'NOT_FOUND', 'That bug could not be found.');
 
-      await validateBugUpdate(client, current, input, features);
+      await validateBugUpdate(client, current, input, features, { canTriage: req.sessionUser!.permissions.canTriage });
 
       const payload = toBugzillaUpdate(input);
 
