@@ -1,6 +1,6 @@
 import { AlertCircle, AlertOctagon, Bug as BugIcon, CheckCircle2, CircleDot, Loader2, Lock, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useBugCounts, useBugStats, useBugs } from '../api/hooks';
+import { useBugCounts, useBugStats, useBugs, useMeta } from '../api/hooks';
 import { BarListChart, type BarListItem } from '../components/dashboard/BarListChart';
 import { SeverityCategoryMatrix } from '../components/dashboard/SeverityCategoryMatrix';
 import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
@@ -14,6 +14,13 @@ import { CATEGORIES, SEVERITIES, type Category, type Severity } from '../types';
 /** "Recently changed" is the only thing here needing bug records, and it shows six. */
 const RECENT_LIMIT = 6;
 const REOPENED_LIMIT = 8;
+
+/** A bug-list URL with repeated keys (`?status=A&status=B`), which is how the list reads multi-select filters. */
+function listUrl(filters: Record<string, string[]>): string {
+  const q = new URLSearchParams();
+  for (const [key, values] of Object.entries(filters)) for (const v of values) q.append(key, v);
+  return `/bugs?${q.toString()}`;
+}
 
 export function Dashboard() {
   const { data: stats, isLoading, isError, error } = useBugStats();
@@ -38,6 +45,15 @@ export function Dashboard() {
     sortDir: 'desc',
   });
   const reopened = reopenedData?.bugs ?? [];
+
+  /*
+   * Open vs closed straight from Bugzilla's workflow (is_open per status), so the Open tile's list
+   * includes REOPENED - and any status added later - exactly as the count does.
+   */
+  const { data: meta } = useMeta();
+  const workflow = meta?.workflow ?? [];
+  const openStatuses = workflow.length ? workflow.filter((w) => w.isOpen).map((w) => w.status) : ['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS', 'REOPENED'];
+  const closedStatuses = workflow.length ? workflow.filter((w) => !w.isOpen).map((w) => w.status) : ['RESOLVED', 'VERIFIED'];
   const reopenedTotal = reopenedCount?.counts.total;
 
   /*
@@ -100,10 +116,17 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard icon={BugIcon} label="Total bugs" value={stats.total} tone="brand" />
-          <StatCard icon={CircleDot} label="Open" value={stats.open} tone="amber" />
-          <StatCard icon={CheckCircle2} label="Resolved" value={stats.resolved} tone="emerald" />
-          <StatCard icon={AlertOctagon} label="Critical (P0) open" value={loadBySeverity?.Critical ?? 0} tone="rose" />
+          {/* Every tile opens the list it counts, filtered the same way, so the number and the list agree. */}
+          <StatCard icon={BugIcon} label="Total bugs" value={stats.total} tone="brand" to="/bugs" />
+          <StatCard icon={CircleDot} label="Open" value={stats.open} tone="amber" to={listUrl({ status: openStatuses })} />
+          <StatCard icon={CheckCircle2} label="Resolved" value={stats.resolved} tone="emerald" to={listUrl({ status: closedStatuses })} />
+          <StatCard
+            icon={AlertOctagon}
+            label="Critical (P0) open"
+            value={loadBySeverity?.Critical ?? 0}
+            tone="rose"
+            to={listUrl({ severity: ['Critical'], status: openStatuses })}
+          />
           <StatCard icon={RotateCcw} label="Reopened" value={reopenedTotal ?? '…'} tone="rose" to="/bugs?status=REOPENED" hint="Fixes that didn't hold" />
         </div>
       )}
