@@ -1,6 +1,8 @@
 import { Mail, KeyRound, Bookmark, ShieldCheck, SlidersHorizontal, User } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useMe, useMeta } from '../api/hooks';
+import { ChangePasswordCard } from '../components/account/ChangePasswordCard';
 import { EmbeddedNative } from '../components/layout/EmbeddedNative';
 import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -22,17 +24,23 @@ export function Preferences() {
   const [tab, setTab] = useState<string | null>(null);
 
   const active = PREFERENCE_TABS.find((t) => t.tab === tab) ?? null;
+  const location = useLocation();
+
+  // /preferences#password (the profile card's shortcut, or a bookmark) lands on the form.
+  useEffect(() => {
+    if (location.hash === '#password') document.getElementById('password')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [location.hash]);
 
   return (
     <div className="mx-auto max-w-[1100px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader title="Preferences" description="Your account, notifications, saved searches and API keys." />
 
       <Card className="mb-6">
-        <CardBody className="flex items-center gap-4">
+        <CardBody className="flex flex-wrap items-center gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-100 text-lg font-semibold text-brand-800">
             {initials(user?.realName || user?.email || '?')}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="flex items-center gap-2 text-base font-semibold text-slate-900">
               <User className="h-4 w-4 text-slate-400" />
               {user?.realName || '—'}
@@ -51,8 +59,17 @@ export function Preferences() {
               )}
             </div>
           </div>
+          <a
+            href="#password"
+            className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-full bg-white/80 px-3.5 text-[13px] font-semibold text-slate-700 shadow-card ring-1 ring-inset ring-slate-900/10 hover:bg-white hover:text-slate-900"
+          >
+            <KeyRound className="h-4 w-4" aria-hidden />
+            Change password
+          </a>
         </CardBody>
       </Card>
+
+      <ChangePasswordCard />
 
       <Card>
         <CardHeader>

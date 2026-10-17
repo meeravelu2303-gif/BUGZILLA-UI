@@ -86,6 +86,13 @@ export function useResetPassword() {
   });
 }
 
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+      api.post<{ changed: true; otherSessionsSignedOut: number }>('/auth/change-password', input),
+  });
+}
+
 export function useMeta() {
   return useQuery({
     queryKey: ['meta'],

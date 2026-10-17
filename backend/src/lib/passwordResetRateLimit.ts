@@ -28,6 +28,13 @@ export const RESET_REQUESTS_PER_IP = 10;
 export const RESET_ATTEMPTS_PER_IP = 20;
 
 /**
+ * Change-password attempts per signed-in account per window. A stolen session
+ * cookie must not become a way to guess the account's current password, so
+ * every attempt counts, right or wrong.
+ */
+export const CHANGE_PASSWORD_ATTEMPTS_PER_USER = 5;
+
+/**
  * The policy limit, keyed on the ADDRESS alone: three reset emails per account
  * per rolling 24 hours, whoever asks and from wherever. The per-IP limits above
  * are abuse brakes; this one is the rule people are told about ("3 per day").

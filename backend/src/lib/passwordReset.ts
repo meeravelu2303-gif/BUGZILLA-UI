@@ -23,19 +23,41 @@ import { AppError } from './errors';
 
 const UPSTREAM_TIMEOUT_MS = 15_000;
 
-/** `http://host/bugzilla/rest` -> `http://host/bugzilla/token.cgi`. */
-export function tokenCgiUrlFor(restBase: string): string {
-  return restBase.replace(/\/+$/, '').replace(/\/rest$/, '') + '/token.cgi';
+/** `http://host/bugzilla/rest` + `token.cgi` -> `http://host/bugzilla/token.cgi`. */
+export function cgiUrlFor(restBase: string, script: string): string {
+  return restBase.replace(/\/+$/, '').replace(/\/rest$/, '') + '/' + script;
 }
 
-async function postTokenCgi(restBase: string, fields: Record<string, string>): Promise<string> {
+export function tokenCgiUrlFor(restBase: string): string {
+  return cgiUrlFor(restBase, 'token.cgi');
+}
+
+/**
+ * Fetches one of Bugzilla's HTML pages from the server side.
+ *
+ * `fields` are always sent as a form body, never a query string, so nothing
+ * secret reaches the access log; `query` is for the non-secret selector a
+ * GET needs (e.g. `tab=account`). `cookie` lets the request act as a signed-in
+ * user - see bugzillaLoginCookie.
+ */
+export async function fetchBugzillaPage(
+  restBase: string,
+  script: string,
+  opts: { method?: 'GET' | 'POST'; fields?: Record<string, string>; query?: Record<string, string>; cookie?: string } = {}
+): Promise<string> {
+  const method = opts.method ?? 'POST';
+  const qs = opts.query ? `?${new URLSearchParams(opts.query).toString()}` : '';
+  const headers: Record<string, string> = { Accept: 'text/html' };
+  if (method === 'POST') headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  if (opts.cookie) headers.Cookie = opts.cookie;
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
-    const response = await fetch(tokenCgiUrlFor(restBase), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'text/html' },
-      body: new URLSearchParams(fields).toString(),
+    const response = await fetch(cgiUrlFor(restBase, script) + qs, {
+      method,
+      headers,
+      body: method === 'POST' ? new URLSearchParams(opts.fields ?? {}).toString() : undefined,
       signal: controller.signal,
       redirect: 'manual',
     });
@@ -48,6 +70,10 @@ async function postTokenCgi(restBase: string, fields: Record<string, string>): P
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function postTokenCgi(restBase: string, fields: Record<string, string>): Promise<string> {
+  return fetchBugzillaPage(restBase, 'token.cgi', { fields });
 }
 
 // ---------------------------------------------------------------- page reading
@@ -86,7 +112,7 @@ export function hiddenField(html: string, name: string): string | null {
   return byValueFirst ? decodeEntities(byValueFirst[1]) : null;
 }
 
-function unexpectedPage(html: string, doing: string): AppError {
+export function unexpectedPage(html: string, doing: string): AppError {
   const detail = errorText(html) ?? pageTitle(html) ?? '(no title)';
   console.error(`[password-reset] unexpected Bugzilla page while trying to ${doing}: ${detail}`);
   // `mail_send_error` (code-error.html.tmpl) is the one operators actually hit:

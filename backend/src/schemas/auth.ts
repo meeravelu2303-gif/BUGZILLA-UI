@@ -38,3 +38,26 @@ export const resetPasswordInputSchema = z
   });
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordInputSchema>;
+
+/**
+ * Same length floor as reset (Bugzilla's USER_PASSWORD_MIN_LENGTH); complexity
+ * is Bugzilla's to judge. "Same as current" is refused here because Bugzilla
+ * itself accepts it silently and changes nothing - the user would be told it
+ * worked while their password stayed as it was.
+ */
+export const changePasswordInputSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Enter your current password').max(1024),
+    newPassword: z.string().min(6, 'Password must be at least 6 characters').max(1024),
+    confirmPassword: z.string().max(1024),
+  })
+  .refine((v) => v.confirmPassword === v.newPassword, {
+    path: ['confirmPassword'],
+    message: 'Passwords do not match',
+  })
+  .refine((v) => v.newPassword !== v.currentPassword, {
+    path: ['newPassword'],
+    message: 'The new password must be different from the current one',
+  });
+
+export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;

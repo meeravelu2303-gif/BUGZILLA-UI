@@ -13,8 +13,10 @@ import {
   loginRateLimitKey,
   recordLoginFailure,
 } from '../lib/loginRateLimit';
+import { changeOwnPassword } from '../lib/changePassword';
 import { completePasswordReset, requestPasswordReset, validateResetToken } from '../lib/passwordReset';
 import {
+  CHANGE_PASSWORD_ATTEMPTS_PER_USER,
   RESET_ATTEMPTS_PER_IP,
   RESET_DAILY_WINDOW_MS,
   RESET_REQUESTS_PER_ACCOUNT,
@@ -34,7 +36,13 @@ import {
   sessionsFor,
 } from '../lib/sessionRegistry';
 import { parseInput } from '../lib/validate';
-import { forgotPasswordInputSchema, loginInputSchema, resetPasswordInputSchema, resetTokenSchema } from '../schemas/auth';
+import {
+  changePasswordInputSchema,
+  forgotPasswordInputSchema,
+  loginInputSchema,
+  resetPasswordInputSchema,
+  resetTokenSchema,
+} from '../schemas/auth';
 import { derivePermissions, userDetailSchema } from '../schemas/common';
 import { requireAuth } from '../middleware/auth';
 import type { SessionUser } from '../types/express';
@@ -387,6 +395,36 @@ export function authRouter(env: Env): Router {
       });
       res.status(204).end();
     });
+  });
+
+  /*
+   * Change password, signed in. Bugzilla verifies the current password and
+   * applies its own rules (lib/changePassword.ts), then ends every other login
+   * of the account while keeping this one. The BFF mirrors that for its own
+   * sessions straight away, so another device is signed out on its next
+   * request rather than whenever its Bugzilla call next fails.
+   */
+  router.post('/change-password', requireAuth(env), async (req, res, next) => {
+    try {
+      const user = req.sessionUser!;
+      // Validated first: a mismatched confirmation never reaches Bugzilla, so it costs no attempt.
+      const input = parseInput(changePasswordInputSchema, req.body);
+      const slot = takeSlot(`chpw|${user.bzUserId}`, CHANGE_PASSWORD_ATTEMPTS_PER_USER);
+      if (!slot.allowed) throw tooManyRequests(res, slot.retryAfterSec, 'password change attempts', { scope: 'change-password' });
+
+      await changeOwnPassword(env.BUGZILLA_URL, user.bzToken, input.currentPassword, input.newPassword, user.realName);
+
+      let signedOut = 0;
+      for (const other of sessionsFor(user.bzUserId)) {
+        if (other.sessionId === req.sessionID) continue;
+        destroySession(req, other.sessionId);
+        signedOut++;
+      }
+      console.info(`[auth] password changed for user ${user.bzUserId}; ${signedOut} other session(s) signed out`);
+      res.json({ changed: true, otherSessionsSignedOut: signedOut });
+    } catch (err) {
+      next(err);
+    }
   });
 
   router.get('/me', requireAuth(env), (req, res) => {

@@ -123,6 +123,7 @@ Both pass cleanly with zero errors.
 | POST | `/api/auth/logout` | Clears the session cookie |
 | POST | `/api/auth/forgot-password` | `{ login }` → 202 always; Bugzilla emails a one-time reset link (needs SMTP: `ops/bugzilla/setup-smtp.pl`) |
 | POST | `/api/auth/reset-password/validate` | `{ token }` → `{ valid }` |
+| POST | `/api/auth/change-password` | **Signed in.** `{ currentPassword, newPassword, confirmPassword }` → `{ changed, otherSessionsSignedOut }`; via Bugzilla's Preferences → Account form (current password verified); other devices are signed out |
 | POST | `/api/auth/reset-password` | `{ token, password }` → 204; sets the password through Bugzilla's `token.cgi` |
 | GET | `/api/auth/me` | Current user identity |
 | GET | `/api/bugs` | List with filters, search, sort, pagination |
