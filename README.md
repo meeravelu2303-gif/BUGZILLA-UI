@@ -10,7 +10,7 @@ database and never modifies its Perl/Template-Toolkit code.
 ┌──────────────────┐        ┌──────────────────────┐        ┌────────────────────────┐
 │                  │  HTTPS │                       │  HTTPS │                        │
 │  Browser (React) │───────▶│  BFF (Node/Express)   │───────▶│  Bugzilla 5.2 REST API │
-│  Vite dev :5173  │◀───────│  :4000                │◀───────│  /bugzilla/rest         │
+│  Vite dev :5175  │◀───────│  :4000                │◀───────│  /bugzilla/rest         │
 │                  │ cookie │                       │  token/ │                        │
 └──────────────────┘ session└──────────────────────┘ api_key └────────────────────────┘
                                         │
@@ -50,7 +50,7 @@ behavior.
 
 ## Confirmation: no database drivers
 
-`backend/package.json` dependencies: `cookie-session`, `cors`, `dotenv`, `express`,
+`backend/package.json` dependencies: `cors`, `dotenv`, `express`, `express-session`,
 `zod`. No `mysql`, `mysql2`, `pg`, `sqlite3`, an ORM, or any other DB driver is
 installed or imported anywhere in this repo. Every read, create, update, and comment
 goes through Bugzilla's REST API exclusively (see `backend/src/lib/bugzillaClient.ts`
@@ -100,10 +100,10 @@ npm run dev      # starts on http://localhost:4000
 ```bash
 cd frontend
 npm install
-npm run dev       # starts on http://localhost:5173, proxies /api to :4000
+npm run dev       # starts on http://localhost:5175, proxies /api to :4000
 ```
 
-Open `http://localhost:5173` and sign in with a Bugzilla account's email + password
+Open `http://localhost:5175` and sign in with a Bugzilla account's email + password
 (this calls Bugzilla's own login, not a separate credential store).
 
 ### Type checking

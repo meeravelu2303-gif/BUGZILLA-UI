@@ -9,3 +9,6 @@ coverage/
 
 # Microsoft Office lock files (created while a document is open)
 ~$*
+
+# Server-side session files (SESSION_STORE=file)
+backend/.sessions/

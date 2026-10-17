@@ -59,3 +59,12 @@ export function verifyProof(
 export function proofQueryString(q: SignedQuery): string {
   return new URLSearchParams({ ...q }).toString();
 }
+
+/**
+ * The secret proof links are signed with. Dedicated when configured, so the
+ * session secret can be rotated (signing everyone out) without voiding every
+ * link in every sheet ever exported; otherwise the session secret, as before.
+ */
+export function proofSecret(env: { PROOF_LINK_SECRET?: string; SESSION_SECRET: string }): string {
+  return env.PROOF_LINK_SECRET ?? env.SESSION_SECRET;
+}

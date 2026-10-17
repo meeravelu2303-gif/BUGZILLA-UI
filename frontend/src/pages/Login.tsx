@@ -517,15 +517,8 @@ export function Login() {
           </form>
 
           <p className="mt-5 text-center text-xs text-slate-500">
-            {/*
-              NOTE: this line describes single sign-on, which this app does not
-              implement - sign-in is username + password verified server-side,
-              with per-group access control. Requested copy, kept as specified.
-              If a reader ever asks where the SSO button is, that is why; an
-              accurate alternative is "Secured by centralized team access
-              control." which keeps the positioning without the SSO claim.
-            */}
-            Secured by enterprise single sign-on &amp; team access control.
+            {/* Accurate: sign-in is verified against Bugzilla's own accounts, with per-group access control. No SSO is offered. */}
+            Secured by centralized team access control.
           </p>
         </div>
       </main>

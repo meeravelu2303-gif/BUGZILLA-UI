@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { BugzillaClient } from '../lib/bugzillaClient';
 import { AppError } from '../lib/errors';
-import { touchSession } from '../lib/sessionRegistry';
+import { ensureTracked, touchSession } from '../lib/sessionRegistry';
 import type { Permissions } from '../schemas/common';
 import type { Env } from '../config/env';
 
@@ -47,6 +47,14 @@ export function requireAuth(env: Env) {
      * could be evicted in favour of one they signed into last week and
      * abandoned.
      */
+    // A session restored from the durable store after a restart is adopted here.
+    ensureTracked({
+      sessionId: req.sessionID,
+      userId: session.bzUserId,
+      deviceId: String(session.deviceId ?? ''),
+      createdAt: Date.now(),
+      userAgent: String(req.headers['user-agent'] ?? ''),
+    });
     touchSession(req.sessionID);
     next();
   };

@@ -30,7 +30,7 @@ import { effectiveReport, isReportRevision, normaliseReport, revisionComment, st
 import { buildBugWorkbook, currentComments, type BugProof, type ExportBug, type ExportContext } from '../lib/bugExport';
 import { EMPTY_REPORT, parseDefectReport } from '../lib/defectReport';
 import { AppError } from '../lib/errors';
-import { proofQueryString, signProof } from '../lib/proofLinks';
+import { proofQueryString, proofSecret, signProof } from '../lib/proofLinks';
 import { parseDescription } from '../lib/grouping';
 import { displayNameFor, resolveDisplayNames } from '../lib/displayNames';
 import { parseInput } from '../lib/validate';
@@ -839,7 +839,7 @@ export function bugsRouter(env: Env): Router {
         proofLink: origin
           ? (bugId: number) =>
               `${origin}/api/proof/bug/${bugId}?${proofQueryString(
-                signProof(env.SESSION_SECRET, 'bug', bugId, bugId, proofLinksUntil.getTime())
+                signProof(proofSecret(env), 'bug', bugId, bugId, proofLinksUntil.getTime())
               )}`
           : undefined,
         proofLinksUntil: origin ? proofLinksUntil : undefined,

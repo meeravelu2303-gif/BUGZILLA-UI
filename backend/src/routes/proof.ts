@@ -1,7 +1,7 @@
 import { Router, type Response } from 'express';
 import type { Env } from '../config/env';
 import { BugzillaClient } from '../lib/bugzillaClient';
-import { proofQueryString, signProof, verifyProof } from '../lib/proofLinks';
+import { proofQueryString, proofSecret, signProof, verifyProof } from '../lib/proofLinks';
 
 /**
  * GET /api/proof/bug/:bugId   - a page with every proof file of one bug (screenshots shown, videos playable)
@@ -63,7 +63,7 @@ export function proofRouter(env: Env): Router {
     try {
       const bugId = Number(req.params.bugId);
       const expires = Number(req.query.e);
-      if (verifyProof(env.SESSION_SECRET, 'bug', bugId, req.query) !== bugId) return refuse(res);
+      if (verifyProof(proofSecret(env), 'bug', bugId, req.query) !== bugId) return refuse(res);
 
       const [attachResp, bugResp] = await Promise.all([
         service.get<{ bugs: Record<string, RawAttachment[]> }>(`/bug/${bugId}/attachment`, {
@@ -77,7 +77,7 @@ export function proofRouter(env: Env): Router {
       const title = bugResp.bugs?.[0]?.summary ?? '';
 
       const items = files.map((a) => {
-        const href = `../file/${a.id}?${proofQueryString(signProof(env.SESSION_SECRET, 'file', a.id, bugId, expires))}`;
+        const href = `../file/${a.id}?${proofQueryString(signProof(proofSecret(env), 'file', a.id, bugId, expires))}`;
         const type = a.content_type ?? '';
         const when = String(a.creation_time ?? '')
           .slice(0, 16)
@@ -122,7 +122,7 @@ export function proofRouter(env: Env): Router {
   router.get('/file/:id', async (req, res, next) => {
     try {
       const id = Number(req.params.id);
-      const bugId = verifyProof(env.SESSION_SECRET, 'file', id, req.query);
+      const bugId = verifyProof(proofSecret(env), 'file', id, req.query);
       if (bugId === null) return refuse(res);
 
       const resp = await service.get<{ attachments: Record<string, RawAttachment> }>(`/bug/attachment/${id}`);

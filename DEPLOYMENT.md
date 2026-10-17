@@ -10,7 +10,7 @@ services, verify end-to-end, then roll it out to your team.
 
 ```
 Browser (React)  ──►  BFF (Node/Express)  ──►  Bugzilla 5.2 REST API
-   :5173 dev            :4000                     /bugzilla/rest
+   :5175 dev            :4000                     /bugzilla/rest
 ```
 
 ---
@@ -91,13 +91,27 @@ cp .env.example .env        # Windows: copy .env.example .env
 Edit `backend/.env`:
 
 ```ini
-BUGZILLA_URL=http://localhost/bugzilla/rest   # MUST end in /rest
+BUGZILLA_URL=http://localhost/bugzilla/rest   # MUST end in /rest (calls go to the sibling /jsonrpc.cgi)
 BUGZILLA_API_KEY=<the key from Phase 1 step 6>
 PORT=4000
-SESSION_SECRET=<random string, 16+ chars>     # e.g. openssl rand -hex 32
-COOKIE_SECURE=false                            # true only behind HTTPS
-CORS_ORIGIN=http://localhost:5173
+SESSION_SECRET=<random string, 32+ chars>     # e.g. openssl rand -hex 32
+PROOF_LINK_SECRET=<another random string>     # signs proof links; optional, defaults to SESSION_SECRET
+COOKIE_SECURE=auto                             # auto = Secure when served over HTTPS; true/false to force
+HSTS=false                                     # true once the site is HTTPS end to end
+TRUST_PROXY=false                              # 1 behind one reverse proxy (production), false when direct
+SESSION_STORE=file                             # file (survives restarts) | redis (multi-instance) | memory (dev)
+# SESSION_DIR=D:\bugtracker\sessions           # file store location (default: backend\.sessions)
+# REDIS_URL=redis://127.0.0.1:6379/0           # required for SESSION_STORE=redis
+CORS_ORIGIN=http://localhost:5175
 ```
+
+> **Credentials never travel in URLs.** The BFF talks to Bugzilla through its
+> JSON-RPC endpoint with the user's token (or the service key) in the request
+> body. Bugzilla 5.2's REST transport only accepts credentials as query
+> parameters, which the web server writes to its access log; that is why REST
+> is not used on the wire even though every call site is written against REST
+> paths. Run `ops\apache\harden-access-log.ps1` once so Apache stops logging
+> query strings at all.
 
 Then:
 
@@ -122,13 +136,13 @@ In a **separate** terminal:
 ```bash
 cd frontend
 npm install
-npm run dev        # → http://localhost:5173  (proxies /api to :4000)
+npm run dev        # → http://localhost:5175  (proxies /api to :4000)
 ```
 
-Open **http://localhost:5173** and sign in with a Bugzilla email + password
+Open **http://localhost:5175** and sign in with a Bugzilla email + password
 (this calls Bugzilla's own login — no separate credential store).
 
-Both servers must be running at once: backend on :4000, frontend on :5173.
+Both servers must be running at once: backend on :4000, frontend on :5175.
 
 ---
 
@@ -196,3 +210,20 @@ a UI shortcut — see `README.md` → "Why some admin stays native".
 
 Everything else (bugs, comments, user create/enable-disable, product/component
 **create**) is fully native in the app.
+
+---
+
+## Operations
+
+- **Nightly database backup** — register once from an elevated PowerShell:
+  `powershell -ExecutionPolicy Bypass -File ops\windows\register-backup-task.ps1`
+  (daily 02:00 as SYSTEM; `-At 23:30` to change the time; `-Unregister` to remove).
+  Test a restore into a scratch database at least once.
+- **Health check** — `powershell -ExecutionPolicy Bypass -File ops\health-check.ps1`
+  checks the BFF, the BFF→Bugzilla path, Bugzilla's REST API, the database port, the
+  Apache/MariaDB services, backup freshness and the session store; exit code 1 on any
+  failure. For an external monitor, poll `GET /api/health?deep=1` (200 healthy, 503 not).
+  Quick manual check: `curl -s http://localhost:4000/api/health?deep=1`
+- **Access-log hardening** — `ops\apache\harden-access-log.ps1` (see Phase 2 note).
+- **Sessions** — with `SESSION_STORE=file` a restart keeps users signed in; the files
+  live in `backend\.sessions` (git-ignored, 0600). Delete the folder to sign everyone out.

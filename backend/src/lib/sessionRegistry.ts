@@ -123,6 +123,25 @@ export function sessionsFor(userId: number): TrackedSession[] {
 }
 
 /** Test seam. Not used by the running server. */
+/**
+ * Re-adopts a session this process has not seen - one created before a restart
+ * and still valid in a durable store (file or Redis). Without this the registry
+ * would start empty after every restart, so surviving sessions would neither
+ * count towards the device limit nor be evictable until the user signed in
+ * again. Called on every authenticated request; a no-op once known.
+ */
+export function ensureTracked(session: Omit<TrackedSession, 'lastSeenAt'> & { userId: number }): void {
+  if (ownerOf.has(session.sessionId)) return;
+  const { userId, ...tracked } = session;
+  let sessions = byUser.get(userId);
+  if (!sessions) {
+    sessions = new Map<string, TrackedSession>();
+    byUser.set(userId, sessions);
+  }
+  sessions.set(tracked.sessionId, { ...tracked, lastSeenAt: Date.now() });
+  ownerOf.set(tracked.sessionId, userId);
+}
+
 export function resetSessionRegistry(): void {
   byUser.clear();
   ownerOf.clear();

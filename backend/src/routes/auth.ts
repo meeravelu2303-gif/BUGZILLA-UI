@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { SESSION_COOKIE_NAME, type Env } from '../config/env';
-import { loginToBugzilla } from '../lib/bugzillaAuth';
+import { loginToBugzilla, logoutFromBugzilla } from '../lib/bugzillaAuth';
 import { BugzillaClient } from '../lib/bugzillaClient';
 import { AppError } from '../lib/errors';
 import {
@@ -205,7 +205,7 @@ export function authRouter(env: Env): Router {
       res.cookie(DEVICE_COOKIE_NAME, deviceId, {
         httpOnly: true,
         sameSite: 'lax',
-        secure: env.COOKIE_SECURE,
+        secure: env.COOKIE_SECURE === 'true' || (env.COOKIE_SECURE === 'auto' && req.secure),
         path: '/',
         maxAge: DEVICE_COOKIE_MAX_AGE_MS,
       });
@@ -229,10 +229,14 @@ export function authRouter(env: Env): Router {
     }
   });
 
-  router.post('/logout', (req, res, next) => {
+  router.post('/logout', async (req, res, next) => {
     // Free this device's slot immediately. Signing out on one device must not
     // disturb the same account's other sessions - they keep their own records.
     forgetSession(req.sessionID);
+    // Invalidate the Bugzilla token too, so it cannot be replayed from a backup
+    // or log after the cookie is gone. Best effort - see logoutFromBugzilla.
+    const token = req.session.bzToken;
+    if (token) await logoutFromBugzilla(env.BUGZILLA_URL, token);
     req.session.destroy((err) => {
       if (err) {
         next(err);
@@ -241,7 +245,7 @@ export function authRouter(env: Env): Router {
       res.clearCookie(SESSION_COOKIE_NAME, {
         httpOnly: true,
         sameSite: 'lax',
-        secure: env.COOKIE_SECURE,
+        secure: env.COOKIE_SECURE === 'true' || (env.COOKIE_SECURE === 'auto' && req.secure),
         path: '/',
       });
       res.status(204).end();
