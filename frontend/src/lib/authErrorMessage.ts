@@ -141,3 +141,53 @@ export function getSignInErrorMessage(err: unknown): string {
 
   return err.message ? stripNetworkDetail(err.message) : UNEXPECTED;
 }
+
+const RESET_UNEXPECTED = 'Something went wrong. Please try again.';
+
+/** "at 6:21 PM" today, "tomorrow at 6:21 PM", or "on 19 Oct at 6:21 PM" - in the reader's locale. */
+function formatRetryMoment(iso: string): string | null {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  if (at.toDateString() === today.toDateString()) return `at ${time}`;
+  if (at.toDateString() === tomorrow.toDateString()) return `tomorrow at ${time}`;
+  return `on ${at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} at ${time}`;
+}
+
+/**
+ * The forgot / reset password pages' counterpart to getSignInErrorMessage.
+ *
+ * Narrower on purpose: there is no credential to be wrong about here, so a
+ * 401 is not a case, and a 400 carries a sentence worth showing verbatim -
+ * Bugzilla's own password rule, or "enter a valid email address".
+ */
+export function getPasswordResetErrorMessage(err: unknown): string {
+  if (!(err instanceof ApiError)) return RESET_UNEXPECTED;
+
+  if (err.status === 429 || err.code === 'RATE_LIMITED') {
+    const seconds = remainingSeconds(err.details);
+
+    // The daily cap: a policy the person should hear in full, with the moment
+    // it lifts as a clock time - "in 1,380 minutes" is not something anyone can plan around.
+    if (err.details?.scope === 'password-reset-daily') {
+      const limit = typeof err.details.limit === 'number' ? err.details.limit : 3;
+      const at = typeof err.details.retryAt === 'string' ? formatRetryMoment(err.details.retryAt) : null;
+      return `Limit reached: ${limit} password reset emails per 24 hours for this address. ${
+        at ? `You can request another ${at}.` : 'Please try again later.'
+      }`;
+    }
+
+    return seconds !== null && seconds > 0
+      ? `Too many attempts. Please try again ${formatCooldown(seconds)}.`
+      : 'Too many attempts. Please wait a few minutes and try again.';
+  }
+
+  if (err.code === 'UPSTREAM_UNREACHABLE' || err.code === 'UPSTREAM_TIMEOUT') {
+    return 'Cannot reach the Bugzilla server right now. Please try again shortly.';
+  }
+
+  return err.message ? stripNetworkDetail(err.message) : RESET_UNEXPECTED;
+}

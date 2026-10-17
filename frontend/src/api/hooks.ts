@@ -57,6 +57,35 @@ export function useLogout() {
   });
 }
 
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: (input: { login: string }) =>
+      api.post<{ accepted: true; cooldownMinutes: number; linkValidDays: number; dailyLimit: number }>('/auth/forgot-password', input),
+  });
+}
+
+/**
+ * POST rather than GET so the token travels in a body - the reset page has
+ * already scrubbed it from its own URL, and it should not reappear in a
+ * query string on the way to the server.
+ */
+export function useValidateResetToken(token: string | null) {
+  return useQuery({
+    queryKey: ['reset-token', token],
+    queryFn: () => api.post<{ valid: boolean }>('/auth/reset-password/validate', { token }),
+    enabled: token !== null,
+    retry: false,
+    staleTime: Infinity,
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: (input: { token: string; password: string; confirmPassword: string }) =>
+      api.post<undefined>('/auth/reset-password', input),
+  });
+}
+
 export function useMeta() {
   return useQuery({
     queryKey: ['meta'],

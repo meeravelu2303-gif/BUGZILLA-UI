@@ -11,6 +11,7 @@
     5. Windows services    Apache2.4, MariaDB
     6. Backup freshness    newest bugzilla-full-*.sql younger than -MaxBackupAgeHours
     7. Session store       the BFF reports its store type (file/redis expected in production)
+    8. Outbound mail       Bugzilla's mail_delivery_method is not None (password resets need it)
 
   Suitable for Task Scheduler (hourly) with an alert on a non-zero exit code, or for a monitor
   that only needs the single URL: <BffUrl>/api/health?deep=1 returns 200 when healthy, 503 otherwise.
@@ -24,6 +25,7 @@ param(
   [string]$BffUrl = 'http://localhost:4000',
   [string]$BugzillaUrl = 'http://localhost',
   [string]$BackupDir = 'D:\TEST-BENCH-AUTOMATIONS\_backups',
+  [string]$BugzillaDir = 'C:\Bugzilla',
   [int]$MaxBackupAgeHours = 26
 )
 
@@ -82,6 +84,17 @@ Report 'Backup task' ($null -ne $task) $(if ($task) { "state $($task.State), nex
 if ($live.body) {
   $store = [string]$live.body.sessionStore
   Report 'Session store' ($store -ne 'memory') $(if ($store -eq 'memory') { 'memory - sessions lost on restart' } else { $store })
+}
+
+$paramsFile = Join-Path $BugzillaDir 'data\params.json'
+if (Test-Path $paramsFile) {
+  try {
+    $bzParams = Get-Content $paramsFile -Raw | ConvertFrom-Json
+    $method = [string]$bzParams.mail_delivery_method
+    Report 'Outbound mail' ($method -ne 'None') $(if ($method -eq 'None') { 'mail_delivery_method None - no reset emails (ops\bugzilla\setup-smtp.pl)' } else { "$method via $($bzParams.smtpserver)" })
+  } catch {
+    Report 'Outbound mail' $false "cannot read $paramsFile"
+  }
 }
 
 "----------------------------------------------------------------"

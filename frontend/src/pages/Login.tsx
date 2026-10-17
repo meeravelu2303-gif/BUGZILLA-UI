@@ -13,7 +13,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useLogin } from '../api/hooks';
 import { UEducateLogo } from '../components/brand/UEducateLogo';
 import { getSignInErrorMessage } from '../lib/authErrorMessage';
@@ -432,9 +432,19 @@ export function Login() {
 
               {/* ---- password ---- */}
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="login-password" className="text-sm font-medium text-slate-700">
-                  Password
-                </label>
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="login-password" className="text-sm font-medium text-slate-700">
+                    Password
+                  </label>
+                  {/* Beside the label, not under the button: it is read at the
+                      moment the password is being remembered, not after a failure. */}
+                  <Link
+                    to="/forgot-password"
+                    className="rounded text-xs font-medium text-[#0d6875] outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[#0d6875]/30"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <div className="relative">
                   <Lock
                     className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${

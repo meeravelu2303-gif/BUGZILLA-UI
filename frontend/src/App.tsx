@@ -6,7 +6,9 @@ import { BugDetail } from './pages/BugDetail';
 import { BugList } from './pages/BugList';
 import { CreateBug } from './pages/CreateBug';
 import { Dashboard } from './pages/Dashboard';
+import { ForgotPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
+import { ResetPassword } from './pages/ResetPassword';
 import { MyBugs } from './pages/MyBugs';
 import { Preferences } from './pages/Preferences';
 import { Reports } from './pages/Reports';
@@ -29,6 +31,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       <Route path="/" element={<Protected><Dashboard /></Protected>} />
       <Route path="/my-bugs" element={<Protected><MyBugs /></Protected>} />

@@ -32,6 +32,18 @@ Equivalently supported (not used, documented for completeness): `X-Bugzilla-API-
 | `login`/`password` invalid on `/login` | 200 (!) | `{"error":true,"code":300,"message":"The login or password you entered is not valid."}` — note: this endpoint returns HTTP 200 even on failure; only the JSON body's `error:true` signals failure. BFF must check body, not just status. |
 | `match` param on `/user` while logged out | 401 | `{"error":true,"code":505,"message":"Logged-out users cannot use the \"match\" argument..."}` |
 
+### BFF password-reset endpoints (added 2026-10-17)
+
+Bugzilla 5.2 has **no WebService method** for forgotten passwords; the only implementation is the HTML flow behind `token.cgi` (`a=reqpw` → emailed token → `a=cfmpw` / `a=chgpw`). The BFF drives it with form POSTs (nothing in query strings) and reads the outcome from the page `<title>` - the one stable marker Bugzilla's templates set per message/error (`backend/src/lib/passwordReset.ts` quotes each title it keys on). Outbound mail must be on (`setup-smtp.pl`); the link in the email points at this app once `setup-password-reset.pl` has installed the custom mail template.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/api/auth/forgot-password` | `{ login }` | **202** `{ accepted: true, cooldownMinutes: 10, linkValidDays: 3, dailyLimit: 3 }` - always, for any well-formed address (existence, disabled state and Bugzilla's 10-minute `too_soon_for_new_token` are logged server-side, never returned). 400 `VALIDATION` for a malformed address; 429 `RATE_LIMITED` (same `details` shape as login: `retryAfterSeconds`, `retryAt`, `windowSeconds`, `scope: 'password-reset'`) above **3 per address per rolling 24 h** (`scope: 'password-reset-daily'`, `limit: 3`; only requests that made Bugzilla issue a token count), 3 per (IP, address) or 10 per IP in 15 min; 502 `UPSTREAM_ERROR` when Bugzilla cannot send the mail (`mail_send_error`) or has `user_verify_class` without `DB`. |
+| POST | `/api/auth/reset-password/validate` | `{ token }` | `{ valid: boolean }` - whether Bugzilla would accept a new password for this token right now (`a=cfmpw` renders the form only for a live token). Lets the page say "expired" before a password is typed. |
+| POST | `/api/auth/reset-password` | `{ token, password, confirmPassword? }` | **204**. 400 `VALIDATION` with `details.reason = 'invalid_token'` (used / expired / cancelled - UI switches to "request a new link") or `'password_rejected'` (Bugzilla's own sentence: `USER_PASSWORD_MIN_LENGTH` = 6, or the `password_complexity` rule). Bugzilla deletes all password tokens and all `logincookies` of the account as part of `chgpw`, so other signed-in devices get a 401 on their next call. Token checks + submissions are capped at 20 per IP per 15 min. |
+
+Token alphabet: `[0-9a-zA-Z]{10}` today (`Bugzilla::Util::generate_random_password`); the BFF accepts `[\w.~-]{6,128}` so a Bugzilla upgrade cannot lock resets out.
+
 **Note on API keys**: Bugzilla 5.2 has no REST endpoint to *generate* an API key — it must be created via the web UI (Preferences → API Keys), which is intentionally protected by a JS-populated CSRF token that cannot be scripted. The key used throughout this contract was generated manually in-browser by the project owner.
 
 ---

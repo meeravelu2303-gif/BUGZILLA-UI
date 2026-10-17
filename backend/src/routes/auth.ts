@@ -13,6 +13,20 @@ import {
   loginRateLimitKey,
   recordLoginFailure,
 } from '../lib/loginRateLimit';
+import { completePasswordReset, requestPasswordReset, validateResetToken } from '../lib/passwordReset';
+import {
+  RESET_ATTEMPTS_PER_IP,
+  RESET_DAILY_WINDOW_MS,
+  RESET_REQUESTS_PER_ACCOUNT,
+  RESET_REQUESTS_PER_ACCOUNT_PER_DAY,
+  RESET_REQUESTS_PER_IP,
+  RESET_WINDOW_MS,
+  checkSlot,
+  clientIp,
+  recordHit,
+  requestedLogin,
+  takeSlot,
+} from '../lib/passwordResetRateLimit';
 import {
   MAX_SESSIONS_PER_USER,
   forgetSession,
@@ -20,7 +34,7 @@ import {
   sessionsFor,
 } from '../lib/sessionRegistry';
 import { parseInput } from '../lib/validate';
-import { loginInputSchema } from '../schemas/auth';
+import { forgotPasswordInputSchema, loginInputSchema, resetPasswordInputSchema, resetTokenSchema } from '../schemas/auth';
 import { derivePermissions, userDetailSchema } from '../schemas/common';
 import { requireAuth } from '../middleware/auth';
 import type { SessionUser } from '../types/express';
@@ -112,8 +126,131 @@ function loginRateLimit(req: Request, res: Response, next: NextFunction): void {
   );
 }
 
+/** 429 in the same shape the login limiter uses, so the client's one cooldown branch covers both. */
+function tooManyRequests(
+  res: Response,
+  retryAfterSec: number,
+  what: string,
+  extra: { windowMs?: number; scope?: string; limit?: number } = {}
+): AppError {
+  const windowMs = extra.windowMs ?? RESET_WINDOW_MS;
+  const retryAt = new Date(Date.now() + retryAfterSec * 1000);
+  const wait =
+    retryAfterSec >= 3600
+      ? `after ${retryAt.toLocaleString('en-GB', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' })}`
+      : `in ${Math.max(1, Math.ceil(retryAfterSec / 60))} minute(s)`;
+  res.setHeader('Retry-After', String(retryAfterSec));
+  return new AppError(429, 'RATE_LIMITED', `Too many ${what}. Try again ${wait}.`, undefined, {
+    retryAfterSeconds: retryAfterSec,
+    retryAt: retryAt.toISOString(),
+    windowSeconds: Math.round(windowMs / 1000),
+    scope: extra.scope ?? 'password-reset',
+    ...(extra.limit !== undefined ? { limit: extra.limit } : {}),
+  });
+}
+
+/**
+ * Caps reset emails per (IP, address) and per IP. Counted up front, success
+ * or not: the cost being limited is the email Bugzilla sends, and that is
+ * incurred before the outcome is known.
+ */
+function forgotPasswordRateLimit(req: Request, res: Response, next: NextFunction): void {
+  const ip = clientIp(req);
+  const perIp = takeSlot(`ip|${ip}`, RESET_REQUESTS_PER_IP);
+  if (!perIp.allowed) return next(tooManyRequests(res, perIp.retryAfterSec, 'password reset requests'));
+  const perAccount = takeSlot(`acct|${ip}|${requestedLogin(req)}`, RESET_REQUESTS_PER_ACCOUNT);
+  if (!perAccount.allowed) return next(tooManyRequests(res, perAccount.retryAfterSec, 'password reset requests for this address'));
+  next();
+}
+
+/** Caps token checks and password submissions per IP, so a link cannot be guessed at. */
+function resetAttemptRateLimit(req: Request, res: Response, next: NextFunction): void {
+  const slot = takeSlot(`attempt|${clientIp(req)}`, RESET_ATTEMPTS_PER_IP);
+  if (!slot.allowed) return next(tooManyRequests(res, slot.retryAfterSec, 'password reset attempts'));
+  next();
+}
+
+/** `m***@example.com` - enough to follow a reset in the server log, not enough to harvest. */
+function maskLogin(login: string): string {
+  const at = login.indexOf('@');
+  return at > 0 ? `${login[0]}***${login.slice(at)}` : '***';
+}
+
 export function authRouter(env: Env): Router {
   const router = Router();
+
+  /*
+   * Forgot password. Always 202 once the input is well formed - whether the
+   * address has an account, is disabled, or asked ten minutes ago is not
+   * revealed to an unauthenticated caller. The real outcome goes to the server
+   * log only. Bugzilla sends the email itself (see lib/passwordReset.ts).
+   */
+  router.post('/forgot-password', forgotPasswordRateLimit, async (req, res, next) => {
+    try {
+      const { login } = parseInput(forgotPasswordInputSchema, req.body);
+
+      // The "3 per day" rule, on the address itself. Checked here, after
+      // validation, so a typo does not spend one of the three.
+      const dailyKey = `day|${login.toLowerCase()}`;
+      const daily = checkSlot(dailyKey, RESET_REQUESTS_PER_ACCOUNT_PER_DAY, RESET_DAILY_WINDOW_MS);
+      if (!daily.allowed) {
+        throw tooManyRequests(res, daily.retryAfterSec, `password reset emails for this address (limit ${RESET_REQUESTS_PER_ACCOUNT_PER_DAY} per 24 hours)`, {
+          windowMs: RESET_DAILY_WINDOW_MS,
+          scope: 'password-reset-daily',
+          limit: RESET_REQUESTS_PER_ACCOUNT_PER_DAY,
+        });
+      }
+
+      const outcome = await requestPasswordReset(env.BUGZILLA_URL, login);
+      console.info(`[auth] password reset requested for ${maskLogin(login)}: ${outcome}`);
+      // Bugzilla sent nothing inside its 10-minute interval, so that attempt is not one of the three.
+      if (outcome !== 'too_soon') recordHit(dailyKey, RESET_DAILY_WINDOW_MS);
+      res.status(202).json({
+        accepted: true,
+        // What the UI tells people to wait before asking again: Bugzilla's own
+        // per-account interval (ACCOUNT_CHANGE_INTERVAL), after which a fresh
+        // token can be issued.
+        cooldownMinutes: 10,
+        // MAX_TOKEN_AGE: how long the emailed link stays valid.
+        linkValidDays: 3,
+        dailyLimit: RESET_REQUESTS_PER_ACCOUNT_PER_DAY,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /*
+   * Is this link still good? Lets the reset page say "expired, request a new
+   * one" before the person types a password, instead of after. The token
+   * travels in the body (never a query string) on both hops.
+   */
+  router.post('/reset-password/validate', resetAttemptRateLimit, async (req, res, next) => {
+    try {
+      const token = parseInput(resetTokenSchema, (req.body as { token?: unknown } | undefined)?.token);
+      const valid = await validateResetToken(env.BUGZILLA_URL, token);
+      res.set('Cache-Control', 'no-store').json({ valid });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /*
+   * Reset password. Bugzilla consumes the token, sets the password and drops
+   * every Bugzilla login session of that account - so any BFF session still
+   * holding one of those tokens fails its next upstream call with a 401 and
+   * the browser is sent back to sign in. No separate eviction is needed here.
+   */
+  router.post('/reset-password', resetAttemptRateLimit, async (req, res, next) => {
+    try {
+      const { token, password } = parseInput(resetPasswordInputSchema, req.body);
+      await completePasswordReset(env.BUGZILLA_URL, token, password);
+      console.info('[auth] password reset completed');
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
 
   router.post('/login', loginRateLimit, async (req, res, next) => {
     const rateKey = loginRateLimitKey(req);

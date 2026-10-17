@@ -74,6 +74,28 @@ Bugzilla's REST API cannot write, so they're set up once in Bugzilla's own admin
    Adds the open status `REOPENED` with RESOLVED/VERIFIED → REOPENED (comment
    required) and REOPENED → CONFIRMED / IN_PROGRESS / RESOLVED. The app lets only
    testers and admins reopen, and counts reopened bugs on the dashboard.
+9. **Outbound email (SMTP)** — needed for "Forgot password" and for bug-change
+   notifications. Out of the box this install has `mail_delivery_method = None`:
+   Bugzilla then *reports* that a reset link was emailed and sends nothing.
+   ```
+   cd C:\Bugzilla
+   set BZ_SMTP_PASSWORD=<app password>
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-smtp.pl --server smtp.gmail.com:465 --ssl ssl --user you@gmail.com --from "Bug Tracker <you@gmail.com>" --test you@example.com
+   ```
+   `--ssl ssl` is SMTPS (port 465); `--ssl starttls` for port 587; `--ssl none` for an
+   internal relay. `--test <address>` sends a real message through the saved settings,
+   so a wrong password shows up here, not in a user's reset attempt. `--status` prints the
+   current settings; `--off` turns mail back off. Gmail/Outlook need an *app password*,
+   not the account password.
+10. **Password reset link → this app** — run once (and again if the app's address changes):
+   ```
+   cd C:\Bugzilla
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-password-reset.pl --app-url http://192.168.0.50:5175
+   ```
+   Installs `template/en/custom/account/password/forgotten-password.txt.tmpl`, so the
+   email Bugzilla sends opens the app's **/reset-password** page instead of Bugzilla's own.
+   The app's Forgot/Reset pages work without this step - the link just lands on
+   Bugzilla's page instead. `--uninstall` restores the default email.
 
 > You can view all of the above **inside this app** later (Administration →
 > Field Values / Status Workflow / Groups / Parameters) — read-only, with an
@@ -225,5 +247,14 @@ Everything else (bugs, comments, user create/enable-disable, product/component
   failure. For an external monitor, poll `GET /api/health?deep=1` (200 healthy, 503 not).
   Quick manual check: `curl -s http://localhost:4000/api/health?deep=1`
 - **Access-log hardening** — `ops\apache\harden-access-log.ps1` (see Phase 2 note).
+- **Password resets** — the app's `/forgot-password` and `/reset-password` pages drive
+  Bugzilla's own `token.cgi` flow from the BFF (no WebService exists for it). Requests are
+  capped at **3 emails per address per 24 hours** (the policy users are told), plus 3 per
+  (device, address) and 10 per device every 15 minutes, on top of Bugzilla's one token per
+  account per 10 minutes; the emailed link lasts 3 days and works once. The
+  BFF always answers "accepted" so the page cannot be used to discover accounts; the real
+  outcome (sent / too soon / disabled) is in the BFF log. A reset also ends every Bugzilla
+  session of that account, so devices still signed in are sent back to the sign-in page.
+  If a user reports no email: `perl -T ops\bugzilla\setup-smtp.pl --status`, then `--test`.
 - **Sessions** — with `SESSION_STORE=file` a restart keeps users signed in; the files
   live in `backend\.sessions` (git-ignored, 0600). Delete the folder to sign everyone out.

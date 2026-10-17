@@ -121,6 +121,9 @@ Both pass cleanly with zero errors.
 |---|---|---|
 | POST | `/api/auth/login` | `{ login, password }` → Bugzilla session token stored server-side |
 | POST | `/api/auth/logout` | Clears the session cookie |
+| POST | `/api/auth/forgot-password` | `{ login }` → 202 always; Bugzilla emails a one-time reset link (needs SMTP: `ops/bugzilla/setup-smtp.pl`) |
+| POST | `/api/auth/reset-password/validate` | `{ token }` → `{ valid }` |
+| POST | `/api/auth/reset-password` | `{ token, password }` → 204; sets the password through Bugzilla's `token.cgi` |
 | GET | `/api/auth/me` | Current user identity |
 | GET | `/api/bugs` | List with filters, search, sort, pagination |
 | GET | `/api/bugs/:id` | Bug + comments + attachment metadata in one call |
