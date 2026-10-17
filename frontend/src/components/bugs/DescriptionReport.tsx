@@ -66,7 +66,7 @@ const BLOCK_ANCHORS = [
   'Evidence attached:',
 ];
 
-function parse(raw: string): Sections | null {
+export function parse(raw: string): Sections | null {
   const lines = raw.replace(/\r/g, '').split('\n');
   const meta: Array<{ label: string; value: string }> = [];
   const summaryLines: string[] = [];

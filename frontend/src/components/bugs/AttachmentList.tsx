@@ -172,6 +172,11 @@ export function AttachmentList({
                 </a>
               </div>
               {editing === a.id && <AttachmentEditor bugId={bugId} attachment={a} privateAllowed={privateAllowed} onDone={() => setEditing(null)} />}
+              {/^image\/(png|jpe?g|gif|webp)$/i.test(a.contentType) && editing !== a.id && (
+                <a href={url} target="_blank" rel="noreferrer" className="ml-12 block w-fit" title={`Open ${a.fileName} full size`}>
+                  <img src={url} alt={a.summary || a.fileName} loading="lazy" className="max-h-48 rounded-lg border border-white/40 object-contain shadow-sm transition-opacity hover:opacity-90" />
+                </a>
+              )}
               {isVideo && editing !== a.id && (
                 // eslint-disable-next-line jsx-a11y/media-has-caption -- test-evidence recordings, no captions to provide
                 <video src={url} controls preload="metadata" className="ml-12 max-h-64 rounded-lg border border-white/40" />

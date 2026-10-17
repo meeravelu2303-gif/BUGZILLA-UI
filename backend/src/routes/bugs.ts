@@ -4,7 +4,7 @@ import { mkdir, stat, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import archiver from 'archiver';
-import { Router, type Request } from 'express';
+import express, { Router, type Request } from 'express';
 import { z } from 'zod';
 import type { Env } from '../config/env';
 import { requireAuth, requirePermission } from '../middleware/auth';
@@ -26,6 +26,7 @@ import { allGroupNames, bugFeatures } from '../lib/bugFeatures';
 import { CURRENT_BUG_FIELDS, toBugzillaUpdate, validateBugUpdate, type CurrentBug } from '../lib/bugUpdate';
 import { groupNameForProduct } from '../lib/productGroups';
 import { DELETED_GROUP, DELETED_RESOLUTION, deletedInfoFrom, restoreBugs, softDeleteBugs } from '../lib/softDelete';
+import { effectiveReport, isReportRevision, normaliseReport, revisionComment, stripRevision, withCategoryTag } from '../lib/reportRevision';
 import { buildBugWorkbook, currentComments, type BugProof, type ExportBug, type ExportContext } from '../lib/bugExport';
 import { EMPTY_REPORT, parseDefectReport } from '../lib/defectReport';
 import { AppError } from '../lib/errors';
@@ -48,6 +49,7 @@ import {
   rawAttachmentSchema,
   rawBugSchema,
   rawCommentSchema,
+  updateReportSchema,
   restoreSchema,
   softDeleteSchema,
   tallyBugCounts,
@@ -356,11 +358,15 @@ async function fetchDescriptions(
         // `count` 0 is the description; fall back to the oldest visible comment
         // when the description itself is private and was filtered out.
         const description = comments.find((c) => c.count === 0) ?? comments[0];
+        // An edited report lives in its newest revision comment (lib/reportRevision.ts); those
+        // revisions are the report itself, so they are neither "Last Comment" nor thread history.
+        const report = effectiveReport(comments);
+        const discussion = comments.filter((c) => !isReportRevision(c.text));
         // The newest visible comment, by Bugzilla's own comment ordering (the API
         // already returns them oldest-first) - not necessarily the description.
-        const last = comments[comments.length - 1];
+        const last = discussion[discussion.length - 1];
         info.set(Number(bugId), {
-          description: description?.text,
+          description: report.text || description?.text,
           lastComment:
             last?.text && last.creator && last.creation_time
               ? {
@@ -371,7 +377,7 @@ async function fetchDescriptions(
               : undefined,
           // A finding QA posts as a comment (a measured root cause, a developer's question answered) is pushed
           // out of "Last Comment" by the next run's dated status note, so the sheet keeps the whole thread too.
-          history: comments
+          history: discussion
             .filter((c) => c !== description && c.text && c.creator && c.creation_time)
             .map((c) => ({ text: c.text!, author: c.creator!, createdAt: c.creation_time! }))
             .reverse(),
@@ -1278,7 +1284,9 @@ export function bugsRouter(env: Env): Router {
       const parsedComments = rawComments
         .map((c) => normalizeComment(rawCommentSchema.parse(c)))
         .sort((a, b) => a.count - b.count);
-      const description = parsedComments.find((c) => c.count === 0)?.text ?? '';
+      // The newest report revision, if the report was ever edited - else the original description.
+      const report = effectiveReport(parsedComments);
+      const description = report.text;
 
       const rawAttachments = attachmentResp.bugs[String(id)] ?? [];
       const parsedAttachments = rawAttachments.map((a) => normalizeAttachment(rawAttachmentSchema.parse(a)));
@@ -1298,7 +1306,13 @@ export function bugsRouter(env: Env): Router {
       const comments = parsedComments.map((c) => ({
         ...c,
         author: displayNameFor(names, c.author),
+        // Revisions are shown as "edited the report" entries, with the version they hold.
+        isReportRevision: isReportRevision(c.text),
+        text: stripRevision(c.text),
       }));
+      const lastEdit = report.latestRevision
+        ? comments.find((c) => c.id === (report.latestRevision as { id: number }).id)
+        : undefined;
       const attachments = parsedAttachments.map((a) => ({
         ...a,
         creator: displayNameFor(names, a.creator),
@@ -1342,6 +1356,11 @@ export function bugsRouter(env: Env): Router {
           availableGroups,
           isDeleted: bug.resolution === DELETED_RESOLUTION,
           deleted,
+          reportHistory: {
+            revisions: report.revisions.length,
+            lastEditedBy: lastEdit?.author ?? null,
+            lastEditedAt: lastEdit?.creationTime ?? null,
+          },
         },
         comments,
         attachments,
@@ -1399,6 +1418,79 @@ export function bugsRouter(env: Env): Router {
       next(err);
     }
   });
+
+  /*
+   * POST /api/bugs/:id/attachments/upload - one file, sent as the raw request body.
+   *
+   * The JSON route above needs the browser to base64 the file first (a third bigger, held in
+   * memory twice) and caps it at 15 MB, which most screen recordings exceed. Here the body is the
+   * file itself, so the browser can report real upload progress, and the cap is Bugzilla's own
+   * `maxattachmentsize` (50 MB on this instance). Metadata rides in headers:
+   *   Content-Type    the file's type          X-File-Name  the name, URI-encoded
+   *   X-Summary       description (optional)   X-Comment    a comment to post with it (optional)
+   */
+  router.post(
+    '/:id/attachments/upload',
+    auth,
+    express.raw({ type: () => true, limit: '60mb' }),
+    async (req, res, next) => {
+      try {
+        const { id } = parseInput(idParamSchema, req.params);
+        const client = req.bugzilla!;
+        const body = req.body as Buffer;
+        if (!Buffer.isBuffer(body) || body.length === 0) {
+          throw new AppError(400, 'VALIDATION', 'The file is empty.');
+        }
+        const { maxAttachmentKb } = await bugFeatures(env);
+        if (body.length > maxAttachmentKb * 1024) {
+          throw new AppError(
+            413,
+            'VALIDATION',
+            `That file is ${(body.length / 1024 / 1024).toFixed(1)} MB; Bugzilla accepts up to ${Math.round(maxAttachmentKb / 1024)} MB per file.`
+          );
+        }
+
+        const header = (name: string) => {
+          const raw = req.get(name);
+          if (!raw) return '';
+          try {
+            return decodeURIComponent(raw).trim();
+          } catch {
+            return raw.trim();
+          }
+        };
+        // Only the base name: a path in the name would end up in Bugzilla and in exported zips.
+        const fileName = header('X-File-Name').split(/[\\/]/).pop()?.slice(0, 255) || 'attachment';
+        const summary = header('X-Summary').slice(0, 255) || fileName;
+        const comment = header('X-Comment').slice(0, 65535);
+        const contentType = /^[\w.+-]+\/[\w.+-]+/.exec(req.get('Content-Type') ?? '')?.[0] ?? 'application/octet-stream';
+
+        const current = await client.get<{ bugs: { resolution: string }[] }>(`/bug/${id}`, { include_fields: 'resolution' });
+        if (!current.bugs[0]) throw new AppError(404, 'NOT_FOUND', 'That bug could not be found.');
+        if (current.bugs[0].resolution === DELETED_RESOLUTION) {
+          throw new AppError(409, 'CONFLICT', 'This bug is deleted. Restore it before adding files.');
+        }
+
+        const created = await client.post<{ ids: number[] }>(`/bug/${id}/attachment`, {
+          ids: [id],
+          data: body.toString('base64'),
+          file_name: fileName,
+          content_type: contentType,
+          summary,
+          ...(comment ? { comment } : {}),
+        });
+        const attachmentId = created.ids?.[0];
+        const after = await client.get<{ attachments: Record<string, unknown> }>(`/bug/attachment/${attachmentId}`, {
+          exclude_fields: 'data',
+        });
+        const attachment = normalizeAttachment(rawAttachmentSchema.parse(after.attachments[String(attachmentId)]));
+        const names = await resolveDisplayNames(client, [attachment.creator]);
+        res.status(201).json({ attachment: { ...attachment, creator: displayNameFor(names, attachment.creator) } });
+      } catch (err) {
+        next(err);
+      }
+    }
+  );
 
   // PATCH /api/bugs/:id/attachments/:attachmentId - description, file name, type, obsolete/patch/private.
   router.patch('/:id/attachments/:attachmentId', auth, async (req, res, next) => {
@@ -1551,6 +1643,62 @@ export function bugsRouter(env: Env): Router {
     const u = req.sessionUser!;
     return u.realName ? `${u.realName} (${u.email})` : u.email;
   };
+
+  /*
+   * PUT /api/bugs/:id/report - rewrite the bug report (Expected, Actual, curl, How to fix, ...).
+   * Stored as a revision comment, since Bugzilla cannot edit the description itself; the category
+   * goes to the whiteboard's [cat:] tag in the same update, so the history shows ONE change.
+   */
+  router.put('/:id/report', auth, async (req, res, next) => {
+    try {
+      const { id } = parseInput(idParamSchema, req.params);
+      const input = parseInput(updateReportSchema, req.body);
+      const client = req.bugzilla!;
+
+      const [currentResp, commentResp] = await Promise.all([
+        client.get<{ bugs: { id: number; last_change_time: string; resolution: string; whiteboard?: string }[] }>(`/bug/${id}`, {
+          include_fields: 'id,last_change_time,resolution,whiteboard',
+        }),
+        client.get<{ bugs: Record<string, { comments: { text: string; count: number }[] }> }>(`/bug/${id}/comment`),
+      ]);
+      const current = currentResp.bugs[0];
+      if (!current) throw new AppError(404, 'NOT_FOUND', 'That bug could not be found.');
+      if (current.resolution === DELETED_RESOLUTION) {
+        throw new AppError(409, 'CONFLICT', 'This bug is deleted. Restore it before editing.');
+      }
+      const { text: existing, revisions } = effectiveReport(commentResp.bugs[String(id)]?.comments ?? []);
+      if (input.baseRevisions !== undefined && revisions.length !== input.baseRevisions) {
+        throw new AppError(
+          409,
+          'CONFLICT',
+          'Someone else edited this bug report while you were editing it. Your edits are kept - save again to replace theirs (theirs stays in the history).',
+          undefined,
+          { reason: 'MID_AIR_COLLISION', revisions: revisions.length }
+        );
+      }
+      const whiteboard = current.whiteboard ?? '';
+      const nextWhiteboard = input.category ? withCategoryTag(whiteboard, input.category) : whiteboard;
+      const textChanged = normaliseReport(input.text) !== normaliseReport(existing);
+      const categoryChanged = nextWhiteboard !== whiteboard;
+      if (!textChanged && !categoryChanged) {
+        throw new AppError(400, 'VALIDATION', 'Nothing changed - the report and category are the same as before.');
+      }
+
+      const report = normaliseReport(input.text);
+      await client.put(`/bug/${id}`, {
+        ids: [id],
+        ...(categoryChanged ? { whiteboard: nextWhiteboard } : {}),
+        ...(textChanged
+          ? { comment: { body: revisionComment(input.note ? `${report}\n\nEdit note: ${input.note}` : report) } }
+          : input.note
+            ? { comment: { body: input.note } }
+            : {}),
+      });
+      res.json({ textChanged, categoryChanged });
+    } catch (err) {
+      next(err);
+    }
+  });
 
   router.post('/delete', auth, triage, async (req, res, next) => {
     try {

@@ -18,6 +18,17 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return;
   }
 
+  // body-parser's own refusal of an oversized upload: a readable 413, not "something went wrong".
+  if ((err as { type?: string })?.type === 'entity.too.large') {
+    res.status(413).json({
+      error: true,
+      status: 413,
+      code: 'VALIDATION',
+      message: 'That file is too large to upload.',
+    });
+    return;
+  }
+
   if (err instanceof ZodError) {
     res.status(502).json({
       error: true,

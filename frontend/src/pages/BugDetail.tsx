@@ -1,4 +1,6 @@
-import { AlertCircle, ArchiveRestore, ArrowLeft, Layers, Trash2, User } from 'lucide-react';
+import { AlertCircle, ArchiveRestore, ArrowLeft, ImagePlus, Layers, Pencil, Trash2, User } from 'lucide-react';
+import { AttachmentUploader } from '../components/bugs/AttachmentUploader';
+import { ReportEditor } from '../components/bugs/ReportEditor';
 import { useCallback, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
@@ -108,6 +110,8 @@ function BugDetailView({
   const { toast } = useToast();
   const [conflict, setConflict] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editingReport, setEditingReport] = useState(false);
+  const [addingFiles, setAddingFiles] = useState(false);
   const isDeleted = Boolean(bug.isDeleted);
 
   async function onRestore() {
@@ -295,23 +299,63 @@ function BugDetailView({
             </Card>
           )}
 
-          <Card>
+          <Card className={editingReport ? 'ring-2 ring-brand-500/40' : undefined}>
             <CardHeader>
-              <CardTitle>Description</CardTitle>
+              <div className="min-w-0">
+                <CardTitle>{editingReport ? 'Edit bug report' : 'Description'}</CardTitle>
+                {!editingReport && bug.reportHistory && bug.reportHistory.revisions > 0 && (
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Edited by {bug.reportHistory.lastEditedBy}
+                    {bug.reportHistory.lastEditedAt && <> · {formatDateTime(bug.reportHistory.lastEditedAt)}</>}
+                    {bug.reportHistory.revisions > 1 && <> · {bug.reportHistory.revisions} revisions</>} - earlier versions are in the comments.
+                  </p>
+                )}
+              </div>
+              {!editingReport && !isDeleted && (
+                <Button size="sm" variant="secondary" onClick={() => setEditingReport(true)}>
+                  <Pencil className="h-3.5 w-3.5" /> Edit report
+                </Button>
+              )}
             </CardHeader>
             <CardBody>
-              <DescriptionReport description={bug.description ?? ''} />
+              {editingReport ? (
+                <ReportEditor bug={bug} onClose={() => setEditingReport(false)} />
+              ) : (
+                <DescriptionReport description={bug.description ?? ''} />
+              )}
             </CardBody>
           </Card>
 
-          {attachments.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Attachments ({attachments.length})</CardTitle>
-              </CardHeader>
+          {/* Always shown: a bug filed without proof is exactly the one that needs a way to add it. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Attachments{attachments.length > 0 && ` (${attachments.length})`}
+              </CardTitle>
+              {!isDeleted && attachments.length > 0 && !addingFiles && (
+                <Button size="sm" variant="secondary" onClick={() => setAddingFiles(true)}>
+                  <ImagePlus className="h-3.5 w-3.5" /> Add files
+                </Button>
+              )}
+            </CardHeader>
+            {attachments.length > 0 && (
               <AttachmentList bugId={bug.id} attachments={attachments} privateAllowed={meta?.features.privateComments} />
-            </Card>
-          )}
+            )}
+            {!isDeleted && (attachments.length === 0 || addingFiles) && (
+              <CardBody className={attachments.length > 0 ? 'border-t border-white/30' : undefined}>
+                {attachments.length === 0 && (
+                  <p className="mb-3 text-sm text-slate-600">No screenshots or videos yet. Add the proof a developer needs to see the problem.</p>
+                )}
+                <AttachmentUploader
+                  bugId={bug.id}
+                  maxBytes={(meta?.features.maxAttachmentKb ?? 51200) * 1024}
+                  compact={attachments.length > 0}
+                  onClose={attachments.length > 0 ? () => setAddingFiles(false) : undefined}
+                />
+              </CardBody>
+            )}
+            {isDeleted && attachments.length === 0 && <CardBody className="text-sm text-slate-500">No attachments.</CardBody>}
+          </Card>
 
           <Card>
             <CardHeader>

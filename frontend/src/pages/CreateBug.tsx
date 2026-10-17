@@ -1,7 +1,7 @@
 import { Check, Eye, FileText, MonitorSmartphone, Paperclip, Plus, Server, Sparkles, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, ApiError } from '../api/client';
+import { ApiError } from '../api/client';
 import { useAssignableUsers, useCreateBug, useMe, useProducts } from '../api/hooks';
 import { ClassificationPicker } from '../components/bugs/ClassificationPicker';
 import { DescriptionReport } from '../components/bugs/DescriptionReport';
@@ -28,19 +28,11 @@ import {
   type BugReportInput,
   type SeverityLevel,
 } from '../lib/bugTemplate';
+import { uploadAttachment } from '../lib/uploadAttachment';
 import { cn } from '../lib/utils';
 
-/** Each attachment goes up as its own request; the backend caps one at 15 MB. */
-const MAX_FILE_BYTES = 15 * 1024 * 1024;
-
-function readAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''));
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the file.'));
-    reader.readAsDataURL(file);
-  });
-}
+/** Each attachment goes up as its own request, as raw bytes; Bugzilla's own cap is 50 MB a file. */
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -202,7 +194,7 @@ export function CreateBug() {
     if (!list) return;
     const incoming = Array.from(list);
     const tooBig = incoming.filter((f) => f.size > MAX_FILE_BYTES);
-    setFileError(tooBig.length ? `${tooBig.map((f) => f.name).join(', ')} exceed${tooBig.length === 1 ? 's' : ''} the 15 MB limit.` : '');
+    setFileError(tooBig.length ? `${tooBig.map((f) => f.name).join(', ')} exceed${tooBig.length === 1 ? 's' : ''} the 50 MB limit.` : '');
     setFiles((prev) => [...prev, ...incoming.filter((f) => f.size <= MAX_FILE_BYTES && !prev.some((p) => p.name === f.name))]);
   }
 
@@ -283,12 +275,7 @@ export function CreateBug() {
     for (const file of files) {
       setUploading(file.name);
       try {
-        await api.post(`/bugs/${bugId}/attachments`, {
-          fileName: file.name,
-          contentType: file.type || 'application/octet-stream',
-          data: await readAsBase64(file),
-          summary: `Evidence: ${file.name}`,
-        });
+        await uploadAttachment(bugId, file, { summary: `Evidence: ${file.name}` });
       } catch {
         failed.push(file.name);
       }
@@ -691,7 +678,7 @@ export function CreateBug() {
                 <span>
                   <span className="font-medium text-brand-700">Choose files</span> - screenshot, video, HAR or log
                 </span>
-                <span className="text-xs text-slate-500">Up to 15 MB each</span>
+                <span className="text-xs text-slate-500">Up to 50 MB each</span>
                 <input
                   type="file"
                   multiple

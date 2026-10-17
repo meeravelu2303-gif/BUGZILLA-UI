@@ -556,6 +556,22 @@ export const updateBugSchema = z
     message: 'Choose a QA contact or reset to the default - not both.',
   });
 
+/** The whole bug report, rewritten (see lib/reportRevision.ts), plus its category. */
+export const updateReportSchema = z
+  .object({
+    text: z.string().trim().min(1, 'The report cannot be empty.').max(60000, 'The report is too long (60,000 characters max).'),
+    category: z.enum(CATEGORIES).optional(),
+    /** Why it was edited - appended to the revision comment. */
+    note: z.string().trim().max(1000).optional(),
+    /**
+     * How many report revisions existed when the editor opened. If someone else saved a revision
+     * since, the save is refused (409) rather than silently replacing their report. Unrelated
+     * activity - a comment, a status change - does not count. Omitted = save regardless.
+     */
+    baseRevisions: z.number().int().min(0).optional(),
+  })
+  .strict();
+
 /** Soft delete / restore, one bug or many. */
 export const softDeleteSchema = z.object({
   ids: z.array(z.coerce.number().int().positive()).min(1).max(100),

@@ -54,6 +54,8 @@ export interface Bug {
   description?: string;
   /** Detail responses only: visibility groups the editor may offer for this bug. */
   availableGroups?: string[];
+  /** Detail responses only: how the report got to its current text (it is edited as revisions). */
+  reportHistory?: { revisions: number; lastEditedBy: string | null; lastEditedAt: string | null };
   /** Detail responses only: soft-deleted (resolution DELETED). */
   isDeleted?: boolean;
   deleted?: DeletedInfo | null;
@@ -91,6 +93,8 @@ export interface Comment {
   isPrivate: boolean;
   attachmentId: number | null;
   tags: string[];
+  /** This comment is a saved version of the bug report, not a discussion comment. */
+  isReportRevision?: boolean;
 }
 
 export interface Attachment {

@@ -209,6 +209,17 @@ export function useCommentTagSuggestions(query: string, enabled: boolean) {
   });
 }
 
+/** Saves the whole bug report (and its category) as a new report revision. */
+export function useUpdateReport(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { text: string; category?: string; note?: string; baseRevisions?: number }) =>
+      api.put<{ textChanged: boolean; categoryChanged: boolean }>(`/bugs/${id}/report`, input),
+    // Lists too: category, classification and the exported report all follow the new text.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bugs'], exact: false }),
+  });
+}
+
 /** Soft-deletes bugs (testers and admins). Everything bug-shaped is refetched: lists, counts, the bug itself. */
 export function useDeleteBugs() {
   const qc = useQueryClient();

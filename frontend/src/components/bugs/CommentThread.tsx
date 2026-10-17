@@ -1,4 +1,5 @@
-import { Plus, Tag, X } from 'lucide-react';
+import { FilePenLine, Plus, Tag, X } from 'lucide-react';
+import { DescriptionReport } from './DescriptionReport';
 import { useId, useState } from 'react';
 import { ApiError } from '../../api/client';
 import { useCommentTagSuggestions, useUpdateCommentTags } from '../../api/hooks';
@@ -113,7 +114,10 @@ export function CommentThread({ bugId, comments, tagsEnabled = false }: { bugId:
 
   return (
     <ol className="flex flex-col gap-4 px-5 py-4">
-      {followUps.map((comment) => (
+      {followUps.map((comment) =>
+        comment.isReportRevision ? (
+          <ReportRevisionEntry key={comment.id} comment={comment} />
+        ) : (
         <li key={comment.id} className="flex gap-3">
           <Avatar name={comment.author} size="md" />
           <div className="min-w-0 flex-1 rounded-xl border border-white/50 bg-white/50">
@@ -130,7 +134,48 @@ export function CommentThread({ bugId, comments, tagsEnabled = false }: { bugId:
             <CommentTags bugId={bugId} comment={comment} editable={tagsEnabled} />
           </div>
         </li>
-      ))}
+        )
+      )}
     </ol>
+  );
+}
+
+/**
+ * A saved version of the bug report. Shown as one line in the thread rather than
+ * a wall of text - the current version is already the Description above - with
+ * the full version a click away, so "what did the report say before?" is answerable.
+ */
+function ReportRevisionEntry({ comment }: { comment: Comment }) {
+  const [open, setOpen] = useState(false);
+  const note = /\n\nEdit note: (.+)$/.exec(comment.text)?.[1];
+  const body = note ? comment.text.slice(0, comment.text.lastIndexOf('\n\nEdit note: ')) : comment.text;
+  return (
+    <li className="flex gap-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200">
+        <FilePenLine className="h-4 w-4" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1 pt-1">
+        <p className="text-sm text-slate-700">
+          <span className="font-medium text-slate-900">{comment.author}</span> edited the bug report
+          <time dateTime={comment.creationTime} className="ml-2 text-xs text-slate-500">
+            {formatDateTime(comment.creationTime)}
+          </time>
+        </p>
+        {note && <p className="mt-0.5 text-sm italic text-slate-600">“{note}”</p>}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="focus-ring mt-1 rounded text-xs font-medium text-brand-700 hover:underline"
+        >
+          {open ? 'Hide this version' : 'View this version'}
+        </button>
+        {open && (
+          <div className="mt-3 rounded-xl border border-slate-200 bg-white/70 p-4">
+            <DescriptionReport description={body} />
+          </div>
+        )}
+      </div>
+    </li>
   );
 }
