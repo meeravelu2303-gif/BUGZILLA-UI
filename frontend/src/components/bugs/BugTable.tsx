@@ -22,27 +22,30 @@ interface Column {
  * blocker->trivial rather than sorting the words alphabetically. `importance`
  * (the default) is the composite triage order: severity, then priority.
  */
+/*
+ * Component and test type are not columns: they sit on a second line under the
+ * summary, as "API Automation · Authentication & Gateway". Eleven columns did
+ * not fit beside the sidebar at 1440px, and the two that lost out to the scroll
+ * were Assignee and Changed - the ones a triager reads most. Folding the two
+ * descriptive fields into the summary cell leaves every remaining column
+ * visible without a horizontal scroll, and gives the summary itself more room.
+ * Both are still filterable from the bar above the table.
+ */
 const COLUMNS: Column[] = [
-  { key: 'id', label: 'ID', sortable: true, className: 'w-24' },
-  { key: 'summary', label: 'Summary', sortable: true },
-  { key: 'component', label: 'Component', sortable: true, className: 'w-44' },
-  /*
-   * Which bench filed the bug. Sorts on `product`, the field it is derived from
-   * - there is no separate "test type" column in Bugzilla to order by.
-   */
-  { key: 'product', label: 'Type', sortable: true, className: 'w-36' },
-  { key: 'severity', label: 'Severity', sortable: true, className: 'w-32' },
-  { key: 'priority', label: 'Priority', sortable: true, className: 'w-24' },
-  { key: 'category', label: 'Category', className: 'w-36' },
+  { key: 'id', label: 'ID', sortable: true, className: 'w-[5.25rem] whitespace-nowrap' },
+  { key: 'summary', label: 'Summary', sortable: true, className: 'min-w-[18rem]' },
+  { key: 'severity', label: 'Severity', sortable: true, className: 'w-[5.75rem]' },
+  { key: 'priority', label: 'Priority', sortable: true, className: 'w-[4.25rem]' },
+  { key: 'category', label: 'Category', className: 'w-[6.5rem]' },
   // Not sortable: browser comes from a whiteboard tag, and Bugzilla cannot
   // order by a substring of one. Shown so a triager can scan for their browser.
   //
   // The only OPTIONAL column: it is dropped entirely for an API-only scope,
   // where every cell in it would read "—". See `showBrowser` below.
-  { key: 'browser', label: 'Browser', className: 'w-32' },
-  { key: 'status', label: 'Status', sortable: true, className: 'w-28' },
-  { key: 'assigned_to', label: 'Assignee', sortable: true, className: 'w-40' },
-  { key: 'last_change_time', label: 'Changed', sortable: true, className: 'w-24' },
+  { key: 'browser', label: 'Browser', className: 'w-24' },
+  { key: 'status', label: 'Status', sortable: true, className: 'w-[6.75rem]' },
+  { key: 'assigned_to', label: 'Assignee', sortable: true, className: 'w-32' },
+  { key: 'last_change_time', label: 'Changed', sortable: true, className: 'w-[4.5rem]' },
 ];
 
 export function BugTable({
@@ -110,9 +113,9 @@ export function BugTable({
             column labels. Over the white card the flat tint lands in the same
             place visually, without that cost.
           */}
-          <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <tr className="border-b border-slate-200/80 bg-slate-50 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-slate-500">
             {selection && (
-              <th scope="col" className="w-10 px-3 py-3">
+              <th scope="col" className="w-9 px-2.5 py-3">
                 <input
                   type="checkbox"
                   className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus-ring"
@@ -122,11 +125,11 @@ export function BugTable({
                 />
               </th>
             )}
-            <th scope="col" className="w-8 px-2 py-3">
+            <th scope="col" className="w-7 px-1.5 py-3">
               <span className="sr-only">Expand row</span>
             </th>
             {columns.map((col) => (
-              <th key={col.key} scope="col" className={cn('px-3 py-2.5 font-semibold', col.numeric && 'text-right', col.className)}>
+              <th key={col.key} scope="col" className={cn('px-3 py-3 font-semibold', col.numeric && 'text-right', col.className)}>
                 {col.sortable ? (
                   <button
                     onClick={() => onSort(col.key)}
@@ -169,9 +172,9 @@ export function BugTable({
               const isOpen = expanded === bug.id;
               return (
                 <Fragment key={bug.id}>
-                  <tr className="border-b border-slate-100 align-middle transition-colors last:border-0 hover:bg-slate-50/80">
+                  <tr className="group/row border-b border-slate-100 align-middle transition-colors last:border-0 hover:bg-brand-50/50">
                     {selection && (
-                      <td className="px-3 py-2.5">
+                      <td className="px-2.5 py-3">
                         {/*
                           Closed bugs are not selectable: the only bulk action is
                           reassignment, and reassigning finished work is refused by
@@ -198,7 +201,7 @@ export function BugTable({
                         />
                       </td>
                     )}
-                    <td className="px-2 py-2.5">
+                    <td className="px-1.5 py-3">
                       {canExpand && (
                         <button
                           onClick={() => setExpanded(isOpen ? null : bug.id)}
@@ -210,35 +213,38 @@ export function BugTable({
                         </button>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 align-middle">
+                    <td className="whitespace-nowrap px-3 py-3 align-middle">
                       <Link
                         to={`/bugs/${bug.id}`}
-                        className="focus-ring rounded font-mono text-xs text-slate-600 transition-colors hover:text-slate-900 hover:underline"
+                        className="focus-ring inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-600 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-brand-50 hover:text-brand-800 hover:ring-brand-500/30"
                         title={`Bug #${bug.id}`}
                       >
                         {bugDisplayId(bug)}
                       </Link>
                     </td>
-                    <td className="max-w-0 px-3 py-2.5 align-middle">
+                    <td className="max-w-0 min-w-[18rem] px-3 py-2.5 align-middle">
                       <Link
                         to={`/bugs/${bug.id}`}
-                        className="focus-ring block truncate rounded font-medium text-slate-900 transition-colors hover:text-brand-800"
+                        className="focus-ring block truncate rounded text-[13.5px] font-medium text-slate-900 transition-colors group-hover/row:text-brand-800"
                         title={bug.summary}
                       >
                         {bug.summary}
                       </Link>
+                      <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                        <TestTypePill product={bug.product} />
+                        <span className="text-slate-300" aria-hidden>
+                          ·
+                        </span>
+                        <span className="truncate text-xs text-slate-500" title={bug.component}>
+                          {bug.component}
+                        </span>
+                      </div>
                     </td>
-                    <td className="max-w-0 truncate px-3 py-2.5 align-middle font-medium text-slate-700" title={bug.component}>
-                      {bug.component}
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">
-                      <TestTypePill product={bug.product} />
-                    </td>
-                    <td className="px-3 py-2.5 align-middle">{triage && <SeverityPill severity={triage.severity} />}</td>
-                    <td className="px-3 py-2.5 align-middle">{triage && <PriorityPill priority={triage.priority} />}</td>
-                    <td className="px-3 py-2.5 align-middle">{triage && <CategoryPill category={triage.category} />}</td>
+                    <td className="px-3 py-3 align-middle">{triage && <SeverityPill severity={triage.severity} />}</td>
+                    <td className="px-3 py-3 align-middle">{triage && <PriorityPill priority={triage.priority} />}</td>
+                    <td className="px-3 py-3 align-middle">{triage && <CategoryPill category={triage.category} />}</td>
                     {showBrowser && (
-                      <td className="px-3 py-2.5 align-middle">
+                      <td className="px-3 py-3 align-middle">
                         {triage?.browsers && triage.browsers.length > 0 ? (
                           <BrowserPills browsers={triage.browsers} />
                         ) : (
@@ -253,18 +259,18 @@ export function BugTable({
                         )}
                       </td>
                     )}
-                    <td className="px-3 py-2.5 align-middle">
+                    <td className="px-3 py-3 align-middle">
                       <StatusPill status={bug.status} />
                     </td>
-                    <td className="max-w-0 px-3 py-2.5 align-middle">
+                    <td className="max-w-0 px-3 py-3 align-middle">
                       <div className="flex items-center gap-2">
                         <Avatar name={bug.assignedTo?.name ?? '?'} />
-                        <span className="truncate font-medium text-slate-700" title={bug.assignedTo?.name ?? 'Unassigned'}>
+                        <span className="truncate text-[13px] font-medium text-slate-700" title={bug.assignedTo?.name ?? 'Unassigned'}>
                           {bug.assignedTo?.name ?? 'Unassigned'}
                         </span>
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 align-middle text-slate-500">
+                    <td className="whitespace-nowrap px-3 py-3 align-middle text-xs tabular-nums text-slate-500">
                       {timeAgo(bug.lastChangeTime)}
                     </td>
                   </tr>

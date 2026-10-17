@@ -1,4 +1,4 @@
-import { AlertCircle, AlertOctagon, Bug as BugIcon, CheckCircle2, CircleDot, Loader2, Lock, RotateCcw } from 'lucide-react';
+import { AlertCircle, AlertOctagon, Bug as BugIcon, CheckCircle2, CircleDot, LayoutDashboard, Loader2, Lock, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useBugCounts, useBugStats, useBugs, useMeta } from '../api/hooks';
 import { BarListChart, type BarListItem } from '../components/dashboard/BarListChart';
@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { CategoryPill, SeverityPill, StatusPill } from '../components/ui/Pill';
 import { Skeleton } from '../components/ui/Skeleton';
+import { PageHeader } from '../components/ui/PageHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { bugDisplayId, timeAgo } from '../lib/utils';
 import { CATEGORIES, SEVERITIES, type Category, type Severity } from '../types';
@@ -91,7 +92,7 @@ export function Dashboard() {
 
   if (isError) {
     return (
-      <div className="mx-auto max-w-[1400px] px-8 py-8">
+      <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
         <EmptyState
           icon={AlertCircle}
           title="Couldn't load the dashboard"
@@ -102,20 +103,21 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] px-8 py-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-600">Defect load by severity and category, across the products you can access.</p>
-      </div>
+    <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        icon={LayoutDashboard}
+        title="Dashboard"
+        description="Defect load by severity and category, across the products you can access."
+      />
 
       {isLoading || !stats ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-[84px] rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {/* Every tile opens the list it counts, filtered the same way, so the number and the list agree. */}
           <StatCard icon={BugIcon} label="Total bugs" value={stats.total} tone="brand" to="/bugs" />
           <StatCard icon={CircleDot} label="Open" value={stats.open} tone="amber" to={listUrl({ status: openStatuses })} />
@@ -252,7 +254,7 @@ export function Dashboard() {
           to={`/bugs?category=${encodeURIComponent('Security' satisfies Category)}&severity=${encodeURIComponent(
             'Critical' satisfies Severity
           )}`}
-          className="focus-ring mt-6 flex items-center gap-3 rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-900 ring-1 ring-inset ring-violet-700/20 hover:bg-violet-100"
+          className="focus-ring mt-6 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-violet-50/90 to-white/60 px-5 py-3.5 text-sm text-violet-900 shadow-glass ring-1 ring-inset ring-violet-700/15 backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:shadow-float"
         >
           <Lock className="h-4 w-4 shrink-0" aria-hidden />
           <span>

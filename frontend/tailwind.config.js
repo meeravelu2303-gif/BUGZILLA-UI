@@ -1,6 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  /*
+   * LIGHT THEME ONLY - deliberately no `darkMode` key and no `dark:` utilities
+   * anywhere in src/. See the note in components/ui/Pill.tsx and the e2e
+   * `ui-theme.spec.ts` tripwire.
+   */
   theme: {
     extend: {
       fontFamily: {
@@ -43,12 +48,25 @@ export default {
           900: '#154651',
         },
       },
+      /*
+       * Three elevations, all tinted with the brand teal rather than plain black so
+       * the glass reads as lit from the page, not stuck on top of it:
+       *   card   - resting surfaces
+       *   glass  - the same, with the inner top highlight that sells the frosted edge
+       *   float  - popovers, the save bar, modals (further off the page, softer, wider)
+       *   glow   - the primary button's halo
+       */
       boxShadow: {
-        card: '0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06)',
-        glass: '0 1px 1px 0 rgb(15 23 42 / 0.03), 0 8px 24px -4px rgb(58 178 204 / 0.16), inset 0 1px 0 0 rgb(255 255 255 / 0.5)',
+        card: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.05)',
+        glass:
+          'inset 0 1px 0 0 rgb(255 255 255 / 0.65), 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 14px 36px -14px rgb(37 123 142 / 0.22)',
+        float:
+          'inset 0 1px 0 0 rgb(255 255 255 / 0.7), 0 2px 4px 0 rgb(15 23 42 / 0.04), 0 24px 56px -16px rgb(21 70 81 / 0.28)',
+        glow: '0 1px 0 0 rgb(255 255 255 / 0.25) inset, 0 8px 20px -6px rgb(37 123 142 / 0.55)',
       },
       keyframes: {
-        'toast-in': { from: { opacity: '0', transform: 'translateY(0.5rem)' }, to: { opacity: '1', transform: 'translateY(0)' } },
+        'toast-in': { from: { opacity: '0', transform: 'translateY(0.5rem) scale(0.98)' }, to: { opacity: '1', transform: 'translateY(0) scale(1)' } },
+        'page-in': { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
         shimmer: { '100%': { transform: 'translateX(100%)' } },
         indeterminate: { from: { transform: 'translateX(-100%)' }, to: { transform: 'translateX(300%)' } },
         'fade-up': { from: { opacity: '0', transform: 'translateY(16px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
@@ -68,7 +86,8 @@ export default {
         },
       },
       animation: {
-        'toast-in': 'toast-in 0.2s ease-out',
+        'toast-in': 'toast-in 0.22s cubic-bezier(0.22,1,0.36,1)',
+        'page-in': 'page-in 0.35s cubic-bezier(0.22,1,0.36,1) both',
         shimmer: 'shimmer 1.5s infinite',
         indeterminate: 'indeterminate 1.2s ease-in-out infinite',
         'fade-up': 'fade-up 0.6s cubic-bezier(0.22,1,0.36,1) both',

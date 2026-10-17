@@ -86,7 +86,8 @@ export function Pill({
     <span
       title={title}
       className={cn(
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-0.5 text-xs font-medium leading-5',
+        // Compact: a row of five of these must read as labels, not as buttons.
+        'inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-px text-[11px] font-semibold leading-[18px] tracking-[0.01em]',
         TONE_STYLES[tone],
         className
       )}

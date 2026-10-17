@@ -39,14 +39,14 @@ export function Pagination({
   const canGoNext = hasMore && (total === undefined || end < total);
 
   return (
-    <div className="flex items-center justify-between border-t border-white/30 px-5 py-3">
-      <p className="text-sm text-slate-600">
-        Showing <span className="font-medium text-slate-700">{start}</span>–
-        <span className="font-medium text-slate-700">{end}</span>
+    <div className="flex items-center justify-between border-t border-slate-900/[0.06] bg-slate-50/60 px-5 py-3">
+      <p className="text-[13px] text-slate-600">
+        Showing <span className="font-semibold tabular-nums text-slate-800">{start}</span>–
+        <span className="font-semibold tabular-nums text-slate-800">{end}</span>
         {total !== undefined && (
           <>
             {' '}
-            of <span className="font-medium text-slate-700">{total.toLocaleString()}</span>
+            of <span className="font-semibold tabular-nums text-slate-800">{total.toLocaleString()}</span>
           </>
         )}
       </p>

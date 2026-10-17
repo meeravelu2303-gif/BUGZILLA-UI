@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAdminUsers, useProducts } from '../../api/hooks';
 import { Avatar } from '../../components/ui/Avatar';
 import { Card } from '../../components/ui/Card';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Pill } from '../../components/ui/Pill';
 import { Select } from '../../components/ui/Field';
@@ -26,23 +27,25 @@ export function Users() {
   );
 
   return (
-    <div className="mx-auto max-w-[1000px] px-8 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Users</h1>
-          <p className="mt-1 text-sm text-slate-600">Search, create, and enable or disable Bugzilla accounts.</p>
-        </div>
-        <Link
-          to="/admin/users/new"
-          className="focus-ring inline-flex items-center gap-2 rounded-xl bg-gradient-to-b from-brand-700 to-brand-800 px-4 py-2 text-sm font-medium text-white shadow-glass hover:from-brand-800 hover:to-brand-900"
-        >
-          <Plus className="h-4 w-4" />
-          New user
-        </Link>
-      </div>
+    <div className="mx-auto max-w-[1000px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        icon={UsersIcon}
+        eyebrow="Administration"
+        title="Users"
+        description="Search, create, and enable or disable Bugzilla accounts."
+        actions={
+          <Link
+            to="/admin/users/new"
+            className="focus-ring inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-b from-brand-600 to-brand-800 px-5 text-sm font-semibold text-white shadow-glow ring-1 ring-inset ring-white/20 transition-all hover:from-brand-700 hover:to-brand-900 hover:shadow-float"
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            New user
+          </Link>
+        }
+      />
 
       <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/30 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-900/[0.06] px-5 py-4">
           <div className="flex w-full max-w-xl flex-wrap items-center gap-3">
             <div className="relative min-w-56 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -52,7 +55,7 @@ export function Users() {
                 placeholder="Filter by name or email…"
                 aria-label="Search users"
                 autoFocus
-                className="focus-ring w-full rounded-xl border border-white/60 bg-white/80 py-2 pl-9 pr-3 text-sm placeholder:text-slate-500 backdrop-blur-sm"
+                className="h-10 w-full rounded-xl border border-slate-900/10 bg-white/85 pl-9 pr-3 text-sm text-slate-900 shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] outline-none transition-all placeholder:text-slate-400 hover:border-slate-900/20 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/15"
               />
             </div>
             <Select

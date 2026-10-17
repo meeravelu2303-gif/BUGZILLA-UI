@@ -11,7 +11,8 @@ import { useBrowserScope } from '../lib/useBrowserScope';
 import { useFacetStats } from '../lib/useFacetStats';
 import { useBugFilters } from '../lib/useBugFilters';
 import type { Bug } from '../types';
-import { AlertCircle, ArrowLeft, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ListChecks, Trash2 } from 'lucide-react';
+import { PageHeader } from '../components/ui/PageHeader';
 
 const LIMIT = 20;
 
@@ -125,18 +126,17 @@ export function BugList() {
   const { hasBrowsers } = useBrowserScope(filters, stats.for('browser'));
 
   return (
-    <div className="mx-auto max-w-[1600px] px-8 py-8">
-      <div className="mb-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900">{showDeleted ? 'Deleted bugs' : 'Bugs'}</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              {showDeleted
-                ? 'Soft-deleted bugs, hidden from everyone else. Select any to restore them exactly as they were.'
-                : 'Browse, filter and triage every defect across your products.'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+    <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        icon={showDeleted ? Trash2 : ListChecks}
+        title={showDeleted ? 'Deleted bugs' : 'Bugs'}
+        description={
+          showDeleted
+            ? 'Soft-deleted bugs, hidden from everyone else. Select any to restore them exactly as they were.'
+            : 'Browse, filter and triage every defect across your products.'
+        }
+        actions={
+          <>
             {canTriage && (
               <button
                 type="button"
@@ -144,8 +144,8 @@ export function BugList() {
                 aria-pressed={showDeleted}
                 className={
                   showDeleted
-                    ? 'focus-ring inline-flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 ring-1 ring-inset ring-rose-200 hover:bg-rose-100'
-                    : 'focus-ring inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white/70'
+                    ? 'focus-ring inline-flex h-10 items-center gap-1.5 rounded-full bg-rose-50 px-4 text-sm font-semibold text-rose-700 ring-1 ring-inset ring-rose-200 transition-colors hover:bg-rose-100'
+                    : 'focus-ring inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-white/70 hover:text-slate-900'
                 }
               >
                 {showDeleted ? <ArrowLeft className="h-4 w-4" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
@@ -154,9 +154,9 @@ export function BugList() {
             )}
             {/* The table's own filters and sort, minus the page - so the sheet holds every match. */}
             <ExportButton params={{ ...queryParams, sortBy, sortDir }} count={filteredCount?.counts.total} />
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <Card variant="solid">
         <FilterBar

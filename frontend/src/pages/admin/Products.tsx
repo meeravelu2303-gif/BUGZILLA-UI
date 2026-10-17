@@ -1,10 +1,11 @@
-import { AlertCircle, Plus } from 'lucide-react';
+import { AlertCircle, Boxes, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { ApiError } from '../../api/client';
 import { useAdminProducts, useCreateProduct, useMeta } from '../../api/hooks';
 import { ProductAdminCard } from '../../components/admin/ProductAdminCard';
 import { Button } from '../../components/ui/Button';
 import { Card, CardBody, CardHeader, CardTitle } from '../../components/ui/Card';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Input } from '../../components/ui/Field';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -42,17 +43,19 @@ export function Products() {
   }
 
   return (
-    <div className="mx-auto max-w-[900px] px-8 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Products</h1>
-          <p className="mt-1 text-sm text-slate-600">Create products and components, and activate or deactivate products.</p>
-        </div>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          <Plus className="h-4 w-4" />
-          New product
-        </Button>
-      </div>
+    <div className="mx-auto max-w-[900px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        icon={Boxes}
+        eyebrow="Administration"
+        title="Products"
+        description="Create products and components, and activate or deactivate products."
+        actions={
+          <Button onClick={() => setShowForm((v) => !v)}>
+            <Plus className="h-4 w-4" aria-hidden />
+            New product
+          </Button>
+        }
+      />
 
       {showForm && (
         <Card className="mb-6">

@@ -39,7 +39,7 @@ export function Reports() {
 
   if (isError) {
     return (
-      <div className="mx-auto max-w-[1400px] px-8 py-8">
+      <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
         <EmptyState
           icon={AlertCircle}
           title="Couldn't build the report"
@@ -50,7 +50,7 @@ export function Reports() {
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] px-8 py-8">
+    <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title="Reports & Charts"
         description="Defect distribution across the two classification axes, computed over every bug."

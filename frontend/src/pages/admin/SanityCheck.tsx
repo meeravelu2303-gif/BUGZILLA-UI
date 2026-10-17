@@ -14,7 +14,7 @@ export function SanityCheck() {
   const { data: meta } = useMeta();
 
   return (
-    <div className="mx-auto max-w-[800px] px-4 py-8 sm:px-8">
+    <div className="mx-auto max-w-[800px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title="Sanity Check"
         description="Bugzilla’s database consistency checker. It runs (and optionally repairs) directly against the database, so it stays a Bugzilla-native action rather than a REST call."

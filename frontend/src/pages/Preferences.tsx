@@ -24,7 +24,7 @@ export function Preferences() {
   const active = PREFERENCE_TABS.find((t) => t.tab === tab) ?? null;
 
   return (
-    <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
+    <div className="mx-auto max-w-[1100px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader title="Preferences" description="Your account, notifications, saved searches and API keys." />
 
       <Card className="mb-6">

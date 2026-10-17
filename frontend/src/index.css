@@ -5,21 +5,80 @@
 @layer base {
   html {
     font-family: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
+    /* Poppins' lining figures sit high; tabular digits keep columns of numbers aligned. */
+    font-feature-settings: 'tnum' 1, 'cv11' 1;
   }
   body {
     @apply text-slate-900 antialiased;
-    /* UEducate brand-teal mesh (#3AB2CC / #5BC9ED / #2B9FB7 at low alpha) - see BRANDING.md */
-    background-color: #eef4f7;
-    background-image: radial-gradient(at 12% 8%, rgba(58, 178, 204, 0.18) 0px, transparent 45%),
-      radial-gradient(at 88% 12%, rgba(91, 201, 237, 0.16) 0px, transparent 48%),
-      radial-gradient(at 50% 92%, rgba(43, 159, 183, 0.13) 0px, transparent 50%),
-      radial-gradient(at 95% 80%, rgba(148, 163, 184, 0.14) 0px, transparent 45%),
-      radial-gradient(at 5% 60%, rgba(180, 228, 238, 0.2) 0px, transparent 45%);
+    /*
+     * The canvas the glass frosts. Glass only reads when something is behind it,
+     * so the washes are a touch richer than a plain tint: UEducate teal
+     * (#3AB2CC / #5BC9ED / #2B9FB7) at low alpha, one cool lavender for depth,
+     * and a white bloom at the top-left where the content starts. Fixed, so the
+     * frosting stays steady while the page scrolls. See BRANDING.md.
+     */
+    background-color: #e9f1f6;
+    background-image:
+      radial-gradient(at 8% 0%, rgba(255, 255, 255, 0.9) 0px, transparent 42%),
+      radial-gradient(at 18% 14%, rgba(58, 178, 204, 0.22) 0px, transparent 46%),
+      radial-gradient(at 85% 8%, rgba(91, 201, 237, 0.2) 0px, transparent 44%),
+      radial-gradient(at 72% 58%, rgba(165, 180, 252, 0.14) 0px, transparent 42%),
+      radial-gradient(at 40% 96%, rgba(43, 159, 183, 0.16) 0px, transparent 48%),
+      radial-gradient(at 98% 90%, rgba(148, 163, 184, 0.14) 0px, transparent 40%);
     background-attachment: fixed;
     background-repeat: no-repeat;
   }
   ::selection {
     @apply bg-brand-200 text-brand-900;
+  }
+
+  /* A quiet scrollbar that matches the glass, instead of the OS default grey bar. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(100 116 139 / 0.35) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(100 116 139 / 0.3);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(100 116 139 / 0.5);
+    background-clip: padding-box;
+    border: 3px solid transparent;
+  }
+
+  /* Native <select>s are `appearance-none` in Field.tsx; this is the chevron they need. */
+  select.app-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.65rem center;
+    background-size: 1rem 1rem;
+  }
+  select.app-select:disabled {
+    opacity: 0.85;
+  }
+
+  /* Checkboxes in the brand teal, without pulling in the forms plugin. */
+  input[type='checkbox'] {
+    accent-color: #257b8e;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
@@ -29,14 +88,38 @@
   .focus-ring {
     @apply outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
   }
-  .glass-surface {
-    @apply border border-white/40 bg-white/70 shadow-glass backdrop-blur-lg;
+
+  /*
+   * Three tiers of glass. Each pairs a translucent white fill with a blur and a
+   * saturation lift (so the colour washes behind read as colour, not grey), a
+   * hairline border, and the `shadow-glass` inner highlight along the top edge
+   * that reads as a lit frosted edge.
+   *
+   *   glass-panel    the shell: sidebar and top bar
+   *   glass-surface  resting cards
+   *   glass-raised   popovers, menus, the save bar, dialogs
+   */
+  .glass-panel {
+    @apply border border-white/60 bg-white/55 shadow-glass backdrop-blur-2xl backdrop-saturate-150;
   }
+  .glass-surface {
+    @apply border border-white/70 bg-white/70 shadow-glass backdrop-blur-xl backdrop-saturate-150;
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 38%);
+  }
+  .glass-raised {
+    @apply border border-white/80 bg-white/90 shadow-float backdrop-blur-2xl backdrop-saturate-150;
+  }
+
+  /* Text in the brand gradient - for the one headline number that may shout. */
+  .text-gradient-brand {
+    @apply bg-gradient-to-br from-brand-700 to-brand-500 bg-clip-text text-transparent;
+  }
+
   .skeleton {
-    @apply relative overflow-hidden bg-slate-200/70 rounded-md;
+    @apply relative overflow-hidden rounded-md bg-slate-200/70;
   }
   .skeleton::after {
     content: '';
-    @apply absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer;
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/60 to-transparent;
   }
 }

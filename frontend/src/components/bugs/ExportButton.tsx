@@ -141,7 +141,7 @@ function ProgressPanel({ kind, run, onCancel }: { kind: Kind; run: RunState; onC
     <div
       role="status"
       aria-live="polite"
-      className="absolute right-0 top-full z-30 mt-2 w-80 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl ring-1 ring-black/[0.03] backdrop-blur"
+      className="absolute right-0 top-full z-30 mt-2 w-80 glass-raised rounded-2xl p-4"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

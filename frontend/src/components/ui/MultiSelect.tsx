@@ -63,12 +63,12 @@ export function MultiSelect({
         aria-expanded={open}
         aria-haspopup="listbox"
         className={cn(
-          'focus-ring flex h-9 w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-sm transition-colors',
+          'focus-ring flex h-10 w-full items-center justify-between gap-2 rounded-xl border bg-white/85 px-3 text-sm shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] transition-all',
           // An active facet is marked with the brand teal, so which controls are
           // narrowing the list is visible without reading every label.
           selected.length > 0
-            ? 'border-brand-500 font-medium text-slate-900'
-            : 'border-slate-200 text-slate-500 hover:border-slate-300'
+            ? 'border-brand-500 bg-brand-50/60 font-medium text-brand-900 ring-2 ring-brand-500/15'
+            : 'border-slate-900/10 text-slate-600 hover:border-slate-900/20 hover:bg-white'
         )}
       >
         <span className="truncate">{summary}</span>
@@ -79,7 +79,7 @@ export function MultiSelect({
         <div
           role="listbox"
           aria-multiselectable
-          className="absolute left-0 z-30 mt-1.5 max-h-72 w-64 overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+          className="glass-raised absolute left-0 z-30 mt-1.5 max-h-72 w-64 overflow-auto rounded-xl p-1.5 animate-toast-in"
         >
           {options.length === 0 ? (
             <p className="px-3 py-2 text-sm text-slate-500">Nothing to filter by yet.</p>

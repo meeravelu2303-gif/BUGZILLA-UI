@@ -81,7 +81,7 @@ export function SaveBar({
       <div
         role="region"
         aria-label="Unsaved changes"
-        className="pointer-events-auto w-full max-w-3xl animate-toast-in rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_12px_40px_-12px_rgba(15,23,42,0.35)] ring-1 ring-black/[0.03] backdrop-blur-lg"
+        className="pointer-events-auto w-full max-w-3xl animate-toast-in glass-raised rounded-2xl"
       >
         {conflict && (
           <div className="flex flex-wrap items-center gap-3 rounded-t-2xl border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">

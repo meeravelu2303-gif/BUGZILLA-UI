@@ -77,8 +77,10 @@ export function DateRangeFilter({
         aria-expanded={open}
         aria-haspopup="dialog"
         className={cn(
-          'focus-ring flex h-9 w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-sm transition-colors',
-          active ? 'border-brand-500 font-medium text-slate-900' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+          'focus-ring flex h-10 w-full items-center justify-between gap-2 rounded-xl border bg-white/85 px-3 text-sm shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] transition-all',
+          active
+            ? 'border-brand-500 bg-brand-50/60 font-medium text-brand-900 ring-2 ring-brand-500/15'
+            : 'border-slate-900/10 text-slate-600 hover:border-slate-900/20 hover:bg-white'
         )}
       >
         <span className="flex min-w-0 items-center gap-1.5">
@@ -91,7 +93,7 @@ export function DateRangeFilter({
       </button>
 
       {open && (
-        <div role="dialog" aria-label="Filter by date" className="absolute left-0 z-30 mt-1.5 w-[22rem] rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
+        <div role="dialog" aria-label="Filter by date" className="glass-raised absolute left-0 z-30 mt-1.5 w-[22rem] rounded-2xl p-4 animate-toast-in">
           {/* Which date */}
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 text-sm" role="radiogroup" aria-label="Date to filter on">
             {(['created', 'updated'] as const).map((f) => (

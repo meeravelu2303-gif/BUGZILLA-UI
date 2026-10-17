@@ -71,7 +71,7 @@ export function AdvancedSearch() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-8 py-8">
+    <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
         title="Advanced Search"
         description="Every axis at once — the resulting URL is the shareable query."

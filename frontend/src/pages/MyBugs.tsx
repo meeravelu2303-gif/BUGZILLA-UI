@@ -7,6 +7,7 @@ import { ExportButton } from '../components/bugs/ExportButton';
 import { FilterBar } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
 import { Card } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/PageHeader';
 import { cn } from '../lib/utils';
 import { useBrowserScope } from '../lib/useBrowserScope';
 import { useFacetStats } from '../lib/useFacetStats';
@@ -70,32 +71,34 @@ export function MyBugs() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-8 py-8">
-      <div className="mb-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900">My Bugs</h1>
-            <p className="mt-1 text-sm text-slate-600">Everything that lands on your desk — assigned, reported, or watched.</p>
-          </div>
-          {/* `scoped` carries the active tab (assigned / reported / CC), so the sheet matches it. */}
-          <ExportButton params={{ ...scoped, sortBy, sortDir }} count={scopedCount?.counts.total} />
-        </div>
-      </div>
+    <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        icon={UserCircle2}
+        title="My Bugs"
+        description="Everything that lands on your desk — assigned, reported, or watched."
+        /* `scoped` carries the active tab (assigned / reported / CC), so the sheet matches it. */
+        actions={<ExportButton params={{ ...scoped, sortBy, sortDir }} count={scopedCount?.counts.total} />}
+      />
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      {/* A segmented control: one glass track, the active tab lifted out of it. */}
+      <div className="mb-4 inline-flex flex-wrap gap-1 rounded-full bg-white/55 p-1 shadow-card ring-1 ring-inset ring-white/70 backdrop-blur-xl">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
             aria-pressed={tab === id}
             className={cn(
-              'focus-ring inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors',
-              tab === id ? 'bg-brand-700 text-white' : 'bg-white/70 text-slate-700 hover:bg-white'
+              'focus-ring inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-semibold transition-all',
+              tab === id
+                ? 'bg-gradient-to-b from-brand-600 to-brand-800 text-white shadow-glow ring-1 ring-inset ring-white/20'
+                : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
             )}
           >
             <Icon className="h-4 w-4" aria-hidden />
             {label}
-            {tab === id && tabTotal && <span className="font-mono text-xs opacity-90">{tabTotal.counts.total}</span>}
+            {tab === id && tabTotal && (
+              <span className="rounded-full bg-white/20 px-1.5 text-[11px] font-semibold tabular-nums">{tabTotal.counts.total}</span>
+            )}
           </button>
         ))}
       </div>

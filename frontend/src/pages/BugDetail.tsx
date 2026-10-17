@@ -34,7 +34,7 @@ export function BugDetail() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-[1600px] px-8 py-8">
+      <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
         <Skeleton className="h-6 w-24" />
         <Skeleton className="mt-4 h-8 w-2/3" />
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
@@ -48,7 +48,7 @@ export function BugDetail() {
   if (isError || !data) {
     const message = error instanceof ApiError ? error.message : 'Something went wrong loading this bug.';
     return (
-      <div className="mx-auto max-w-[1600px] px-8 py-8">
+      <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
         <EmptyState icon={AlertCircle} title="Couldn't load this bug" description={message} />
       </div>
     );
@@ -158,7 +158,7 @@ function BugDetailView({
   const facts = bug.facts;
 
   return (
-    <div className="mx-auto max-w-[1600px] overflow-x-clip px-6 py-8 sm:px-8">
+    <div className="mx-auto max-w-[1600px] animate-page-in overflow-x-clip px-4 py-6 sm:px-6 lg:px-8">
       {/* Returns to the list the reader came from, filters, sort and page intact. Resolved at
           render rather than held in state: this page is reached from BugList, MyBugs, Advanced
           Search and the dashboard matrix, and a plain `/bugs` discarded the filtering that found
@@ -194,7 +194,8 @@ function BugDetailView({
 
       {/* Classification leads: what kind of defect this is, and how urgent. An elevated hero
           so the id, title and the severity/category pills read as one clear header. */}
-      <header className="mt-4 rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm ring-1 ring-black/[0.02] backdrop-blur-sm">
+      <header className="glass-surface relative mt-4 overflow-hidden rounded-2xl p-6">
+        <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-ueducate-accent to-brand-700" />
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <span className="rounded-md bg-slate-900/[0.04] px-2 py-0.5 font-mono font-semibold text-slate-700 ring-1 ring-inset ring-slate-900/10" title={`Bug #${bug.id}`}>
             {bugDisplayId(bug)}

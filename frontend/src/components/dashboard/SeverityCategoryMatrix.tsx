@@ -51,9 +51,9 @@ export function SeverityCategoryMatrix({ stats }: { stats: BugStats }) {
   const shade = (n: number) => {
     if (n === 0) return 'bg-white/40 text-slate-400';
     const ratio = n / peak;
-    if (ratio > 0.66) return 'bg-brand-700/25 text-slate-900 font-semibold';
-    if (ratio > 0.33) return 'bg-brand-700/15 text-slate-900 font-medium';
-    return 'bg-brand-700/[0.07] text-slate-800';
+    if (ratio > 0.66) return 'bg-gradient-to-br from-brand-500/35 to-brand-700/35 text-slate-900 font-semibold ring-1 ring-inset ring-brand-600/30';
+    if (ratio > 0.33) return 'bg-brand-500/20 text-slate-900 font-medium ring-1 ring-inset ring-brand-600/15';
+    return 'bg-brand-500/[0.08] text-slate-800';
   };
 
   const href = (s: Severity, c: Category) => `/bugs?severity=${encodeURIComponent(s)}&category=${encodeURIComponent(c)}`;

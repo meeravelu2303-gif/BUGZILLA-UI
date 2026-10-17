@@ -1,4 +1,4 @@
-import { Check, Eye, FileText, MonitorSmartphone, Paperclip, Plus, Server, Sparkles, X } from 'lucide-react';
+import { Check, Eye, FilePlus2, FileText, MonitorSmartphone, Paperclip, Plus, Server, Sparkles, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
@@ -7,6 +7,7 @@ import { ClassificationPicker } from '../components/bugs/ClassificationPicker';
 import { DescriptionReport } from '../components/bugs/DescriptionReport';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/PageHeader';
 import { Input, Select, Textarea } from '../components/ui/Field';
 import { useToast } from '../context/ToastContext';
 import {
@@ -91,7 +92,7 @@ function Section({ step, title, subtitle, children }: { step: number; title: str
   return (
     <Card>
       <div className="flex items-center gap-3 border-b border-slate-900/[0.06] px-6 py-4">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-xs font-semibold text-white shadow-sm">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-semibold text-white shadow-sm ring-1 ring-inset ring-white/30">
           {step}
         </span>
         <div className="min-w-0">
@@ -298,17 +299,18 @@ export function CreateBug() {
   const invalid = (k: keyof BugReportInput) => (errors[k] ? 'true' : undefined);
 
   return (
-    <div className="mx-auto max-w-[1400px] px-6 py-8 lg:px-8">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">New bug</h1>
-          <p className="mt-1 text-sm text-slate-600">Uses the same structure as test-bench bugs, so every ticket reads the same way.</p>
-        </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-3 py-1 font-mono text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-900/10">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand-600" aria-hidden />
-          {tag}
-        </span>
-      </div>
+    <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        icon={FilePlus2}
+        title="New bug"
+        description="Uses the same structure as test-bench bugs, so every ticket reads the same way."
+        actions={
+          <span className="inline-flex h-9 items-center gap-2 rounded-full bg-white/70 px-3.5 font-mono text-xs font-semibold text-slate-700 shadow-card ring-1 ring-inset ring-white/80 backdrop-blur-xl">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand-500 shadow-[0_0_0_3px_rgb(58_178_204_/_0.25)]" aria-hidden />
+            {tag}
+          </span>
+        }
+      />
 
       <form onSubmit={onSubmit} noValidate autoComplete="off" className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
         <div className="flex min-w-0 flex-col gap-6">

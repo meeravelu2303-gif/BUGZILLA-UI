@@ -91,18 +91,18 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 px-4 pt-[12vh] backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/35 px-4 pt-[12vh] backdrop-blur-sm"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="glass-surface w-full max-w-xl overflow-hidden rounded-2xl bg-white/90 shadow-2xl"
+        className="glass-raised w-full max-w-xl overflow-hidden rounded-2xl animate-toast-in"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
       >
-        <div className="flex items-center gap-3 border-b border-white/40 px-4">
+        <div className="flex items-center gap-3 border-b border-slate-900/[0.06] px-4">
           <SearchIcon className="h-4 w-4 shrink-0 text-slate-400" />
           <input
             ref={inputRef}
@@ -139,8 +139,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   onMouseEnter={() => setActive(i)}
                   onClick={() => choose(cmd)}
                   className={cn(
-                    'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
-                    i === active ? 'bg-brand-600 text-white' : 'text-slate-700 hover:bg-white/70'
+                    'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
+                    i === active
+                      ? 'bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-md ring-1 ring-inset ring-white/20'
+                      : 'text-slate-700 hover:bg-slate-900/[0.04]'
                   )}
                 >
                   <cmd.icon className={cn('h-4 w-4 shrink-0', i === active ? 'text-white' : 'text-slate-400')} />
