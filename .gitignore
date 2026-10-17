@@ -6,3 +6,6 @@ build/
 *.log
 .DS_Store
 coverage/
+
+# Microsoft Office lock files (created while a document is open)
+~$*
