@@ -50,6 +50,7 @@ export default {
       keyframes: {
         'toast-in': { from: { opacity: '0', transform: 'translateY(0.5rem)' }, to: { opacity: '1', transform: 'translateY(0)' } },
         shimmer: { '100%': { transform: 'translateX(100%)' } },
+        indeterminate: { from: { transform: 'translateX(-100%)' }, to: { transform: 'translateX(300%)' } },
         'fade-up': { from: { opacity: '0', transform: 'translateY(16px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
         'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
         float: { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-20px)' } },
@@ -69,6 +70,7 @@ export default {
       animation: {
         'toast-in': 'toast-in 0.2s ease-out',
         shimmer: 'shimmer 1.5s infinite',
+        indeterminate: 'indeterminate 1.2s ease-in-out infinite',
         'fade-up': 'fade-up 0.6s cubic-bezier(0.22,1,0.36,1) both',
         'fade-in': 'fade-in 0.9s ease-out both',
         float: 'float 7s ease-in-out infinite',

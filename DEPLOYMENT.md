@@ -57,6 +57,15 @@ Bugzilla's REST API cannot write, so they're set up once in Bugzilla's own admin
 6. **Create an API key for the service account** (Preferences → API Keys → generate)
    - Used by the BFF only for pre-login connectivity/meta probes; per-user
      actions use each user's own session token.
+7. **Soft delete** — run once, and again after creating a product:
+   ```
+   cd C:\Bugzilla
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-soft-delete.pl <admin login>
+   ```
+   Creates the `DELETED` resolution and the "Deleted bugs" group (members: everyone
+   in `canconfirm`, i.e. testers and admins), and enables that group on every
+   product. Idempotent — it only adds what is missing. Without it, Delete in the
+   app is refused by Bugzilla.
 
 > You can view all of the above **inside this app** later (Administration →
 > Field Values / Status Workflow / Groups / Parameters) — read-only, with an

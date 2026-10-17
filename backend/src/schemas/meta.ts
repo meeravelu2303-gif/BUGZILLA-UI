@@ -34,6 +34,8 @@ export interface BugMeta {
   priorities: string[];
   opSystems: string[];
   platforms: string[];
+  /** Defined keywords. Empty on an instance that has none - the editor then hides the field. */
+  keywords: string[];
   workflow: WorkflowTransition[];
 }
 
@@ -67,11 +69,13 @@ export function extractBugMeta(raw: unknown): BugMeta {
   const parsed = fieldBugResponseSchema.parse(raw);
   return {
     statuses: valuesOf(parsed.fields, 'bug_status'),
-    resolutions: valuesOf(parsed.fields, 'resolution').filter((r) => r !== ''),
+    // DELETED is reached only through Delete, never chosen from a dropdown.
+    resolutions: valuesOf(parsed.fields, 'resolution').filter((r) => r !== '' && r !== 'DELETED'),
     severities: valuesOf(parsed.fields, 'bug_severity'),
     priorities: valuesOf(parsed.fields, 'priority'),
     opSystems: valuesOf(parsed.fields, 'op_sys'),
     platforms: valuesOf(parsed.fields, 'rep_platform'),
+    keywords: valuesOf(parsed.fields, 'keywords'),
     workflow: extractWorkflow(parsed.fields),
   };
 }

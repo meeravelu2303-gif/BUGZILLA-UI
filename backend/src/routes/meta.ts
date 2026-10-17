@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Env } from '../config/env';
+import { bugFeatures } from '../lib/bugFeatures';
 import { BugzillaClient } from '../lib/bugzillaClient';
 import { groupNameForProduct } from '../lib/productGroups';
 import { requireAuth } from '../middleware/auth';
@@ -10,12 +11,13 @@ export function metaRouter(env: Env): Router {
 
   router.get('/', requireAuth(env), async (req, res, next) => {
     try {
-      const raw = await req.bugzilla!.get('/field/bug');
+      const [raw, features] = await Promise.all([req.bugzilla!.get('/field/bug'), bugFeatures(env)]);
       const fieldMeta = extractBugMeta(raw);
       // The REST base is .../rest; Bugzilla's web (non-REST) admin pages live one level up.
       const bugzillaWebUrl = env.BUGZILLA_URL.replace(/\/rest\/?$/, '');
       res.json({
         ...fieldMeta,
+        features,
         currentUser: req.sessionUser!.email,
         bugzillaWebUrl,
       });

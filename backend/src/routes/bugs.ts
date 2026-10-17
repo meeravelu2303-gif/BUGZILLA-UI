@@ -7,7 +7,7 @@ import archiver from 'archiver';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import type { Env } from '../config/env';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requirePermission } from '../middleware/auth';
 import { getCategoryIndex } from '../lib/categoryIndex';
 import { scopeToAccessibleProducts } from '../lib/access';
 import {
@@ -22,6 +22,10 @@ import {
 } from '../lib/classification';
 import type { BugzillaClient } from '../lib/bugzillaClient';
 import { closedStatuses } from '../lib/bugStatus';
+import { allGroupNames, bugFeatures } from '../lib/bugFeatures';
+import { CURRENT_BUG_FIELDS, toBugzillaUpdate, validateBugUpdate, type CurrentBug } from '../lib/bugUpdate';
+import { groupNameForProduct } from '../lib/productGroups';
+import { DELETED_GROUP, DELETED_RESOLUTION, deletedInfoFrom, restoreBugs, softDeleteBugs } from '../lib/softDelete';
 import { buildBugWorkbook, currentComments, type BugProof, type ExportBug, type ExportContext } from '../lib/bugExport';
 import { EMPTY_REPORT, parseDefectReport } from '../lib/defectReport';
 import { AppError } from '../lib/errors';
@@ -44,8 +48,12 @@ import {
   rawAttachmentSchema,
   rawBugSchema,
   rawCommentSchema,
+  restoreSchema,
+  softDeleteSchema,
   tallyBugCounts,
+  updateAttachmentSchema,
   updateBugSchema,
+  updateCommentTagsSchema,
 } from '../schemas/bug';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -116,22 +124,6 @@ const DEFAULT_SORT = 'last_change_time';
  * no bug appearing on two pages or vanishing between them.
  */
 const TIEBREAKERS = [{ field: 'bug_id', clause: 'bug_id ASC' }];
-
-const CAMEL_TO_BUGZILLA_UPDATE: Record<string, string> = {
-  summary: 'summary',
-  status: 'status',
-  resolution: 'resolution',
-  priority: 'priority',
-  severity: 'severity',
-  component: 'component',
-  version: 'version',
-  opSys: 'op_sys',
-  platform: 'platform',
-  assignedTo: 'assigned_to',
-  targetMilestone: 'target_milestone',
-  whiteboard: 'whiteboard',
-  dupeOf: 'dupe_of',
-};
 
 /** Bugzilla's own name for "this bug duplicates another one". */
 const DUPLICATE = 'DUPLICATE';
@@ -317,15 +309,35 @@ export interface BugCommentInfo {
  * when a bug has no comments beyond its own description, that description IS the
  * last comment, so the two fields end up identical rather than one being blank.
  */
-async function fetchDescriptions(client: BugzillaClient, ids: number[]): Promise<Map<number, BugCommentInfo>> {
+/** Thrown between upstream calls once an export job is cancelled; never surfaced as an error. */
+class ExportCancelled extends Error {}
+
+/** Progress + cancellation hooks for the export helpers. Both optional: the direct download passes neither. */
+interface StepHooks {
+  signal?: AbortSignal;
+  /** Called after each unit of work with (done, total) for the current step. */
+  onProgress?: (done: number, total: number) => void;
+}
+
+function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new ExportCancelled('cancelled');
+}
+
+async function fetchDescriptions(
+  client: BugzillaClient,
+  ids: number[],
+  hooks: StepHooks = {}
+): Promise<Map<number, BugCommentInfo>> {
   const batches: number[][] = [];
   for (let i = 0; i < ids.length; i += DESCRIPTION_BATCH) batches.push(ids.slice(i, i + DESCRIPTION_BATCH));
 
   const info = new Map<number, BugCommentInfo>();
   let next = 0;
+  let finished = 0;
 
   async function worker(): Promise<void> {
     while (next < batches.length) {
+      throwIfCancelled(hooks.signal);
       const [first, ...rest] = batches[next++];
       const resp = await client.get<{
         bugs: Record<
@@ -365,6 +377,7 @@ async function fetchDescriptions(client: BugzillaClient, ids: number[]): Promise
             .reverse(),
         });
       }
+      hooks.onProgress?.(Math.min(++finished * DESCRIPTION_BATCH, ids.length), ids.length);
     }
   }
 
@@ -377,15 +390,17 @@ async function fetchDescriptions(client: BugzillaClient, ids: number[]): Promise
  * bytes), batched the same way as `fetchDescriptions`. Developers fix bugs from the exported sheet,
  * so the sheet has to show what proof exists and how recent it is, not just the prose.
  */
-async function fetchAttachments(client: BugzillaClient, ids: number[]): Promise<Map<number, BugProof[]>> {
+async function fetchAttachments(client: BugzillaClient, ids: number[], hooks: StepHooks = {}): Promise<Map<number, BugProof[]>> {
   const batches: number[][] = [];
   for (let i = 0; i < ids.length; i += DESCRIPTION_BATCH) batches.push(ids.slice(i, i + DESCRIPTION_BATCH));
 
   const proof = new Map<number, BugProof[]>();
   let next = 0;
+  let finished = 0;
 
   async function worker(): Promise<void> {
     while (next < batches.length) {
+      throwIfCancelled(hooks.signal);
       const [first, ...rest] = batches[next++];
       const resp = await client.get<{
         bugs: Record<
@@ -420,6 +435,7 @@ async function fetchAttachments(client: BugzillaClient, ids: number[]): Promise<
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         );
       }
+      hooks.onProgress?.(Math.min(++finished * DESCRIPTION_BATCH, ids.length), ids.length);
     }
   }
 
@@ -449,7 +465,11 @@ const TEXT_PROOF_MAX_CHARS = 30_000;
  * evidence itself (request, response, crash diagnosis), not just a file name. A developer handing the
  * sheet to Claude gets everything Claude can read; images and videos cannot be read from a cell.
  */
-async function fetchTextEvidence(client: BugzillaClient, proof: Map<number, BugProof[]>): Promise<Map<number, string>> {
+async function fetchTextEvidence(
+  client: BugzillaClient,
+  proof: Map<number, BugProof[]>,
+  hooks: StepHooks = {}
+): Promise<Map<number, string>> {
   const jobs: Array<{ bugId: number; file: BugProof }> = [];
   for (const [bugId, files] of proof) {
     for (const file of files.filter((f) => TEXT_PROOF.test(f.contentType)).slice(0, TEXT_PROOF_MAX_FILES)) {
@@ -458,8 +478,11 @@ async function fetchTextEvidence(client: BugzillaClient, proof: Map<number, BugP
   }
   const parts = new Map<number, string[]>();
   let next = 0;
+  let finished = 0;
+  hooks.onProgress?.(0, jobs.length);
   async function worker(): Promise<void> {
     while (next < jobs.length) {
+      throwIfCancelled(hooks.signal);
       const { bugId, file } = jobs[next++];
       const text = await fetchAttachmentData(client, file.id)
         .then((b) => b.toString('utf8'))
@@ -467,6 +490,7 @@ async function fetchTextEvidence(client: BugzillaClient, proof: Map<number, BugP
       const list = parts.get(bugId) ?? [];
       list.push(`--- ${file.fileName} (${file.createdAt.slice(0, 10)}) ---\n${text.trim()}`);
       parts.set(bugId, list);
+      hooks.onProgress?.(++finished, jobs.length);
     }
   }
   await Promise.all(Array.from({ length: Math.min(DESCRIPTION_CONCURRENCY, jobs.length) }, worker));
@@ -540,19 +564,46 @@ function bugMarkdown(bug: ExportBug): string {
   return lines.filter((l, i, all) => !(l === '' && all[i - 1] === '')).join('\n') + '\n';
 }
 
-/** One evidence-pack build in progress (or ready to collect), held in memory on this server. */
+/**
+ * One export build in progress (or ready to collect), held in memory on this server: either the
+ * Excel sheet on its own or the evidence pack (.zip). Both run in the background so the browser can
+ * show real progress and the person can cancel - the sheet used to be one request that blocked with
+ * no feedback and could not be stopped.
+ */
 interface PackJob {
   id: string;
+  kind: 'xlsx' | 'zip';
   userId: number;
-  status: 'preparing' | 'ready' | 'failed';
+  status: 'preparing' | 'ready' | 'failed' | 'cancelled';
   phase: string;
   done: number;
   total: number;
+  /** Overall 0-100 across every phase, so the bar never jumps backwards between steps. */
+  percent: number;
   createdAt: number;
+  /** Aborted by DELETE; every upstream loop checks it before its next Bugzilla call. */
+  controller: AbortController;
+  rows?: number;
   file?: string;
   fileName?: string;
   sizeBytes?: number;
   error?: string;
+}
+
+/** What `collectExport` reports: the step it is on and how far through the WHOLE collection it is (0-1). */
+interface CollectProgress {
+  signal?: AbortSignal;
+  report: (phase: string, fraction: number, done?: number, total?: number) => void;
+}
+
+/** Maps a sub-task's 0-1 fraction onto the job's overall [from, to] percent band. */
+function band(job: PackJob, from: number, to: number): CollectProgress['report'] {
+  return (phase, fraction, done, total) => {
+    job.phase = phase;
+    if (done !== undefined) job.done = done;
+    if (total !== undefined) job.total = total;
+    job.percent = Math.max(job.percent, Math.min(99, Math.round(from + (to - from) * fraction)));
+  };
 }
 
 const packJobs = new Map<string, PackJob>();
@@ -675,8 +726,13 @@ export function bugsRouter(env: Env): Router {
    * evidence files. Not wrapped in a fallback — a sheet that quietly lost its description or evidence
    * on a Bugzilla hiccup would read as "this bug has no evidence". Better to fail loudly and retry.
    */
-  async function collectExport(req: Request): Promise<{ bugs: ExportBug[]; ctx: ExportContext; stamp: string }> {
+  async function collectExport(
+    req: Request,
+    progress?: CollectProgress
+  ): Promise<{ bugs: ExportBug[]; ctx: ExportContext; stamp: string }> {
     const query = parseInput(exportBugsQuerySchema, req.query);
+    const signal = progress?.signal;
+    progress?.report('Finding the matching bugs', 0);
 
     const params: Record<string, string | number> = {
       limit: EXPORT_MAX_ROWS,
@@ -700,13 +756,24 @@ export function bugsRouter(env: Env): Router {
       );
     }
 
+    throwIfCancelled(signal);
     const normalized = raw.bugs.map((b) => normalizeBug(rawBugSchema.parse(b)));
     const ids = normalized.map((b) => b.id);
+
+    // Comments and attachments are read in parallel; their progress is summed into one step.
+    const step = { comments: 0, files: 0 };
+    const reading = () =>
+      progress?.report('Reading comments and attachments', 0.1 + 0.45 * ((step.comments + step.files) / Math.max(1, 2 * ids.length)), Math.round((step.comments + step.files) / 2), ids.length);
+    reading();
     const [commentInfo, proofInfo] = await Promise.all([
-      fetchDescriptions(req.bugzilla!, ids),
-      fetchAttachments(req.bugzilla!, ids),
+      fetchDescriptions(req.bugzilla!, ids, { signal, onProgress: (done) => ((step.comments = done), reading()) }),
+      fetchAttachments(req.bugzilla!, ids, { signal, onProgress: (done) => ((step.files = done), reading()) }),
     ]);
-    const textEvidence = await fetchTextEvidence(req.bugzilla!, proofInfo);
+    const textEvidence = await fetchTextEvidence(req.bugzilla!, proofInfo, {
+      signal,
+      onProgress: (done, total) => progress?.report('Reading evidence files', 0.55 + 0.45 * (total ? done / total : 1), done, total),
+    });
+    throwIfCancelled(signal);
 
     const bugs: ExportBug[] = normalized.map((bug) => {
       const triage = classify({
@@ -738,6 +805,20 @@ export function bugsRouter(env: Env): Router {
       return text ? [{ label, value: String(text) }] : [];
     });
 
+    /*
+     * The date range is what makes a sheet a "monthly" or "daily" report, so it is stated in the
+     * Export info sheet and carried in the file name: `bugs-created-2026-10-01_to_2026-10-31-…xlsx`
+     * reads as October's report in a folder of them, without opening each one.
+     */
+    const dateWord = query.dateField === 'updated' ? 'updated' : 'created';
+    let range = '';
+    if (query.from || query.to) {
+      const [from, to] = query.from && query.to && query.from > query.to ? [query.to, query.from] : [query.from, query.to];
+      const text = from && to ? (from === to ? from : `${from} to ${to}`) : from ? `on or after ${from}` : `on or before ${to}`;
+      filters.unshift({ label: dateWord === 'created' ? 'Created' : 'Last updated', value: text });
+      range = `-${dateWord}-${from && to ? (from === to ? from : `${from}_to_${to}`) : from ? `from-${from}` : `until-${to}`}`;
+    }
+
     const user = req.sessionUser!;
     // The sheet is opened on OTHER machines: links must use the app's network address, never whatever
     // this user happened to type (often "localhost", which on a developer's machine points at nothing).
@@ -757,7 +838,7 @@ export function bugsRouter(env: Env): Router {
           : undefined,
         proofLinksUntil: origin ? proofLinksUntil : undefined,
       },
-      stamp: new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-'),
+      stamp: `${range.slice(1) ? `${range.slice(1)}-` : ''}${new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-')}`,
     };
   }
 
@@ -810,16 +891,64 @@ export function bugsRouter(env: Env): Router {
    * Built straight from Bugzilla, never from the test bench's local files. The zip is a temporary file:
    * deleted as soon as it has been downloaded, or after PACK_TTL_MS if nobody collects it.
    */
-  async function buildPack(req: Request, job: PackJob): Promise<void> {
+  /** A cancelled job ends quietly; anything else is reported as a failure the person can retry. */
+  function finishWithError(job: PackJob, err: unknown, what: string): void {
+    if (job.file) void unlink(job.file).catch(() => undefined);
+    if (err instanceof ExportCancelled || job.controller.signal.aborted) {
+      job.status = 'cancelled';
+      job.phase = 'Cancelled';
+      return;
+    }
+    job.status = 'failed';
+    job.error = err instanceof AppError ? err.message : `The ${what} could not be built. Please try again.`;
+  }
+
+  /** The Excel sheet as a background job, so it can show progress and be cancelled. */
+  async function buildSheet(req: Request, job: PackJob): Promise<void> {
+    const signal = job.controller.signal;
     try {
-      const { bugs, ctx, stamp } = await collectExport(req);
+      const { bugs, ctx, stamp } = await collectExport(req, { signal, report: band(job, 0, 90) });
+      job.phase = 'Building the Excel sheet';
+      job.done = bugs.length;
+      job.total = bugs.length;
+      job.percent = 92;
+      const workbook = await buildBugWorkbook(bugs, ctx);
+      throwIfCancelled(signal);
+
+      await mkdir(PACK_DIR, { recursive: true });
+      const file = path.join(PACK_DIR, `${job.id}.xlsx`);
+      job.file = file;
+      await new Promise<void>((resolve, reject) => {
+        const out = createWriteStream(file);
+        out.on('error', reject);
+        out.end(workbook, resolve);
+      });
+      throwIfCancelled(signal);
+
+      job.rows = bugs.length;
+      job.fileName = `bugs-${stamp}.xlsx`;
+      job.sizeBytes = (await stat(file)).size;
+      job.phase = 'Ready to download';
+      job.percent = 100;
+      job.status = 'ready';
+    } catch (err) {
+      finishWithError(job, err, 'spreadsheet');
+    }
+  }
+
+  async function buildPack(req: Request, job: PackJob): Promise<void> {
+    const signal = job.controller.signal;
+    try {
+      const { bugs, ctx, stamp } = await collectExport(req, { signal, report: band(job, 0, 30) });
       job.total = bugs.length;
 
       // Thumbnails: the newest image per bug, capped so the sheet stays openable.
       job.phase = 'Collecting screenshots for the sheet';
       const thumbnails = new Map<number, { buffer: Buffer; extension: 'png' | 'jpeg' }>();
+      const thumbProgress = band(job, 30, 45);
       for (const [i, bug] of bugs.entries()) {
-        job.done = i + 1;
+        throwIfCancelled(signal);
+        thumbProgress('Collecting screenshots for the sheet', (i + 1) / bugs.length, i + 1, bugs.length);
         const image = bug.proof?.find(
           (p) => /^image\/(png|jpe?g)$/i.test(p.contentType) && p.size <= THUMBNAIL_MAX_BYTES
         );
@@ -830,9 +959,12 @@ export function bugsRouter(env: Env): Router {
 
       job.phase = 'Building the Excel sheet';
       job.done = 0;
+      job.percent = Math.max(job.percent, 46);
       const workbook = await buildBugWorkbook(bugs, { ...ctx, thumbnails });
+      throwIfCancelled(signal);
 
       job.phase = 'Packing every proof file';
+      const packProgress = band(job, 50, 99);
       await mkdir(PACK_DIR, { recursive: true });
       const file = path.join(PACK_DIR, `${job.id}.zip`);
       job.file = file;
@@ -843,12 +975,19 @@ export function bugsRouter(env: Env): Router {
         out.on('error', reject);
         archive.on('error', reject);
       });
+      // Observed here as well as awaited below: a cancel throws before the await, and an archive
+      // error after that point must not become an unhandled rejection that takes the server down.
+      written.catch(() => undefined);
       archive.on('warning', () => undefined);
       archive.pipe(out);
 
       archive.append(workbook, { name: `bugs-${stamp}.xlsx` });
       for (const [i, bug] of bugs.entries()) {
-        job.done = i + 1;
+        if (signal.aborted) {
+          archive.abort();
+          throw new ExportCancelled('cancelled');
+        }
+        packProgress('Packing every proof file', (i + 1) / bugs.length, i + 1, bugs.length);
         const folder = `bug-${bug.id}`;
         archive.append(bugMarkdown(bug), { name: `${folder}/BUG-${bug.id}.md` });
         for (const proof of bug.proof ?? []) {
@@ -866,14 +1005,14 @@ export function bugsRouter(env: Env): Router {
       await archive.finalize();
       await written;
 
+      throwIfCancelled(signal);
       job.fileName = `bug-evidence-${stamp}.zip`;
       job.sizeBytes = (await stat(file)).size;
       job.phase = 'Ready to download';
+      job.percent = 100;
       job.status = 'ready';
     } catch (err) {
-      job.status = 'failed';
-      job.error = err instanceof AppError ? err.message : 'The evidence pack could not be built. Please try again.';
-      if (job.file) void unlink(job.file).catch(() => undefined);
+      finishWithError(job, err, 'evidence pack');
     }
   }
 
@@ -882,26 +1021,52 @@ export function bugsRouter(env: Env): Router {
     const { jobId } = parseInput(z.object({ jobId: z.string().uuid() }), req.params);
     const job = packJobs.get(jobId);
     if (!job || job.userId !== req.sessionUser!.bzUserId) {
-      throw new AppError(404, 'NOT_FOUND', 'That evidence pack was not found — it may have expired. Start a new one.');
+      throw new AppError(404, 'NOT_FOUND', 'That export was not found — it may have expired or been cancelled. Start a new one.');
     }
     return job;
   }
 
+  /** Starts an export job of either kind. Bad filters are rejected now, not as a broken download later. */
+  function startJob(req: Request, kind: PackJob['kind']): PackJob {
+    parseInput(exportBugsQuerySchema, req.query);
+    sweepPackJobs();
+    // One export of each kind per person at a time: a second click cancels the first rather than
+    // doubling the load on Bugzilla for a file nobody will collect.
+    for (const other of packJobs.values()) {
+      if (other.userId === req.sessionUser!.bzUserId && other.kind === kind && other.status === 'preparing') {
+        other.controller.abort();
+      }
+    }
+    const job: PackJob = {
+      id: randomUUID(),
+      kind,
+      userId: req.sessionUser!.bzUserId,
+      status: 'preparing',
+      phase: 'Finding the matching bugs',
+      done: 0,
+      total: 0,
+      percent: 0,
+      createdAt: Date.now(),
+      controller: new AbortController(),
+    };
+    packJobs.set(job.id, job);
+    return job;
+  }
+
+  // POST /api/bugs/export/jobs - the Excel sheet, built in the background (progress + cancel).
+  router.post('/export/jobs', auth, async (req, res, next) => {
+    try {
+      const job = startJob(req, 'xlsx');
+      res.status(202).json({ jobId: job.id });
+      void buildSheet(req, job);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post('/export-pack/jobs', auth, async (req, res, next) => {
     try {
-      // Reject bad filters now, as a clear error — not as a broken download minutes later.
-      parseInput(exportBugsQuerySchema, req.query);
-      sweepPackJobs();
-      const job: PackJob = {
-        id: randomUUID(),
-        userId: req.sessionUser!.bzUserId,
-        status: 'preparing',
-        phase: 'Finding the matching bugs',
-        done: 0,
-        total: 0,
-        createdAt: Date.now(),
-      };
-      packJobs.set(job.id, job);
+      const job = startJob(req, 'zip');
       res.status(202).json({ jobId: job.id });
       void buildPack(req, job);
     } catch (err) {
@@ -913,13 +1078,35 @@ export function bugsRouter(env: Env): Router {
     try {
       const job = ownJob(req);
       res.set('Cache-Control', 'no-store').json({
+        kind: job.kind,
         status: job.status,
         phase: job.phase,
         done: job.done,
         total: job.total,
+        percent: job.percent,
+        rows: job.rows ?? null,
         sizeBytes: job.sizeBytes ?? null,
         error: job.error ?? null,
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // DELETE /api/bugs/export-pack/jobs/:jobId - cancel. The build stops before its next Bugzilla
+  // call, and any partial file is removed. Cancelling a finished job just discards its file.
+  router.delete('/export-pack/jobs/:jobId', auth, (req, res, next) => {
+    try {
+      const job = ownJob(req);
+      job.controller.abort();
+      if (job.status === 'ready') {
+        if (job.file) void unlink(job.file).catch(() => undefined);
+        packJobs.delete(job.id);
+      } else if (job.status === 'preparing') {
+        job.status = 'cancelled';
+        job.phase = 'Cancelled';
+      }
+      res.status(204).end();
     } catch (err) {
       next(err);
     }
@@ -929,7 +1116,7 @@ export function bugsRouter(env: Env): Router {
     try {
       const job = ownJob(req);
       if (job.status !== 'ready' || !job.file || !job.fileName) {
-        throw new AppError(409, 'CONFLICT', 'This evidence pack is not ready yet.');
+        throw new AppError(409, 'CONFLICT', 'This export is not ready yet.');
       }
       const file = job.file;
       // res.download sends Content-Length, so the browser shows a real progress bar. The temp file is
@@ -1062,6 +1249,18 @@ export function bugsRouter(env: Env): Router {
     }
   });
 
+  // GET /api/bugs/comment-tags?q=ui - tags already in use, for the tag input's suggestions.
+  // Registered before '/:id' so it is not read as a bug id.
+  router.get('/comment-tags', auth, async (req, res, next) => {
+    try {
+      const { q } = parseInput(z.object({ q: z.string().trim().min(1).max(24).regex(/^[^\s,/]+$/) }), req.query);
+      const tags = await req.bugzilla!.get<string[]>(`/bug/comment/tags/${encodeURIComponent(q)}`, { limit: 10 });
+      res.json({ tags: Array.isArray(tags) ? tags : [] });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // GET /api/bugs/:id
   router.get('/:id', auth, async (req, res, next) => {
     try {
@@ -1119,6 +1318,20 @@ export function bugsRouter(env: Env): Router {
         description,
       });
 
+      /*
+       * Visibility groups the editor may offer: the ones already on the bug plus
+       * the product's own same-named group. Bugzilla's REST API does not expose
+       * a product's group controls, and on this instance each product's bugs are
+       * restricted by exactly that one group - so listing every group would
+       * mostly offer choices Bugzilla then refuses.
+       */
+      const productGroup = groupNameForProduct(bug.product, await allGroupNames(env));
+      // The deletion group is managed by Delete/Restore, never ticked by hand.
+      const availableGroups = [...new Set([...bug.groups, ...(productGroup ? [productGroup] : [])])].filter(
+        (g) => g !== DELETED_GROUP
+      );
+      const deleted = bug.resolution === DELETED_RESOLUTION ? deletedInfoFrom(comments) : null;
+
       res.json({
         bug: {
           ...bug,
@@ -1126,6 +1339,9 @@ export function bugsRouter(env: Env): Router {
           triage: classification,
           grouping: facts.grouping,
           facts,
+          availableGroups,
+          isDeleted: bug.resolution === DELETED_RESOLUTION,
+          deleted,
         },
         comments,
         attachments,
@@ -1179,6 +1395,87 @@ export function bugsRouter(env: Env): Router {
         summary: input.summary || input.fileName,
       });
       res.status(201).json({ ids: created.ids });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // PATCH /api/bugs/:id/attachments/:attachmentId - description, file name, type, obsolete/patch/private.
+  router.patch('/:id/attachments/:attachmentId', auth, async (req, res, next) => {
+    try {
+      const { id, attachmentId } = parseInput(
+        z.object({ id: z.coerce.number().int().positive(), attachmentId: z.coerce.number().int().positive() }),
+        req.params
+      );
+      const input = parseInput(updateAttachmentSchema, req.body);
+      const client = req.bugzilla!;
+
+      /*
+       * The attachment id alone selects what Bugzilla changes, so confirm it
+       * belongs to the bug in the URL. Otherwise a request "for bug 5" could
+       * edit an attachment on any bug the caller can reach, and the bug page it
+       * came from would show nothing changed.
+       */
+      const found = await client.get<{ attachments: Record<string, { bug_id: number }> }>(
+        `/bug/attachment/${attachmentId}`,
+        { include_fields: 'bug_id' }
+      );
+      if (found.attachments[String(attachmentId)]?.bug_id !== id) {
+        throw new AppError(404, 'NOT_FOUND', 'That attachment is not on this bug.');
+      }
+      if (input.isPrivate !== undefined && !(await bugFeatures(env)).privateComments) {
+        throw new AppError(400, 'VALIDATION', 'Private attachments are not enabled on this Bugzilla.');
+      }
+
+      await client.put(`/bug/attachment/${attachmentId}`, {
+        ids: [attachmentId],
+        ...(input.summary !== undefined ? { summary: input.summary } : {}),
+        ...(input.fileName !== undefined ? { file_name: input.fileName } : {}),
+        ...(input.contentType !== undefined ? { content_type: input.contentType } : {}),
+        ...(input.isObsolete !== undefined ? { is_obsolete: input.isObsolete } : {}),
+        ...(input.isPatch !== undefined ? { is_patch: input.isPatch } : {}),
+        ...(input.isPrivate !== undefined ? { is_private: input.isPrivate } : {}),
+        ...(input.comment ? { comment: input.comment } : {}),
+      });
+
+      const after = await client.get<{ attachments: Record<string, unknown> }>(`/bug/attachment/${attachmentId}`, {
+        exclude_fields: 'data',
+      });
+      const attachment = normalizeAttachment(rawAttachmentSchema.parse(after.attachments[String(attachmentId)]));
+      const names = await resolveDisplayNames(client, [attachment.creator]);
+      res.json({ attachment: { ...attachment, creator: displayNameFor(names, attachment.creator) } });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // PUT /api/bugs/:id/comments/:commentId/tags - add/remove tags on one comment.
+  router.put('/:id/comments/:commentId/tags', auth, async (req, res, next) => {
+    try {
+      const { id, commentId } = parseInput(
+        z.object({ id: z.coerce.number().int().positive(), commentId: z.coerce.number().int().positive() }),
+        req.params
+      );
+      const input = parseInput(updateCommentTagsSchema, req.body);
+      const client = req.bugzilla!;
+
+      if (!(await bugFeatures(env)).commentTags) {
+        throw new AppError(400, 'VALIDATION', 'Comment tags are not enabled on this Bugzilla.');
+      }
+      // Same reasoning as attachments: the comment id alone selects the target.
+      const found = await client.get<{ comments: Record<string, { bug_id: number }> }>(`/bug/comment/${commentId}`, {
+        include_fields: 'bug_id',
+      });
+      if (found.comments[String(commentId)]?.bug_id !== id) {
+        throw new AppError(404, 'NOT_FOUND', 'That comment is not on this bug.');
+      }
+
+      const tags = await client.put<string[]>(`/bug/comment/${commentId}/tags`, {
+        comment_id: commentId,
+        ...(input.add?.length ? { add: input.add } : {}),
+        ...(input.remove?.length ? { remove: input.remove } : {}),
+      });
+      res.json({ tags: Array.isArray(tags) ? tags : [] });
     } catch (err) {
       next(err);
     }
@@ -1243,18 +1540,61 @@ export function bugsRouter(env: Env): Router {
     }
   });
 
+  /*
+   * POST /api/bugs/delete and /api/bugs/restore - soft delete (see lib/softDelete.ts).
+   * Testers and admins only. Bugzilla enforces the same line independently:
+   * only they are members of the "Deleted bugs" group it refuses to let anyone
+   * else add or remove.
+   */
+  const triage = requirePermission('canTriage');
+  const actorName = (req: Request) => {
+    const u = req.sessionUser!;
+    return u.realName ? `${u.realName} (${u.email})` : u.email;
+  };
+
+  router.post('/delete', auth, triage, async (req, res, next) => {
+    try {
+      const { ids, reason } = parseInput(softDeleteSchema, req.body);
+      const deleted = await softDeleteBugs(req.bugzilla!, [...new Set(ids)], reason, actorName(req));
+      res.json({ deleted });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/restore', auth, triage, async (req, res, next) => {
+    try {
+      const { ids } = parseInput(restoreSchema, req.body);
+      const client = req.bugzilla!;
+      const restored = await restoreBugs(client, [...new Set(ids)], actorName(req), async (id) => {
+        const resp = await client.get<{ bugs: Record<string, { comments: unknown[] }> }>(`/bug/${id}/comment`);
+        return (resp.bugs[String(id)]?.comments ?? []).map((c) => {
+          const n = normalizeComment(rawCommentSchema.parse(c));
+          return { text: n.text, author: n.author, creationTime: n.creationTime };
+        });
+      });
+      res.json({ restored });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.patch('/:id', auth, async (req, res, next) => {
     try {
       const { id } = parseInput(idParamSchema, req.params);
       const input = parseInput(updateBugSchema, req.body);
       const client = req.bugzilla!;
 
-      const payload: Record<string, string | number> = {};
-      for (const [camelKey, value] of Object.entries(input)) {
-        if (value === undefined) continue;
-        const bzKey = CAMEL_TO_BUGZILLA_UPDATE[camelKey];
-        if (bzKey) payload[bzKey] = value as string | number;
-      }
+      const [currentResp, features] = await Promise.all([
+        client.get<{ bugs: CurrentBug[] }>(`/bug/${id}`, { include_fields: CURRENT_BUG_FIELDS }),
+        bugFeatures(env),
+      ]);
+      const current = currentResp.bugs[0];
+      if (!current) throw new AppError(404, 'NOT_FOUND', 'That bug could not be found.');
+
+      await validateBugUpdate(client, current, input, features);
+
+      const payload = toBugzillaUpdate(input);
 
       /*
        * Resolving as DUPLICATE needs the bug being duplicated.
@@ -1299,18 +1639,23 @@ export function bugsRouter(env: Env): Router {
 
       // Only guard when the assignee is actually changing: every other edit
       // (adding a resolution, correcting a component) stays legal on a closed bug.
-      if (input.assignedTo !== undefined) {
+      // "Reset to default" changes the assignee just as surely as naming one.
+      if (input.assignedTo !== undefined || input.resetAssignedTo) {
         await assertReassignable(client, [id], input.status, {
           email: req.sessionUser!.email,
           canTriage: req.sessionUser!.permissions.canTriage,
         });
       }
 
-      await client.put(`/bug/${id}`, payload);
+      const result = await client.put<{
+        bugs: { id: number; changes: Record<string, { added: string; removed: string }> }[];
+      }>(`/bug/${id}`, payload);
 
       const bugResp = await client.get<{ bugs: unknown[] }>(`/bug/${id}`);
       const bug = normalizeBug(rawBugSchema.parse(bugResp.bugs[0]));
-      res.json({ bug });
+      // What Bugzilla actually recorded, so the UI can confirm the change rather
+      // than echo what was asked for - a no-op edit returns an empty map.
+      res.json({ bug, changes: result.bugs?.find((b) => b.id === id)?.changes ?? {} });
     } catch (err) {
       next(err);
     }

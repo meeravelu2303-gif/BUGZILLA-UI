@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import type { BugFilters, Category, Priority, Severity } from '../types';
+import { describeRange, type DateField } from './dateRange';
 import { rememberListView } from './lastListView';
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * The single filter contract for every list view.
@@ -60,7 +63,7 @@ export const RESOLUTION_VALUES = [
 export type BugQueryParams = Record<string, string | number | string[] | undefined>;
 
 export interface ActiveChip {
-  key: FacetKey | 'search';
+  key: FacetKey | 'search' | 'date';
   value: string;
   label: string;
 }
@@ -79,6 +82,8 @@ export interface UseBugFilters {
   toggleFacet: (key: FacetKey, value: string) => void;
   setFacet: (key: FacetKey, values: string[]) => void;
   setSearch: (value: string) => void;
+  /** Sets (or, with no from/to, clears) the date range. */
+  setDateRange: (range: { field: DateField; from?: string; to?: string }) => void;
   removeChip: (chip: ActiveChip) => void;
   clearAll: () => void;
   /** Sorting lives alongside the filters so the whole view is one URL. */
@@ -87,6 +92,9 @@ export interface UseBugFilters {
   toggleSort: (key: string) => void;
   offset: number;
   setOffset: (offset: number) => void;
+  /** The testers' "Deleted bugs" view (`?deleted=only`). */
+  showDeleted: boolean;
+  setShowDeleted: (on: boolean) => void;
 }
 
 export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'desc' }): UseBugFilters {
@@ -114,6 +122,9 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       status: readAll(params, 'status'),
       resolution: readAll(params, 'resolution'),
       search: params.get('search') ?? '',
+      dateField: params.get('dateField') === 'updated' ? 'updated' : 'created',
+      from: DAY.test(params.get('from') ?? '') ? params.get('from')! : '',
+      to: DAY.test(params.get('to') ?? '') ? params.get('to')! : '',
     }),
     [params]
   );
@@ -167,6 +178,18 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     [commit]
   );
 
+  const setDateRange = useCallback(
+    ({ field, from, to }: { field: DateField; from?: string; to?: string }) =>
+      commit((next) => {
+        for (const k of ['dateField', 'from', 'to']) next.delete(k);
+        if (!from && !to) return;
+        if (field === 'updated') next.set('dateField', 'updated');
+        if (from) next.set('from', from);
+        if (to) next.set('to', to);
+      }),
+    [commit]
+  );
+
   const activeChips = useMemo<ActiveChip[]>(() => {
     const chips: ActiveChip[] = FACET_KEYS.flatMap((key) =>
       readAll(params, key).map((value) => ({
@@ -177,14 +200,22 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     );
     const search = params.get('search');
     if (search) chips.push({ key: 'search', value: search, label: `Search: ${search}` });
+    if (filters.from || filters.to) {
+      const what = filters.dateField === 'updated' ? 'Updated' : 'Created';
+      chips.unshift({ key: 'date', value: `${filters.from}..${filters.to}`, label: `${what}: ${describeRange({ from: filters.from || undefined, to: filters.to || undefined })}` });
+    }
     return chips;
-  }, [params]);
+  }, [params, filters.from, filters.to, filters.dateField]);
 
   const removeChip = useCallback(
     (chip: ActiveChip) =>
       commit((next) => {
         if (chip.key === 'search') {
           next.delete('search');
+          return;
+        }
+        if (chip.key === 'date') {
+          for (const k of ['dateField', 'from', 'to']) next.delete(k);
           return;
         }
         const remaining = next.getAll(chip.key).filter((v) => v !== chip.value);
@@ -198,7 +229,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     () =>
       commit((next) => {
         for (const key of FACET_KEYS) next.delete(key);
-        next.delete('search');
+        for (const k of ['search', 'dateField', 'from', 'to']) next.delete(k);
       }),
     [commit]
   );
@@ -231,6 +262,16 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     [commit]
   );
 
+  const showDeleted = params.get('deleted') === 'only';
+  const setShowDeleted = useCallback(
+    (on: boolean) =>
+      commit((next) => {
+        if (on) next.set('deleted', 'only');
+        else next.delete('deleted');
+      }),
+    [commit]
+  );
+
   const queryParams = useMemo<BugQueryParams>(() => {
     const out: BugQueryParams = {};
     for (const key of FACET_KEYS) {
@@ -238,8 +279,14 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       if (values.length > 0) out[key] = values.map(String);
     }
     if (filters.search) out.search = filters.search;
+    if (filters.from || filters.to) {
+      if (filters.dateField === 'updated') out.dateField = 'updated';
+      if (filters.from) out.from = filters.from;
+      if (filters.to) out.to = filters.to;
+    }
+    if (showDeleted) out.deleted = 'only';
     return out;
-  }, [filters]);
+  }, [filters, showDeleted]);
 
   return {
     filters,
@@ -249,6 +296,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     toggleFacet,
     setFacet,
     setSearch,
+    setDateRange,
     removeChip,
     clearAll,
     sortBy,
@@ -256,5 +304,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     toggleSort,
     offset,
     setOffset,
+    showDeleted,
+    setShowDeleted,
   };
 }

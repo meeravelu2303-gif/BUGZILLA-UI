@@ -32,17 +32,54 @@ export interface Bug {
   classification: string;
   assignedTo: UserRef | null;
   creator: UserRef | null;
+  qaContact: UserRef | null;
   cc: string[];
+  /** The CC list with display names, in the same order as `cc`. */
+  ccDetail: UserRef[];
   keywords: string[];
   groups: string[];
   whiteboard: string;
   url: string;
+  seeAlso: string[];
   dependsOn: number[];
   blocks: number[];
   creationTime: string;
   lastChangeTime: string;
   dupeOf: number | null;
+  /** `null` when the viewer is outside Bugzilla's time-tracking group. */
+  timeTracking: TimeTracking | null;
+  isCcAccessible: boolean;
+  isCreatorAccessible: boolean;
+  flags: BugFlag[];
   description?: string;
+  /** Detail responses only: visibility groups the editor may offer for this bug. */
+  availableGroups?: string[];
+  /** Detail responses only: soft-deleted (resolution DELETED). */
+  isDeleted?: boolean;
+  deleted?: DeletedInfo | null;
+}
+
+export interface DeletedInfo {
+  deletedBy: string;
+  deletedAt: string;
+  reason: string;
+  previous: { status: string; resolution: string; dupeOf: number | null } | null;
+}
+
+export interface TimeTracking {
+  deadline: string | null;
+  estimatedTime: number;
+  remainingTime: number;
+  actualTime: number;
+}
+
+export interface BugFlag {
+  id: number;
+  typeId: number;
+  name: string;
+  status: string;
+  setter: string;
+  requestee: string;
 }
 
 export interface Comment {
@@ -53,6 +90,7 @@ export interface Comment {
   creationTime: string;
   isPrivate: boolean;
   attachmentId: number | null;
+  tags: string[];
 }
 
 export interface Attachment {
@@ -91,9 +129,21 @@ export interface BugMeta {
   priorities: string[];
   opSystems: string[];
   platforms: string[];
+  keywords: string[];
   workflow: WorkflowTransition[];
+  features: BugFeatures;
   currentUser: string;
   bugzillaWebUrl: string;
+}
+
+/** Optional Bugzilla bug fields, as switched on for this instance. */
+export interface BugFeatures {
+  qaContact: boolean;
+  targetMilestone: boolean;
+  seeAlso: boolean;
+  privateComments: boolean;
+  commentTags: boolean;
+  maxAttachmentKb: number;
 }
 
 export interface AdminGroup {
@@ -273,19 +323,61 @@ export interface CreateBugInput {
   whiteboard?: string;
 }
 
+/** Bugzilla's add/remove shape for list fields. */
+export interface ListChange<T> {
+  add?: T[];
+  remove?: T[];
+}
+
 export interface UpdateBugInput {
+  /** The `lastChangeTime` the editor loaded - lets the backend refuse a save that would overwrite someone else's. */
+  lastChangeTime?: string;
   summary?: string;
   status?: string;
   resolution?: string;
+  dupeOf?: number;
   priority?: string;
   severity?: string;
+  product?: string;
   component?: string;
   version?: string;
+  targetMilestone?: string;
   opSys?: string;
   platform?: string;
   assignedTo?: string;
-  targetMilestone?: string;
+  resetAssignedTo?: true;
+  qaContact?: string;
+  resetQaContact?: true;
+  cc?: ListChange<string>;
+  dependsOn?: ListChange<number>;
+  blocks?: ListChange<number>;
+  seeAlso?: ListChange<string>;
+  url?: string;
+  alias?: ListChange<string>;
+  keywords?: ListChange<string>;
+  deadline?: string;
+  estimatedTime?: number;
+  remainingTime?: number;
+  workTime?: number;
+  groups?: ListChange<string>;
+  isCcAccessible?: boolean;
+  isCreatorAccessible?: boolean;
+  flags?: { id?: number; typeId?: number; status: '+' | '-' | '?' | 'X'; requestee?: string }[];
+  comment?: { body: string; isPrivate?: boolean };
   whiteboard?: string;
+}
+
+/** What Bugzilla recorded for a save, field -> before/after. */
+export type BugChanges = Record<string, { added: string; removed: string }>;
+
+export interface UpdateAttachmentInput {
+  summary?: string;
+  fileName?: string;
+  contentType?: string;
+  isObsolete?: boolean;
+  isPatch?: boolean;
+  isPrivate?: boolean;
+  comment?: string;
 }
 
 // ---- Two-axis classification (mirrors backend/src/lib/classification.ts) ----
@@ -415,6 +507,10 @@ export interface BugFilters {
   /** Bugzilla resolutions. `Unresolved` is translated to Bugzilla's `---` server-side. */
   resolution: string[];
   search: string;
+  /** Inclusive local-day range (`YYYY-MM-DD`; '' = open end) on the filed or last-changed date. */
+  dateField: 'created' | 'updated';
+  from: string;
+  to: string;
 }
 
 /* ------------------------------------------------------------------ roles */

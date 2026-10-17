@@ -1,7 +1,15 @@
-import { AlertCircle, ArrowLeft, Layers, User } from 'lucide-react';
+import { AlertCircle, ArchiveRestore, ArrowLeft, Layers, Trash2, User } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { useBug, useMeta, useProducts } from '../api/hooks';
+import { useBug, useMe, useMeta, useProducts, useRestoreBugs, useUpdateBug } from '../api/hooks';
+import { DeleteBugsDialog } from '../components/bugs/DeleteBugsDialog';
+import { Button } from '../components/ui/Button';
+import { EditableSummary } from '../components/bugs/edit/EditableSummary';
+import { SaveBar } from '../components/bugs/edit/SaveBar';
+import { useToast } from '../context/ToastContext';
+import { useBugEditor } from '../lib/useBugEditor';
+import type { BugChanges, BugDetailResponse, BugMeta, Product } from '../types';
 import { AddCommentBox } from '../components/bugs/AddCommentBox';
 import { AttachmentList } from '../components/bugs/AttachmentList';
 import { CommentThread } from '../components/bugs/CommentThread';
@@ -12,14 +20,15 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { CategoryPill, PriorityPill, SeverityPill, StatusPill } from '../components/ui/Pill';
 import { Skeleton } from '../components/ui/Skeleton';
 import { lastListLabel, lastListView } from '../lib/lastListView';
-import { bugDisplayId } from '../lib/utils';
+import { bugDisplayId, formatDateTime } from '../lib/utils';
 
 export function BugDetail() {
   const { id } = useParams<{ id: string }>();
   const bugId = Number(id);
-  const { data, isLoading, isError, error } = useBug(bugId);
+  const { data, isLoading, isError, error, refetch } = useBug(bugId);
   const { data: meta } = useMeta();
   const { data: productsData } = useProducts();
+  const { data: me } = useMe();
 
   if (isLoading) {
     return (
@@ -43,12 +52,103 @@ export function BugDetail() {
     );
   }
 
+  return (
+    <BugDetailView
+      data={data}
+      meta={meta}
+      products={productsData?.products}
+      currentUser={me?.user.email}
+      canTriage={me?.user.permissions.canTriage ?? false}
+      onReload={() => refetch()}
+    />
+  );
+}
+
+/** Bugzilla field names (as returned in `changes`) -> the labels this UI uses. */
+const CHANGE_LABELS: Record<string, string> = {
+  summary: 'Summary', status: 'Status', resolution: 'Resolution', priority: 'Priority', severity: 'Severity',
+  product: 'Product', component: 'Component', version: 'Version', target_milestone: 'Milestone', op_sys: 'OS',
+  platform: 'Platform', assigned_to: 'Assignee', qa_contact: 'QA contact', cc: 'CC', depends_on: 'Depends on',
+  blocks: 'Blocks', see_also: 'See also', url: 'URL', alias: 'Alias', keywords: 'Keywords', groups: 'Visibility',
+  deadline: 'Deadline', estimated_time: 'Estimate', remaining_time: 'Remaining', work_time: 'Hours worked',
+  is_cc_accessible: 'CC access', is_creator_accessible: 'Reporter access', whiteboard: 'Whiteboard', dupe_of: 'Duplicate of',
+  flagtypes: 'Flags',
+};
+
+function describeChanges(changes: BugChanges): string {
+  const parts = Object.entries(changes).map(([field, c]) => {
+    const label = CHANGE_LABELS[field] ?? field.replace(/_/g, ' ');
+    const short = (s: string) => (s.length > 28 ? `${s.slice(0, 27)}…` : s);
+    if (c.added && c.removed) return `${label}: ${short(c.removed)} → ${short(c.added)}`;
+    if (c.added) return `${label}: +${short(c.added)}`;
+    return `${label}: −${short(c.removed)}`;
+  });
+  return parts.length > 4 ? `${parts.slice(0, 4).join(' · ')} · and ${parts.length - 4} more` : parts.join(' · ');
+}
+
+function BugDetailView({
+  data,
+  meta,
+  products,
+  currentUser,
+  canTriage,
+  onReload,
+}: {
+  data: BugDetailResponse;
+  meta?: BugMeta;
+  products?: Product[];
+  currentUser?: string;
+  canTriage: boolean;
+  onReload: () => Promise<unknown>;
+}) {
   const { bug, comments, attachments } = data;
+  const editor = useBugEditor(bug, meta, products);
+  const updateBug = useUpdateBug(bug.id);
+  const restore = useRestoreBugs();
+  const { toast } = useToast();
+  const [conflict, setConflict] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const isDeleted = Boolean(bug.isDeleted);
+
+  async function onRestore() {
+    try {
+      await restore.mutateAsync({ ids: [bug.id] });
+      toast({ variant: 'success', title: `Restored ${bugDisplayId(bug)}`, description: 'It is back in every list, as it was before deletion.' });
+    } catch (err) {
+      toast({ variant: 'error', title: 'Could not restore', description: err instanceof ApiError ? err.message : 'Please try again.' });
+    }
+  }
+
+  const onSave = useCallback(async () => {
+    try {
+      const { changes } = await updateBug.mutateAsync(editor.buildPayload());
+      editor.markSaved();
+      setConflict(false);
+      const count = Object.keys(changes).length;
+      toast({
+        variant: 'success',
+        title: count ? 'Bug updated' : 'Saved',
+        description: count ? describeChanges(changes) : 'Bugzilla already had these values - nothing changed.',
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'CONFLICT' && err.details?.reason === 'MID_AIR_COLLISION') {
+        setConflict(true);
+        return;
+      }
+      toast({ variant: 'error', title: 'Update failed', description: err instanceof ApiError ? err.message : 'Please try again.' });
+    }
+  }, [editor, updateBug, toast]);
+
+  async function reloadLatest() {
+    await onReload();
+    setConflict(false);
+    toast({ variant: 'info', title: 'Loaded the latest version', description: 'Your edits were kept. Review them, then save.' });
+  }
+
   // Read once per render, before any navigation away, so the link always points at the list the
   // reader actually arrived from.
   const backTo = lastListView();
   const backLabel = lastListLabel();
-  const product = productsData?.products.find((p) => p.name === bug.product);
   const triage = bug.triage;
   const grouping = bug.grouping;
   const facts = bug.facts;
@@ -63,6 +163,31 @@ export function BugDetail() {
         <ArrowLeft className="h-3.5 w-3.5" /> {backLabel}
       </Link>
 
+      {isDeleted && (
+        <div role="status" className="mt-4 flex flex-wrap items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-900">
+          <Trash2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">This bug is deleted.</p>
+            <p className="mt-0.5 text-rose-800">
+              {bug.deleted ? (
+                <>
+                  Deleted by {bug.deleted.deletedBy} on {formatDateTime(bug.deleted.deletedAt)}
+                  {bug.deleted.reason && <> - “{bug.deleted.reason}”</>}. Only testers and admins can see it.
+                </>
+              ) : (
+                'Only testers and admins can see it.'
+              )}{' '}
+              It can't be edited until it is restored.
+            </p>
+          </div>
+          {canTriage && (
+            <Button size="sm" variant="secondary" onClick={onRestore} loading={restore.isPending}>
+              <ArchiveRestore className="h-3.5 w-3.5" /> Restore
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Classification leads: what kind of defect this is, and how urgent. An elevated hero
           so the id, title and the severity/category pills read as one clear header. */}
       <header className="mt-4 rounded-2xl border border-slate-200/80 bg-white/70 p-6 shadow-sm ring-1 ring-black/[0.02] backdrop-blur-sm">
@@ -74,11 +199,18 @@ export function BugDetail() {
           <span className="font-medium text-slate-600">{bug.product}</span>
           <span className="text-slate-400">/</span>
           <span className="font-medium text-slate-600">{bug.component}</span>
+          {canTriage && !isDeleted && (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="focus-ring ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-700"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete
+            </button>
+          )}
         </div>
 
-        <h1 className="mt-2 text-[1.6rem] font-semibold leading-snug tracking-tight text-slate-900">
-          {bug.summary}
-        </h1>
+        <EditableSummary editor={editor} readOnly={isDeleted} />
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {triage && <SeverityPill severity={triage.severity} />}
@@ -172,21 +304,47 @@ export function BugDetail() {
             </CardBody>
           </Card>
 
-          {attachments.length > 0 && <AttachmentList bugId={bug.id} attachments={attachments} />}
+          {attachments.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Attachments ({attachments.length})</CardTitle>
+              </CardHeader>
+              <AttachmentList bugId={bug.id} attachments={attachments} privateAllowed={meta?.features.privateComments} />
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
               <CardTitle>Comments</CardTitle>
             </CardHeader>
-            <CardBody>
-              <CommentThread comments={comments} />
+            <CardBody className="px-0 py-0">
+              <CommentThread bugId={bug.id} comments={comments} tagsEnabled={meta?.features.commentTags} />
               <AddCommentBox bugId={bug.id} />
             </CardBody>
           </Card>
         </div>
 
-        <MetadataSidebar bug={bug} meta={meta} product={product} />
+        {/* A disabled fieldset turns every control inside read-only in one place. */}
+        <fieldset disabled={isDeleted} className="min-w-0">
+          <MetadataSidebar bug={bug} meta={meta} editor={editor} products={products} currentUser={currentUser} />
+        </fieldset>
       </div>
+
+      <DeleteBugsDialog open={confirmDelete} ids={[bug.id]} onClose={() => setConfirmDelete(false)} />
+
+      {/* Room for the floating save bar, so it never covers the last comment. */}
+      {(editor.dirty.length > 0 || conflict) && <div className="h-28" aria-hidden />}
+
+      {!isDeleted && (
+        <SaveBar
+          editor={editor}
+          saving={updateBug.isPending}
+          conflict={conflict}
+          onSave={onSave}
+          onReloadLatest={reloadLatest}
+          privateComments={Boolean(meta?.features.privateComments)}
+        />
+      )}
     </div>
   );
 }

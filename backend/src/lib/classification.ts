@@ -282,6 +282,23 @@ export interface BugFilters {
   assignedTo?: string;
   creator?: string;
   cc?: string;
+  /**
+   * Soft-deleted bugs (resolution DELETED). Hidden unless asked for: testers and
+   * admins can still READ them, so without this every list, count, chart and
+   * export they open would quietly include bugs everyone agreed were gone.
+   */
+  deleted?: 'exclude' | 'only' | 'include';
+  /** Inclusive day range (`YYYY-MM-DD`) on the filing date or the last-change date. */
+  dateField?: 'created' | 'updated';
+  from?: string;
+  to?: string;
+}
+
+/** The day after `YYYY-MM-DD`, so an inclusive "to" becomes an exclusive upper bound. */
+function nextDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -567,6 +584,24 @@ export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
   const chart = chartWriter(query);
   whiteboardCharts(filters, chart);
   searchChart(filters, query, chart);
+
+  /*
+   * Date range. Bugzilla's own `creation_time` parameter is "on or after" only, so both ends are
+   * chart rows instead. The upper bound is "before the NEXT day": `to=2026-10-31` must include a
+   * bug filed at 23:59 on the 31st, which "<= 2026-10-31" (midnight) would drop.
+   */
+  if (filters.from || filters.to) {
+    const column = filters.dateField === 'updated' ? 'delta_ts' : 'creation_ts';
+    let [from, to] = [filters.from, filters.to];
+    if (from && to && from > to) [from, to] = [to, from];
+    if (from) chart.pushWith(column, 'greaterthaneq', from);
+    if (to) chart.pushWith(column, 'lessthan', nextDay(to));
+  }
+
+  const deleted = filters.deleted ?? 'exclude';
+  if (deleted === 'only') query.resolution = ['DELETED'];
+  // A top-level chart row ANDs with everything above it.
+  else if (deleted === 'exclude') chart.pushWith('resolution', 'notequals', 'DELETED');
 
   return query;
 }

@@ -1,7 +1,8 @@
-import { UserCheck, X } from 'lucide-react';
+import { ArchiveRestore, Trash2, UserCheck, X } from 'lucide-react';
 import { useState } from 'react';
 import { ApiError } from '../../api/client';
-import { useAssignableUsers, useBulkReassign } from '../../api/hooks';
+import { useAssignableUsers, useBulkReassign, useRestoreBugs } from '../../api/hooks';
+import { DeleteBugsDialog } from './DeleteBugsDialog';
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Field';
@@ -15,6 +16,9 @@ export function BulkReassignBar({
   selectedIds,
   onDone,
   product,
+  canTriage = false,
+  deletedView = false,
+  closedSelected = 0,
 }: {
   selectedIds: Set<number>;
   onDone: () => void;
@@ -26,13 +30,53 @@ export function BulkReassignBar({
    * belong to. Undefined then, which falls back to the full list.
    */
   product?: string | string[];
+  /** Testers and admins: may delete (or, in the deleted view, restore) the selection. */
+  canTriage?: boolean;
+  /** The list is the "Deleted bugs" view - offer Restore instead of Reassign/Delete. */
+  deletedView?: boolean;
+  /** How many selected bugs are closed; those cannot be reassigned. */
+  closedSelected?: number;
 }) {
   const { data: assignable } = useAssignableUsers(product);
   const bulk = useBulkReassign();
+  const restore = useRestoreBugs();
   const { toast } = useToast();
   const [assignee, setAssignee] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (selectedIds.size === 0) return null;
+
+  const ids = [...selectedIds];
+
+  async function onRestore() {
+    try {
+      const res = await restore.mutateAsync({ ids });
+      toast({ variant: 'success', title: `Restored ${res.restored} bug${res.restored === 1 ? '' : 's'}` });
+      onDone();
+    } catch (err) {
+      toast({ variant: 'error', title: 'Restore failed', description: err instanceof ApiError ? err.message : 'Please try again.' });
+    }
+  }
+
+  if (deletedView) {
+    return (
+      <div className="sticky bottom-4 z-20 mx-3 mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-white/95 px-4 py-3 shadow-lg ring-1 ring-black/5 backdrop-blur">
+        <span className="text-sm font-semibold text-slate-800">{selectedIds.size} selected</span>
+        <Button size="sm" onClick={onRestore} loading={restore.isPending} disabled={!canTriage}>
+          <ArchiveRestore className="h-3.5 w-3.5" /> Restore
+        </Button>
+        <button
+          type="button"
+          onClick={onDone}
+          className="focus-ring ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+        >
+          <X className="h-3.5 w-3.5" /> Clear
+        </button>
+      </div>
+    );
+  }
+
+  const reassignBlocked = closedSelected > 0;
 
   async function apply() {
     if (!assignee) return;
@@ -73,9 +117,26 @@ export function BulkReassignBar({
         ))}
       </Select>
 
-      <Button size="sm" onClick={apply} loading={bulk.isPending} disabled={!assignee}>
+      <Button
+        size="sm"
+        onClick={apply}
+        loading={bulk.isPending}
+        disabled={!assignee || reassignBlocked}
+        title={reassignBlocked ? `${closedSelected} selected bug${closedSelected === 1 ? ' is' : 's are'} closed and can't be reassigned.` : undefined}
+      >
         Apply
       </Button>
+      {reassignBlocked && (
+        <span className="text-xs text-amber-700">
+          {closedSelected} closed - deselect {closedSelected === 1 ? 'it' : 'them'} to reassign
+        </span>
+      )}
+      {canTriage && (
+        <Button size="sm" variant="secondary" onClick={() => setConfirmDelete(true)} className="text-rose-700">
+          <Trash2 className="h-3.5 w-3.5" /> Delete
+        </Button>
+      )}
+      <DeleteBugsDialog open={confirmDelete} ids={ids} onClose={() => setConfirmDelete(false)} onDeleted={onDone} />
       <button
         type="button"
         onClick={onDone}

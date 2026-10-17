@@ -5,6 +5,7 @@ import type { FacetStats } from '../../lib/useFacetStats';
 import { FACET_LABELS, RESOLUTION_VALUES, type UseBugFilters } from '../../lib/useBugFilters';
 import { useDebounce } from '../../lib/useDebounce';
 import { CATEGORIES, PRIORITIES, SEVERITIES, type BugMeta, type Product } from '../../types';
+import { DateRangeFilter } from './DateRangeFilter';
 import { MultiSelect, type MultiSelectOption } from '../ui/MultiSelect';
 
 /**
@@ -51,7 +52,7 @@ export function FilterBar({
   totalCount?: number;
   isLoading?: boolean;
 }) {
-  const { filters, activeChips, isFiltered, toggleFacet, setFacet, setSearch, removeChip, clearAll } = controller;
+  const { filters, activeChips, isFiltered, toggleFacet, setFacet, setSearch, setDateRange, removeChip, clearAll } = controller;
 
   // Typing must not fire a request per keystroke; the URL updates once the user pauses.
   const [searchInput, setSearchInput] = useState(filters.search);
@@ -136,6 +137,14 @@ export function FilterBar({
             className="focus-ring h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400"
           />
         </div>
+
+        <DateRangeFilter
+          className="w-56"
+          field={filters.dateField}
+          from={filters.from}
+          to={filters.to}
+          onChange={setDateRange}
+        />
 
         {/* Product leads the row: it is the top-level scope for a user with access to more
             than one product; the facets to its right narrow within that scope. */}

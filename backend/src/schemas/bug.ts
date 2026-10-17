@@ -29,16 +29,45 @@ export const rawBugSchema = z
     assigned_to_detail: userDetailSchema.optional(),
     creator: z.string().optional(),
     creator_detail: userDetailSchema.optional(),
+    qa_contact: z.string().optional(),
+    qa_contact_detail: userDetailSchema.optional(),
     cc: z.array(z.string()).optional(),
+    cc_detail: z.array(userDetailSchema).optional(),
     keywords: z.array(z.string()).optional(),
     groups: z.array(z.string()).optional(),
     whiteboard: z.string().optional(),
     url: z.string().optional(),
+    see_also: z.array(z.string()).optional(),
     depends_on: z.array(z.number()).optional(),
     blocks: z.array(z.number()).optional(),
     creation_time: z.string(),
     last_change_time: z.string(),
     dupe_of: z.number().nullable().optional(),
+    /*
+     * Time tracking. Bugzilla only includes these for members of
+     * `timetrackinggroup`, so "absent" means "not yours to see" and is kept
+     * distinct from 0 - the UI hides the section rather than showing zeros.
+     */
+    deadline: z.string().nullable().optional(),
+    estimated_time: z.number().optional(),
+    remaining_time: z.number().optional(),
+    actual_time: z.number().optional(),
+    is_cc_accessible: z.boolean().optional(),
+    is_creator_accessible: z.boolean().optional(),
+    flags: z
+      .array(
+        z
+          .object({
+            id: z.number(),
+            type_id: z.number(),
+            name: z.string(),
+            status: z.string(),
+            setter: z.string().optional(),
+            requestee: z.string().optional(),
+          })
+          .passthrough()
+      )
+      .optional(),
   })
   .passthrough();
 
@@ -63,16 +92,30 @@ export interface NormalizedBug {
   classification: string;
   assignedTo: { id: number; email: string; name: string } | null;
   creator: { id: number; email: string; name: string } | null;
+  qaContact: { id: number; email: string; name: string } | null;
   cc: string[];
+  /** The CC list with real names, same order as `cc`. Falls back to the login when no detail. */
+  ccDetail: { id: number; email: string; name: string }[];
   keywords: string[];
   groups: string[];
   whiteboard: string;
   url: string;
+  seeAlso: string[];
   dependsOn: number[];
   blocks: number[];
   creationTime: string;
   lastChangeTime: string;
   dupeOf: number | null;
+  /** `null` when the caller is outside Bugzilla's time-tracking group, not "no deadline". */
+  timeTracking: {
+    deadline: string | null;
+    estimatedTime: number;
+    remainingTime: number;
+    actualTime: number;
+  } | null;
+  isCcAccessible: boolean;
+  isCreatorAccessible: boolean;
+  flags: { id: number; typeId: number; name: string; status: string; setter: string; requestee: string }[];
 }
 
 export function normalizeBug(raw: RawBug): NormalizedBug {
@@ -95,16 +138,41 @@ export function normalizeBug(raw: RawBug): NormalizedBug {
     classification: raw.classification ?? '',
     assignedTo: normalizeUser(raw.assigned_to_detail) ?? (raw.assigned_to ? { id: 0, email: raw.assigned_to, name: raw.assigned_to } : null),
     creator: normalizeUser(raw.creator_detail) ?? (raw.creator ? { id: 0, email: raw.creator, name: raw.creator } : null),
+    qaContact: normalizeUser(raw.qa_contact_detail) ?? (raw.qa_contact ? { id: 0, email: raw.qa_contact, name: raw.qa_contact } : null),
     cc: raw.cc ?? [],
+    ccDetail: (raw.cc ?? []).map((email) => {
+      const detail = raw.cc_detail?.find((d) => d.email === email || d.name === email);
+      return normalizeUser(detail) ?? { id: 0, email, name: email };
+    }),
     keywords: raw.keywords ?? [],
     groups: raw.groups ?? [],
     whiteboard: raw.whiteboard ?? '',
     url: raw.url ?? '',
+    seeAlso: raw.see_also ?? [],
     dependsOn: raw.depends_on ?? [],
     blocks: raw.blocks ?? [],
     creationTime: raw.creation_time,
     lastChangeTime: raw.last_change_time,
     dupeOf: raw.dupe_of ?? null,
+    timeTracking:
+      raw.estimated_time === undefined
+        ? null
+        : {
+            deadline: raw.deadline ?? null,
+            estimatedTime: raw.estimated_time,
+            remainingTime: raw.remaining_time ?? 0,
+            actualTime: raw.actual_time ?? 0,
+          },
+    isCcAccessible: raw.is_cc_accessible ?? true,
+    isCreatorAccessible: raw.is_creator_accessible ?? true,
+    flags: (raw.flags ?? []).map((f) => ({
+      id: f.id,
+      typeId: f.type_id,
+      name: f.name,
+      status: f.status,
+      setter: f.setter ?? '',
+      requestee: f.requestee ?? '',
+    })),
   };
 }
 
@@ -129,6 +197,7 @@ export interface NormalizedComment {
   creationTime: string;
   isPrivate: boolean;
   attachmentId: number | null;
+  tags: string[];
 }
 
 export function normalizeComment(raw: z.infer<typeof rawCommentSchema>): NormalizedComment {
@@ -140,6 +209,7 @@ export function normalizeComment(raw: z.infer<typeof rawCommentSchema>): Normali
     creationTime: raw.creation_time,
     isPrivate: raw.is_private,
     attachmentId: raw.attachment_id,
+    tags: raw.tags ?? [],
   };
 }
 
@@ -207,6 +277,12 @@ function repeatable<T extends z.ZodTypeAny>(item: T) {
 /** Free-text facet values (product/component/status) - user data, not a fixed vocabulary. */
 const facetValue = z.string().min(1).max(200);
 
+/** A calendar day, `YYYY-MM-DD`, that actually exists (no 2026-02-30). */
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.')
+  .refine((d) => !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && new Date(`${d}T00:00:00Z`).toISOString().startsWith(d), 'Not a real date.');
+
 export const listBugsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(25),
   offset: z.coerce.number().int().min(0).default(0),
@@ -240,6 +316,16 @@ export const listBugsQuerySchema = z.object({
   creator: z.string().optional(),
   cc: z.string().optional(),
   search: z.string().optional(),
+  /** Soft-deleted bugs: hidden by default; `only` is the testers' "Deleted bugs" view. */
+  deleted: z.enum(['exclude', 'only', 'include']).default('exclude'),
+
+  /**
+   * Date range, inclusive on both ends: `from=2026-10-01&to=2026-10-31` is October. Applies to
+   * the date the bug was filed (`created`) or last changed (`updated`). Either end may be open.
+   */
+  dateField: z.enum(['created', 'updated']).default('created'),
+  from: isoDate.optional(),
+  to: isoDate.optional(),
 
   sortBy: z.string().default('last_change_time'),
   sortDir: z.enum(['asc', 'desc']).default('desc'),
@@ -264,6 +350,10 @@ export const countBugsQuerySchema = listBugsQuerySchema.pick({
   creator: true,
   cc: true,
   search: true,
+  deleted: true,
+  dateField: true,
+  from: true,
+  to: true,
 });
 
 export type CountBugsQuery = z.infer<typeof countBugsQuerySchema>;
@@ -348,19 +438,105 @@ export const createAttachmentSchema = z.object({
 
 export type CreateBugInput = z.infer<typeof createBugSchema>;
 
+/**
+ * Bugzilla's add/remove shape for list fields (cc, keywords, depends_on, ...).
+ * Deltas rather than a full replacement list, so two people editing the CC
+ * list at once each add their own name instead of the later save silently
+ * dropping the earlier one.
+ */
+function listChange<T extends z.ZodTypeAny>(item: T) {
+  return z
+    .object({
+      add: z.array(item).max(100).optional(),
+      remove: z.array(item).max(100).optional(),
+    })
+    .refine((v) => (v.add?.length ?? 0) + (v.remove?.length ?? 0) > 0, { message: 'Nothing to add or remove' })
+    .optional();
+}
+
+const bugIdValue = z.coerce.number().int().positive();
+const hours = z.number().min(0).max(99999.99);
+
 export const updateBugSchema = z
   .object({
-    summary: z.string().min(1).max(255).optional(),
+    /**
+     * The `lastChangeTime` the editor loaded. When it no longer matches the bug,
+     * someone else saved in between and the request is refused with a 409
+     * instead of quietly overwriting their change ("mid-air collision").
+     */
+    lastChangeTime: z.string().optional(),
+
+    summary: z.string().trim().min(1).max(255).optional(),
     status: z.string().optional(),
     resolution: z.string().optional(),
     priority: z.string().optional(),
     severity: z.string().optional(),
+
+    /** Moving products needs a component and version that exist in the new one. */
+    product: z.string().min(1).optional(),
     component: z.string().optional(),
     version: z.string().optional(),
+    targetMilestone: z.string().optional(),
     opSys: z.string().optional(),
     platform: z.string().optional(),
+
     assignedTo: z.string().email().optional(),
-    targetMilestone: z.string().optional(),
+    /** Hand the bug back to the component's default assignee. */
+    resetAssignedTo: z.literal(true).optional(),
+    /** `''` clears the QA contact. */
+    qaContact: z.union([z.string().email(), z.literal('')]).optional(),
+    resetQaContact: z.literal(true).optional(),
+    cc: listChange(z.string().email()),
+
+    dependsOn: listChange(bugIdValue),
+    blocks: listChange(bugIdValue),
+    seeAlso: listChange(z.string().trim().min(1).max(255)),
+    url: z.union([z.string().trim().url().max(255), z.literal('')]).optional(),
+    alias: listChange(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(40)
+        .regex(/^(?!\d+$)[^\s,]+$/, 'An alias cannot contain spaces or commas, and cannot be only digits.')
+    ),
+    keywords: listChange(z.string().min(1).max(64)),
+
+    /** `YYYY-MM-DD`, or `''` to clear it. */
+    deadline: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD.'), z.literal('')]).optional(),
+    estimatedTime: hours.optional(),
+    remainingTime: hours.optional(),
+    /** Hours worked, ADDED to the total (not a new total). Negative corrects an over-logged entry. */
+    workTime: z.number().min(-99999.99).max(99999.99).refine((n) => n !== 0, 'Hours worked cannot be 0.').optional(),
+
+    /** Who can see the bug: the product groups it is restricted to. */
+    groups: listChange(z.string().min(1).max(255)),
+    isCcAccessible: z.boolean().optional(),
+    isCreatorAccessible: z.boolean().optional(),
+
+    flags: z
+      .array(
+        z
+          .object({
+            id: z.number().int().positive().optional(),
+            typeId: z.number().int().positive().optional(),
+            /** `X` clears a flag. */
+            status: z.enum(['+', '-', '?', 'X']),
+            requestee: z.string().email().optional(),
+          })
+          .refine((f) => f.id !== undefined || f.typeId !== undefined, 'A flag needs an id or a type id.')
+      )
+      .max(50)
+      .optional(),
+
+    /** Posted with the change, so the bug history says why it was made. */
+    comment: z
+      .object({
+        body: z.string().trim().min(1).max(65535),
+        isPrivate: z.boolean().optional(),
+      })
+      .optional(),
+
     whiteboard: z.string().optional(),
     /**
      * The bug this one duplicates. Required by Bugzilla whenever the resolution
@@ -371,7 +547,53 @@ export const updateBugSchema = z
      */
     dupeOf: z.coerce.number().int().positive().optional(),
   })
-  .refine((obj) => Object.keys(obj).length > 0, { message: 'At least one field must be provided' });
+  .strict()
+  .refine((obj) => Object.keys(obj).some((k) => k !== 'lastChangeTime'), { message: 'At least one field must be provided' })
+  .refine((obj) => !(obj.assignedTo && obj.resetAssignedTo), {
+    message: 'Choose an assignee or reset to the default - not both.',
+  })
+  .refine((obj) => !(obj.qaContact !== undefined && obj.resetQaContact), {
+    message: 'Choose a QA contact or reset to the default - not both.',
+  });
+
+/** Soft delete / restore, one bug or many. */
+export const softDeleteSchema = z.object({
+  ids: z.array(z.coerce.number().int().positive()).min(1).max(100),
+  reason: z.string().trim().min(3, 'Say why - at least a few words.').max(1000),
+});
+
+export const restoreSchema = z.object({
+  ids: z.array(z.coerce.number().int().positive()).min(1).max(100),
+});
+
+/** Editable attachment properties - Bugzilla's `PUT /bug/attachment/{id}`. */
+export const updateAttachmentSchema = z
+  .object({
+    summary: z.string().trim().min(1).max(255).optional(),
+    fileName: z.string().trim().min(1).max(255).optional(),
+    contentType: z
+      .string()
+      .trim()
+      .regex(/^[\w.+-]+\/[\w.+-]+$/, 'Enter a MIME type such as image/png or text/plain.')
+      .optional(),
+    isObsolete: z.boolean().optional(),
+    isPatch: z.boolean().optional(),
+    isPrivate: z.boolean().optional(),
+    comment: z.string().trim().min(1).max(65535).optional(),
+  })
+  .strict()
+  .refine((obj) => Object.keys(obj).some((k) => k !== 'comment'), { message: 'At least one field must be provided' });
+
+export type UpdateAttachmentInput = z.infer<typeof updateAttachmentSchema>;
+
+/** Comment tags - Bugzilla's `PUT /bug/comment/{id}/tags`. */
+export const updateCommentTagsSchema = z
+  .object({
+    add: z.array(z.string().trim().min(1).max(24).regex(/^[^\s,]+$/, 'A tag cannot contain spaces or commas.')).max(20).optional(),
+    remove: z.array(z.string().min(1).max(24)).max(20).optional(),
+  })
+  .strict()
+  .refine((v) => (v.add?.length ?? 0) + (v.remove?.length ?? 0) > 0, { message: 'Nothing to add or remove' });
 
 /**
  * Bulk reassignment: one assignee applied to many bugs at once. Bugzilla's `Bug.update` accepts

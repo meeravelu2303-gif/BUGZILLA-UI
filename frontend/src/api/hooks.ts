@@ -4,7 +4,9 @@ import type { BugQueryParams } from '../lib/useBugFilters';
 import type {
   AdminGroup,
   AdminUser,
+  Attachment,
   AuthUser,
+  BugChanges,
   BugCounts,
   BugDetailResponse,
   BugStats,
@@ -15,6 +17,7 @@ import type {
   CreateProductInput,
   CreateUserInput,
   Product,
+  UpdateAttachmentInput,
   UpdateBugInput,
   UpdateProductInput,
   UpdateUserInput,
@@ -156,11 +159,70 @@ export function useCreateBug() {
 export function useUpdateBug(id: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: UpdateBugInput) => api.patch<{ bug: BugDetailResponse['bug'] }>(`/bugs/${id}`, input),
-    onSuccess: () => {
+    mutationFn: (input: UpdateBugInput) =>
+      api.patch<{ bug: BugDetailResponse['bug']; changes: BugChanges }>(`/bugs/${id}`, input),
+    onSuccess: ({ bug }) => {
+      // The response already carries the saved bug: apply it at once so the
+      // editor's baseline moves and the save bar clears without waiting for a
+      // refetch (each Bugzilla call costs ~600ms under mod_cgi). The refetch
+      // below then fills in the derived fields (triage, description, groups).
+      qc.setQueryData<BugDetailResponse>(['bugs', id], (prev) => (prev ? { ...prev, bug: { ...prev.bug, ...bug } } : prev));
       qc.invalidateQueries({ queryKey: ['bugs', id] });
       qc.invalidateQueries({ queryKey: ['bugs'], exact: false });
     },
+  });
+}
+
+export function useUpdateAttachment(bugId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ attachmentId, input }: { attachmentId: number; input: UpdateAttachmentInput }) =>
+      api.patch<{ attachment: Attachment }>(`/bugs/${bugId}/attachments/${attachmentId}`, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bugs', bugId] });
+    },
+  });
+}
+
+/** Adds/removes tags on one comment. Patches the cached comment so the chip appears without a refetch. */
+export function useUpdateCommentTags(bugId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ commentId, add, remove }: { commentId: number; add?: string[]; remove?: string[] }) =>
+      api.put<{ tags: string[] }>(`/bugs/${bugId}/comments/${commentId}/tags`, { add, remove }),
+    onSuccess: ({ tags }, { commentId }) => {
+      qc.setQueryData<BugDetailResponse>(['bugs', bugId], (prev) =>
+        prev ? { ...prev, comments: prev.comments.map((c) => (c.id === commentId ? { ...c, tags } : c)) } : prev
+      );
+    },
+  });
+}
+
+/** Tags already used elsewhere, for the tag input's suggestions. */
+export function useCommentTagSuggestions(query: string, enabled: boolean) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: ['bugs', 'comment-tags', q.toLowerCase()],
+    queryFn: () => api.get<{ tags: string[] }>(`/bugs/comment-tags${buildQuery({ q })}`),
+    enabled: enabled && q.length > 0 && /^[^\s,/]+$/.test(q),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** Soft-deletes bugs (testers and admins). Everything bug-shaped is refetched: lists, counts, the bug itself. */
+export function useDeleteBugs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { ids: number[]; reason: string }) => api.post<{ deleted: number }>('/bugs/delete', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bugs'], exact: false }),
+  });
+}
+
+export function useRestoreBugs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { ids: number[] }) => api.post<{ restored: number }>('/bugs/restore', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bugs'], exact: false }),
   });
 }
 

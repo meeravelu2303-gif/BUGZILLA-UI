@@ -11,7 +11,7 @@ import { useBrowserScope } from '../lib/useBrowserScope';
 import { useFacetStats } from '../lib/useFacetStats';
 import { useBugFilters } from '../lib/useBugFilters';
 import type { Bug } from '../types';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Trash2 } from 'lucide-react';
 
 const LIMIT = 20;
 
@@ -28,7 +28,7 @@ export function BugList() {
    * most important work should be on top without asking.
    */
   const controller = useBugFilters({ sortBy: 'id', sortDir: 'asc' });
-  const { filters, queryParams, sortBy, sortDir, toggleSort, offset, setOffset, isFiltered } = controller;
+  const { filters, queryParams, sortBy, sortDir, toggleSort, offset, setOffset, isFiltered, showDeleted, setShowDeleted } = controller;
 
   const query = useMemo(
     () => ({ ...queryParams, limit: LIMIT, offset, sortBy, sortDir }),
@@ -83,8 +83,10 @@ export function BugList() {
   const myEmail = (me?.user.email ?? '').toLowerCase();
 
   const selectReason = (bug: Bug): string | undefined => {
-    if (!bug.isOpen) return `${bug.status} bugs can't be reassigned — reopen it first.`;
+    // Testers and admins can select anything: closed bugs can still be deleted
+    // or restored, and the bar explains when a selection can't be reassigned.
     if (canTriage) return undefined;
+    if (!bug.isOpen) return `${bug.status} bugs can't be reassigned — reopen it first.`;
     if ((bug.assignedTo?.email ?? '').toLowerCase() !== myEmail) {
       return `Assigned to ${bug.assignedTo?.name ?? 'someone else'} — only the assignee or a tester can reassign it.`;
     }
@@ -110,7 +112,8 @@ export function BugList() {
   // The exact size of the filtered set, and of the whole product, so the bar can
   // say how much is hidden rather than leaving the user to infer it.
   const { data: filteredCount } = useBugCounts(queryParams);
-  const { data: totalCount } = useBugCounts({});
+  // In the deleted view, "of N" means of all deleted bugs, not of the live ones.
+  const { data: totalCount } = useBugCounts(showDeleted ? { deleted: 'only' } : {});
   // Scope the facet-count breakdown to the selected product, so every filter shows this
   // product's data only — never another product's severities, categories or components. Only the
   // product facet is folded in (not severity/status/etc.), so picking one facet never collapses
@@ -126,11 +129,32 @@ export function BugList() {
       <div className="mb-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900">Bugs</h1>
-            <p className="mt-1 text-sm text-slate-600">Browse, filter and triage every defect across your products.</p>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">{showDeleted ? 'Deleted bugs' : 'Bugs'}</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              {showDeleted
+                ? 'Soft-deleted bugs, hidden from everyone else. Select any to restore them exactly as they were.'
+                : 'Browse, filter and triage every defect across your products.'}
+            </p>
           </div>
-          {/* The table's own filters and sort, minus the page - so the sheet holds every match. */}
-          <ExportButton params={{ ...queryParams, sortBy, sortDir }} count={filteredCount?.counts.total} />
+          <div className="flex items-center gap-2">
+            {canTriage && (
+              <button
+                type="button"
+                onClick={() => setShowDeleted(!showDeleted)}
+                aria-pressed={showDeleted}
+                className={
+                  showDeleted
+                    ? 'focus-ring inline-flex items-center gap-1.5 rounded-xl bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 ring-1 ring-inset ring-rose-200 hover:bg-rose-100'
+                    : 'focus-ring inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white/70'
+                }
+              >
+                {showDeleted ? <ArrowLeft className="h-4 w-4" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
+                {showDeleted ? 'Back to bugs' : 'Deleted bugs'}
+              </button>
+            )}
+            {/* The table's own filters and sort, minus the page - so the sheet holds every match. */}
+            <ExportButton params={{ ...queryParams, sortBy, sortDir }} count={filteredCount?.counts.total} />
+          </div>
         </div>
       </div>
 
@@ -168,6 +192,9 @@ export function BugList() {
               selectedIds={selectedIds}
               onDone={() => setSelectedIds(new Set())}
               product={reassignProduct}
+              canTriage={canTriage}
+              deletedView={showDeleted}
+              closedSelected={(data?.bugs ?? []).filter((b) => selectedIds.has(b.id) && !b.isOpen).length}
             />
             {data && (data.bugs.length > 0 || offset > 0) && (
               <Pagination
