@@ -80,7 +80,7 @@ export function DateRangeFilter({
           'focus-ring flex h-10 w-full items-center justify-between gap-2 rounded-xl border bg-white/85 px-3 text-sm shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] transition-all',
           active
             ? 'border-brand-500 bg-brand-50/60 font-medium text-brand-900 ring-2 ring-brand-500/15'
-            : 'border-slate-900/10 text-slate-600 hover:border-slate-900/20 hover:bg-white'
+            : 'border-line text-slate-600 hover:border-slate-500/55 hover:bg-white'
         )}
       >
         <span className="flex min-w-0 items-center gap-1.5">
@@ -144,7 +144,7 @@ export function DateRangeFilter({
                 max={today}
                 value={singleDay}
                 onChange={(e) => e.target.value && apply({ from: e.target.value, to: e.target.value })}
-                className="focus-ring h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-900"
+                className="focus-ring h-9 rounded-lg border border-hairline px-2 text-sm text-slate-900"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
@@ -154,13 +154,13 @@ export function DateRangeFilter({
                 max={today.slice(0, 7)}
                 value={wholeMonth}
                 onChange={(e) => e.target.value && apply(monthRange(e.target.value))}
-                className="focus-ring h-9 rounded-lg border border-slate-200 px-2 text-sm text-slate-900"
+                className="focus-ring h-9 rounded-lg border border-hairline px-2 text-sm text-slate-900"
               />
             </label>
           </div>
 
           {/* Any range */}
-          <fieldset className="mt-4 border-t border-slate-100 pt-3">
+          <fieldset className="mt-4 border-t border-hairline pt-3">
             <legend className="text-xs font-medium text-slate-600">Custom range</legend>
             <div className="mt-1.5 flex items-center gap-2">
               <input
@@ -169,7 +169,7 @@ export function DateRangeFilter({
                 value={customFrom}
                 max={customTo || today}
                 onChange={(e) => setCustomFrom(e.target.value)}
-                className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm text-slate-900"
+                className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-hairline px-2 text-sm text-slate-900"
               />
               <span className="text-xs text-slate-400">to</span>
               <input
@@ -179,7 +179,7 @@ export function DateRangeFilter({
                 min={customFrom || undefined}
                 max={today}
                 onChange={(e) => setCustomTo(e.target.value)}
-                className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm text-slate-900"
+                className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-hairline px-2 text-sm text-slate-900"
               />
             </div>
             {customInvalid && <p className="mt-1 text-xs text-rose-600">The start is after the end.</p>}
@@ -204,7 +204,7 @@ export function DateRangeFilter({
               Apply range
             </button>
           </div>
-          <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+          <p className="mt-3 border-t border-hairline pt-2 text-[11px] text-slate-500">
             Shows bugs {fieldWord} in the chosen days. <span className="font-medium text-slate-600">Export to Excel</span> then downloads exactly
             these - a daily or monthly report.
           </p>

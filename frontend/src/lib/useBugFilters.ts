@@ -263,6 +263,14 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
   );
 
   const showDeleted = params.get('deleted') === 'only';
+
+  /*
+   * `?assignment=picked|queued` - who owns the bug, in the sense the dashboard
+   * tiles use. Passed straight through to the API, which resolves it against
+   * each component's default owner; there is no Bugzilla search term for it.
+   */
+  const assignmentParam = params.get('assignment');
+  const assignment = assignmentParam === 'picked' || assignmentParam === 'queued' ? assignmentParam : undefined;
   const setShowDeleted = useCallback(
     (on: boolean) =>
       commit((next) => {
@@ -285,8 +293,9 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       if (filters.to) out.to = filters.to;
     }
     if (showDeleted) out.deleted = 'only';
+    if (assignment) out.assignment = assignment;
     return out;
-  }, [filters, showDeleted]);
+  }, [filters, showDeleted, assignment]);
 
   return {
     filters,

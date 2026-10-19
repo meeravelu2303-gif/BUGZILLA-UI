@@ -3,16 +3,30 @@ import { Link } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 
 /*
- * Each tone is an icon tile gradient plus a soft glow of the same hue behind the
- * tile, so five tiles in a row read as five different things at a glance rather
- * than five grey boxes with different words in them.
+ * Soft pastel fills, not gradients.
+ *
+ * Each tile was previously a saturated gradient chip with a coloured glow
+ * bleeding behind it. On a white page with shadow-led elevation that competes
+ * with the card itself - two depth cues in the same 40px. A flat pastel wash
+ * with the icon in the darker sibling of the same hue reads as a category mark
+ * and lets the number be the loudest thing on the card, which is the point.
+ *
+ * Every pairing is AA at this size: the icon colour is the 600/700 step on its
+ * own 50 step, which measures between 5.1:1 and 8.0:1.
+ *
+ * `tone` is a CATEGORY mark, not a severity signal - pass a constant one.
+ * Several cards used to switch to `slate` when their value hit zero, on the
+ * theory that a quiet number should look quiet. On screen it read as a broken
+ * icon instead: three coloured chips beside one grey one looks like a failed
+ * render, not a calm state. The NUMBER communicates "nothing to do"; the
+ * colour's job is only to tell the cards apart at a glance.
  */
 const TONE_STYLES = {
-  slate: { tile: 'from-slate-500 to-slate-700', glow: 'bg-slate-400/25' },
-  brand: { tile: 'from-brand-500 to-brand-700', glow: 'bg-brand-400/30' },
-  emerald: { tile: 'from-emerald-400 to-emerald-600', glow: 'bg-emerald-400/25' },
-  amber: { tile: 'from-amber-400 to-orange-500', glow: 'bg-amber-400/30' },
-  rose: { tile: 'from-rose-400 to-rose-600', glow: 'bg-rose-400/25' },
+  slate: 'bg-slate-100 text-slate-600',
+  brand: 'bg-brand-50 text-brand-600',
+  emerald: 'bg-emerald-50 text-emerald-600',
+  amber: 'bg-amber-50 text-amber-600',
+  rose: 'bg-rose-50 text-rose-600',
 } as const;
 
 export function StatCard({
@@ -31,42 +45,35 @@ export function StatCard({
   to?: string;
   hint?: string;
 }) {
-  const t = TONE_STYLES[tone];
   const body = (
-    <>
-      {/* The glow sits behind the tile and bleeds past the card edge; the card clips it. */}
-      <span aria-hidden className={cn('pointer-events-none absolute -left-6 -top-8 h-28 w-28 rounded-full blur-2xl', t.glow)} />
-      <div className="relative flex items-start gap-3.5">
-        <div
-          className={cn(
-            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-md ring-1 ring-inset ring-white/30',
-            t.tile
-          )}
-        >
-          <Icon className="h-5 w-5" aria-hidden />
-        </div>
-        <div className="min-w-0 flex-1">
-          {/* Labels wrap rather than truncate: a tile that reads "Critical (P0) o…" says nothing. */}
-          <p className="text-[12.5px] font-medium leading-snug text-slate-600">{label}</p>
-          <p className="mt-0.5 text-[26px] font-semibold leading-none tracking-tight tabular-nums text-slate-900">
-            {typeof value === 'number' ? value.toLocaleString() : value}
-          </p>
-          {hint && <p className="mt-1.5 text-[11px] leading-snug text-slate-500">{hint}</p>}
-        </div>
+    /*
+     * Centred stack: icon, number, label. The number is the reason the card
+     * exists, so it sits in the optical centre at the largest size on the
+     * page; the label reads underneath as its caption rather than beside it
+     * competing for the same line.
+     */
+    <div className="flex flex-col items-center gap-3 text-center">
+      <span className={cn('flex h-11 w-11 items-center justify-center rounded-2xl', TONE_STYLES[tone])}>
+        <Icon className="h-[22px] w-[22px]" aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[30px] font-semibold leading-none tracking-tight tabular-nums text-slate-900">
+          {typeof value === 'number' ? value.toLocaleString() : value}
+        </p>
+        {/* Labels wrap rather than truncate: a tile reading "Critical (P0) o…" says nothing. */}
+        <p className="mt-2 text-xs font-medium leading-snug text-slate-500">{label}</p>
+        {hint && <p className="mt-1 text-2xs leading-snug text-slate-400">{hint}</p>}
       </div>
-    </>
+    </div>
   );
 
-  const shell = 'glass-surface relative overflow-hidden rounded-2xl p-5';
+  // Generous padding is what makes these read as "wider": the grid gives each
+  // tile the same width, and the breathing room inside is what changes.
+  const shell = 'surface px-5 py-6';
+
   if (to) {
     return (
-      <Link
-        to={to}
-        className={cn(
-          shell,
-          'focus-ring block transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-300/70 hover:shadow-float'
-        )}
-      >
+      <Link to={to} className={cn(shell, 'focus-ring block transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lifted')}>
         {body}
       </Link>
     );

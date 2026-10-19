@@ -68,7 +68,7 @@ export function MultiSelect({
           // narrowing the list is visible without reading every label.
           selected.length > 0
             ? 'border-brand-500 bg-brand-50/60 font-medium text-brand-900 ring-2 ring-brand-500/15'
-            : 'border-slate-900/10 text-slate-600 hover:border-slate-900/20 hover:bg-white'
+            : 'border-line text-slate-600 hover:border-slate-500/55 hover:bg-white'
         )}
       >
         <span className="truncate">{summary}</span>
@@ -99,7 +99,7 @@ export function MultiSelect({
                     <span
                       className={cn(
                         'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
-                        isOn ? 'border-brand-700 bg-brand-700 text-white' : 'border-slate-300 bg-white'
+                        isOn ? 'border-brand-700 bg-brand-700 text-white' : 'border-line bg-white'
                       )}
                     >
                       {isOn && <Check className="h-3 w-3" aria-hidden />}
@@ -115,7 +115,7 @@ export function MultiSelect({
                 <button
                   type="button"
                   onClick={onClear}
-                  className="focus-ring mt-1 w-full rounded-md border-t border-slate-100 px-2 py-1.5 text-left text-xs font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                  className="focus-ring mt-1 w-full rounded-md border-t border-hairline px-2 py-1.5 text-left text-xs font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
                 >
                   Clear {label.toLowerCase()}
                 </button>

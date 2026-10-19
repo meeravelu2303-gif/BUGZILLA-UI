@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Env } from '../config/env';
+import { accessSnapshot } from '../lib/access';
 import { bugFeatures } from '../lib/bugFeatures';
 import { BugzillaClient } from '../lib/bugzillaClient';
 import { groupNameForProduct } from '../lib/productGroups';
@@ -87,12 +88,73 @@ export function metaRouter(env: Env): Router {
         .filter((g): g is string => g !== undefined);
       const poolNames = gating.length > 0 ? gating : ['editbugs'];
 
-      const resp = await directory.get<{
-        groups: Array<{
-          name: string;
-          membership?: Array<{ email?: string; real_name?: string; name?: string; can_login?: boolean }>;
-        }>;
-      }>('/group', { names: poolNames, membership: 1 });
+      /*
+       * The candidate pool and the role groups, fetched together.
+       *
+       * `canconfirm`, `editusers` and `editcomponents` are what separate a
+       * tester from an engineer (see lib/roles.ts), and Group.get takes several
+       * names in one call - so this costs one upstream request, not three.
+       * Under mod_cgi each one forks a Perl interpreter, which is why batching
+       * matters here.
+       */
+      const [resp, roleResp] = await Promise.all([
+        directory.get<{
+          groups: Array<{
+            name: string;
+            membership?: Array<{ email?: string; real_name?: string; name?: string; can_login?: boolean }>;
+          }>;
+        }>('/group', { names: poolNames, membership: 1 }),
+        directory.get<{
+          groups: Array<{ name: string; membership?: Array<{ email?: string }> }>;
+        }>('/group', { names: ['canconfirm', 'editusers', 'editcomponents'], membership: 1 }),
+      ]);
+
+      const membersOf = (group: string) =>
+        new Set(
+          (roleResp.groups ?? [])
+            .find((g) => g.name.toLowerCase() === group)
+            ?.membership?.map((m) => (m.email ?? '').toLowerCase())
+            .filter(Boolean) ?? []
+        );
+
+      /*
+       * A STRICT tester: holds `canconfirm` but neither admin group.
+       *
+       * Defects are assigned to whoever will change the code, so testers are
+       * left out of this list - but an admin also holds `canconfirm`, and
+       * subtracting the admin groups is what stops the rule from quietly
+       * removing them too.
+       */
+      const canConfirm = membersOf('canconfirm');
+      const admins = new Set([...membersOf('editusers'), ...membersOf('editcomponents')]);
+      const strictTesters = new Set([...canConfirm].filter((email) => !admins.has(email)));
+
+      /*
+       * Component owners are always assignable, whatever role they hold.
+       *
+       * Bugzilla routes every new bug to the component's `initialowner`, so a
+       * person who owns a module is already receiving its defects. Hiding them
+       * from the picker would mean the UI refused to name the person the
+       * server assigns to by default.
+       *
+       * Read from the cached access snapshot, so this is normally free.
+       */
+      const owners = new Set<string>();
+      try {
+        const snapshot = await accessSnapshot(req.bugzilla!, req.sessionUser!.bzUserId);
+        const wanted = new Set(products.map((p) => p.toLowerCase()));
+        for (const product of snapshot.products) {
+          if (wanted.size > 0 && !wanted.has(product.name.toLowerCase())) continue;
+          const components =
+            (product as { components?: Array<{ default_assigned_to?: string }> }).components ?? [];
+          for (const c of components) {
+            if (c.default_assigned_to) owners.add(c.default_assigned_to.toLowerCase());
+          }
+        }
+      } catch {
+        // Owners unavailable: fall back to the role rule alone rather than
+        // failing the picker.
+      }
 
       // Intersect: for a batch spanning products, only people who can reach
       // EVERY one of them may take the whole selection.
@@ -114,10 +176,49 @@ export function metaRouter(env: Env): Router {
        */
       const me = req.sessionUser!.email.toLowerCase();
       const users = [...(pool?.values() ?? [])]
-        .filter((u) => u.email.toLowerCase() !== me)
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .filter((u) => {
+          const email = u.email.toLowerCase();
+          if (email === me) return false;
+          // Engineering only - unless they own a component, in which case
+          // Bugzilla already assigns defects to them.
+          return !strictTesters.has(email) || owners.has(email);
+        })
+        /*
+         * Owners of the selected product first, then everyone else, each run
+         * alphabetical. The caller renders these as two labelled groups.
+         *
+         * Group membership can no longer narrow this list - every account is in
+         * every product group, so "who may see this product" is now true of
+         * everyone. COMPONENT OWNERSHIP is what still distinguishes people:
+         * Bugzilla routes each component's bugs to its `initialowner`, so those
+         * are demonstrably the engineers who work that product. Everyone else
+         * stays selectable, because a defect does sometimes need to go to
+         * someone outside the usual owner.
+         */
+        .sort((a, b) => {
+          const ao = owners.has(a.email.toLowerCase()) ? 0 : 1;
+          const bo = owners.has(b.email.toLowerCase()) ? 0 : 1;
+          return ao !== bo ? ao - bo : a.name.localeCompare(b.name);
+        });
 
-      res.json({ users });
+      res.json({
+        /*
+         * Each person carries their ROLE, so the picker can mark an admin as
+         * one rather than listing them beside developers with nothing to tell
+         * them apart. Derived from the same group membership the rest of the
+         * app uses (lib/roles.ts), so the label cannot drift from the
+         * permissions the server actually enforces.
+         */
+        users: users.map((u) => ({
+          ...u,
+          role: admins.has(u.email.toLowerCase()) ? ('admin' as const) : ('developer' as const),
+        })),
+        /*
+         * The owner emails for the products asked about, so the picker can
+         * label them rather than re-deriving ownership in the browser.
+         */
+        owners: users.filter((u) => owners.has(u.email.toLowerCase())).map((u) => u.email),
+      });
     } catch (err) {
       next(err);
     }

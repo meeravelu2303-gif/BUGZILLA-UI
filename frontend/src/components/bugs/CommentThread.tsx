@@ -171,7 +171,7 @@ function ReportRevisionEntry({ comment }: { comment: Comment }) {
           {open ? 'Hide this version' : 'View this version'}
         </button>
         {open && (
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white/70 p-4">
+          <div className="mt-3 rounded-xl border border-hairline bg-white/70 p-4">
             <DescriptionReport description={body} />
           </div>
         )}

@@ -482,7 +482,7 @@ export function MetadataSidebar({
                     type="checkbox"
                     checked={draft.groups.includes(g)}
                     onChange={(e) => set('groups', e.target.checked ? [...draft.groups, g] : draft.groups.filter((x) => x !== g))}
-                    className="rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+                    className="rounded border-line text-brand-700 focus:ring-brand-600"
                   />
                   {g}
                 </label>
@@ -507,7 +507,7 @@ export function MetadataSidebar({
                   type="checkbox"
                   checked={draft[key]}
                   onChange={(e) => set(key, e.target.checked)}
-                  className="rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+                  className="rounded border-line text-brand-700 focus:ring-brand-600"
                 />
                 {text}
               </label>

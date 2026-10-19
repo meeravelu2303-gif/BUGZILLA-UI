@@ -48,6 +48,28 @@ export function productsRouter(env: Env): Router {
     try {
       const { products, names } = await accessSnapshot(req.bugzilla!, req.sessionUser!.bzUserId);
       const normalized = products.map((p) => normalizeProduct(rawProductSchema.parse(p)));
+
+      /*
+       * `?scope=filing` returns everything Bugzilla says this user may FILE
+       * into, skipping the same-named-group convention applied below.
+       *
+       * The two answers differ on purpose. The convention is a sensible way to
+       * scope a FILTER - a KPost UI engineer does not want three dropdown
+       * options returning nothing. But it is stricter than Bugzilla itself: a
+       * product whose group is not MANDATORY is enterable by anyone, so
+       * filtering it out of the filing form refuses a bug the server would
+       * happily accept. Someone finding a defect in another team's product
+       * should be able to report it.
+       *
+       * Still Bugzilla's own list, NOT every product in the system: it comes
+       * from `product_enterable`, so a product that genuinely refuses this user
+       * never appears and the form cannot offer a choice that fails on submit.
+       */
+      if (req.query.scope === 'filing') {
+        res.json({ products: normalized });
+        return;
+      }
+
       // `names === null` means an instance admin, or membership that could not
       // be read: show everything enterable rather than nothing.
       const visible = names === null ? normalized : normalized.filter((p) => names.includes(p.name));

@@ -97,7 +97,7 @@ export function SaveBar({
         )}
 
         {showComment && (
-          <div className="border-b border-slate-200/70 px-4 pt-3">
+          <div className="border-b border-hairline px-4 pt-3">
             <label htmlFor="save-comment" className="text-xs font-medium text-slate-600">
               {editor.commentRequired ? (editor.draft.status === 'REOPENED' ? 'Why reopen? What still fails after the fix - required' : 'Comment - required for this status change') : 'Comment - saved with this change, so the history says why'}
             </label>
@@ -108,7 +108,7 @@ export function SaveBar({
               onChange={(e) => editor.setComment({ ...editor.comment, body: e.target.value })}
               rows={3}
               placeholder="e.g. Fixed in build 2.4.1 - verified on Chrome and Firefox."
-              className="focus-ring mt-1 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+              className="focus-ring mt-1 w-full resize-y rounded-xl border border-hairline bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
             />
             {privateComments && (
               <label className="mb-2 mt-1 inline-flex items-center gap-2 text-xs text-slate-600">
@@ -116,7 +116,7 @@ export function SaveBar({
                   type="checkbox"
                   checked={editor.comment.isPrivate}
                   onChange={(e) => editor.setComment({ ...editor.comment, isPrivate: e.target.checked })}
-                  className="rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+                  className="rounded border-line text-brand-700 focus:ring-brand-600"
                 />
                 Private - visible to the insider group only
               </label>

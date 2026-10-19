@@ -40,7 +40,7 @@ export function AuthShell({
           </span>
         </div>
 
-        <div className="w-full overflow-hidden rounded-3xl border border-slate-100/80 bg-white shadow-2xl shadow-teal-950/10">
+        <div className="w-full overflow-hidden rounded-3xl border border-hairline bg-white shadow-2xl shadow-teal-950/10">
           <div className="h-1.5 bg-gradient-to-r from-ueducate-primary via-ueducate-accent to-ueducate-hover" aria-hidden />
           <div className="p-9">
             <h1 className="text-[1.5rem] font-bold leading-tight tracking-tight text-ueducate-ink">{title}</h1>
@@ -64,7 +64,7 @@ export function AuthShell({
 /** The sign-in page's field look, shared so these pages read as the same form. */
 export const AUTH_FIELD_BASE =
   'h-12 w-full rounded-xl border bg-slate-50 pl-10 pr-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all';
-export const AUTH_FIELD_OK = 'border-slate-200/80 focus:border-[#0d6875] focus:bg-white focus:ring-4 focus:ring-[#0d6875]/15';
+export const AUTH_FIELD_OK = 'border-hairline focus:border-[#0d6875] focus:bg-white focus:ring-4 focus:ring-[#0d6875]/15';
 export const AUTH_FIELD_ERROR = 'border-rose-400 bg-rose-50/20 focus:border-rose-400 focus:ring-4 focus:ring-rose-200/60';
 export const AUTH_SUBMIT =
   'mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0d6875] text-sm font-semibold text-white shadow-md shadow-[#0d6875]/20 outline-none transition-all hover:bg-[#0a525d] focus-visible:ring-2 focus-visible:ring-[#0d6875]/40 focus-visible:ring-offset-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60';

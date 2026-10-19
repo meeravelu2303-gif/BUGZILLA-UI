@@ -195,7 +195,7 @@ export function AttachmentUploader({
         className={cn(
           'focus-ring flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed text-center transition-colors',
           compact ? 'px-4 py-5' : 'px-6 py-9',
-          dragging ? 'border-brand-500 bg-brand-50/70' : 'border-slate-300 bg-white/50 hover:border-brand-400 hover:bg-white/80'
+          dragging ? 'border-brand-500 bg-brand-50/70' : 'border-line bg-white/50 hover:border-brand-400 hover:bg-white/80'
         )}
       >
         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200">
@@ -203,7 +203,7 @@ export function AttachmentUploader({
         </span>
         <p className="text-sm text-slate-700">
           <span className="font-semibold text-brand-700">Choose files</span>, drop them here, or press{' '}
-          <kbd className="rounded border border-slate-200 bg-white px-1 text-xs">Ctrl</kbd>+<kbd className="rounded border border-slate-200 bg-white px-1 text-xs">V</kbd> to paste a screenshot
+          <kbd className="rounded border border-hairline bg-white px-1 text-xs">Ctrl</kbd>+<kbd className="rounded border border-hairline bg-white px-1 text-xs">V</kbd> to paste a screenshot
         </p>
         <p className="text-xs text-slate-500">Screenshots, screen recordings, HAR files, logs · up to {formatSize(maxBytes)} each</p>
         <input
@@ -228,7 +228,7 @@ export function AttachmentUploader({
                 key={it.id}
                 className={cn(
                   'flex gap-3 rounded-xl border bg-white/80 p-3',
-                  it.status === 'rejected' || it.status === 'failed' ? 'border-rose-200' : it.status === 'done' ? 'border-emerald-200' : 'border-slate-200'
+                  it.status === 'rejected' || it.status === 'failed' ? 'border-rose-200' : it.status === 'done' ? 'border-emerald-200' : 'border-hairline'
                 )}
               >
                 <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100 text-slate-500">
@@ -294,7 +294,7 @@ export function AttachmentUploader({
                       maxLength={255}
                       aria-label={`Description for ${it.file.name}`}
                       placeholder="Describe this file"
-                      className="focus-ring mt-1.5 h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-800"
+                      className="focus-ring mt-1.5 h-8 w-full rounded-lg border border-hairline bg-white px-2.5 text-xs text-slate-800"
                     />
                   )}
                 </div>
@@ -314,7 +314,7 @@ export function AttachmentUploader({
               rows={2}
               disabled={running}
               placeholder="e.g. Recording of the crash on Chrome 129 - starts at 0:12."
-              className="focus-ring rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 placeholder:text-slate-400"
+              className="focus-ring rounded-xl border border-hairline bg-white px-3 py-2 text-sm font-normal text-slate-900 placeholder:text-slate-400"
             />
           </label>
           <div className="flex items-center justify-end gap-2">

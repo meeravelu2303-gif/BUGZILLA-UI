@@ -210,7 +210,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
         }}
         className={cn(
           'focus-ring flex w-full items-center gap-2 rounded-xl border bg-white/80 px-3 py-2 text-left text-sm backdrop-blur-sm transition-colors',
-          error ? 'border-rose-400' : open ? 'border-brand-500' : 'border-white/60 hover:border-slate-300',
+          error ? 'border-rose-400' : open ? 'border-brand-500' : 'border-white/60 hover:border-line',
         )}
       >
         {value ? (
@@ -245,7 +245,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
       {open &&
         createPortal(
           <div ref={panelRef} style={panelStyle} className="z-[60] overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-slate-900/10">
-            <div className="flex items-center gap-2 border-b border-slate-100 px-3">
+            <div className="flex items-center gap-2 border-b border-hairline px-3">
               <Search className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
               <input
                 ref={searchRef}
@@ -315,7 +315,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
               {matchCount === 0 && !canUseCustom && <p className="px-3 py-6 text-center text-sm text-slate-500">No classifications.</p>}
 
               {canUseCustom && (
-                <div className={cn(matchCount > 0 && 'mt-1 border-t border-slate-100 pt-1')}>
+                <div className={cn(matchCount > 0 && 'mt-1 border-t border-hairline pt-1')}>
                   {matchCount === 0 && <p className="px-3 pb-1 pt-2 text-xs text-slate-500">No match in the bench's list.</p>}
                   {(() => {
                     const i = rows.length - 1;
@@ -344,7 +344,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
               )}
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/80 px-3 py-1.5 text-[11px] text-slate-500">
+            <div className="flex items-center justify-between border-t border-hairline bg-slate-50/80 px-3 py-1.5 text-[11px] text-slate-500">
               <span>
                 {matchCount} of {options.length}
               </span>

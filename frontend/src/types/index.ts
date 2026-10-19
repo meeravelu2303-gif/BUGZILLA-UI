@@ -309,6 +309,29 @@ export interface RateLimitDetails {
  */
 export interface BugCounts {
   total: number;
+  /**
+   * Open bugs parked with their component's default assignee - in that
+   * component's queue, not yet routed to a person.
+   *
+   * NOT "unassigned": Bugzilla's `assigned_to` is NOT NULL, so no bug is ever
+   * without an owner. The real question is whether that owner was CHOSEN.
+   */
+  queued: number;
+  /**
+   * Open bugs whose assignee differs from the component default.
+   *
+   * Weak on its own - it cannot tell a bug that was reassigned from one that
+   * was simply filed to that person. Prefer `reassigned`.
+   */
+  picked: number;
+  /**
+   * Open bugs genuinely handed off: assignee differs from the component
+   * default AND the bug's history records an `assigned_to` change.
+   *
+   * A subset of `picked`, and the only one of the two safe to show, because it
+   * cannot be inflated by a bench run that sets an assignee at creation.
+   */
+  reassigned: number;
   open: number;
   resolved: number;
   blockerCritical: number;
@@ -350,6 +373,11 @@ export interface CreateBugInput {
   priority?: string;
   /** `[cat:Xxx]` (+ `[browser:…]`), the tags the test bench writes. */
   whiteboard?: string;
+  /**
+   * Who to hand the bug to. Omit to let Bugzilla apply the component's default
+   * owner - which is what the automated bench relies on.
+   */
+  assignedTo?: string;
 }
 
 /** Bugzilla's add/remove shape for list fields. */

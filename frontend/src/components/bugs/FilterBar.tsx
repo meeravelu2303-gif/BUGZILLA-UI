@@ -125,7 +125,7 @@ export function FilterBar({
     .map(([name, count]) => ({ value: name, label: BROWSER_LABELS[name] ?? name, count }));
 
   return (
-    <div className="border-b border-slate-900/[0.06] bg-gradient-to-b from-slate-50/80 to-white/40 px-5 py-4">
+    <div className="border-b border-hairline bg-gradient-to-b from-slate-50/80 to-white/40 px-5 py-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
@@ -134,7 +134,7 @@ export function FilterBar({
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search summary or KPA-494…"
             aria-label="Search bug summaries"
-            className="h-10 w-full rounded-xl border border-slate-900/10 bg-white/85 pl-10 pr-3 text-sm text-slate-900 shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] outline-none transition-all placeholder:text-slate-400 hover:border-slate-900/20 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/15"
+            className="h-10 w-full rounded-xl border border-line bg-white/85 pl-10 pr-3 text-sm text-slate-900 shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] outline-none transition-all placeholder:text-slate-400 hover:border-slate-500/55 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/15"
           />
         </div>
 

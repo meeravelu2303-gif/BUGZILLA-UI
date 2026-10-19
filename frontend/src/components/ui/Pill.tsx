@@ -36,6 +36,12 @@ export type Tone = 'slate' | 'teal' | 'amber' | 'emerald' | 'purple' | 'violet' 
  * contrast work recorded in BRANDING.md. Severity colours stay semantic - the
  * brand palette themes the chrome, never the signals.
  *
+ * The `teal` tone is now ROYAL BLUE: it resolves through the `brand-*` scale,
+ * which was re-based when the accent system changed, so it followed the new
+ * palette without a call-site edit (brand-800 on brand-50 measures 8.01:1).
+ * The tone KEEPS its old name on purpose - renaming it would touch every
+ * component that passes `tone="teal"` to achieve an identical render.
+ *
  * Tones are assigned by AXIS, not per value, so a row reads as several distinct
  * kinds of information rather than a stripe of interchangeable blue chips:
  *
@@ -55,9 +61,10 @@ export type Tone = 'slate' | 'teal' | 'amber' | 'emerald' | 'purple' | 'violet' 
  * to the config and theme the whole shell in one pass, not this file alone.
  */
 const TONE_STYLES: Record<Tone, string> = {
-  slate: 'bg-slate-100 text-slate-700 border-slate-200',
-  // The app's own UEducate teal, not Tailwind's stock `teal-*`: the brand scale
-  // in tailwind.config.js is the one with measured AA contrast (BRANDING.md).
+  slate: 'bg-slate-100 text-slate-700 border-hairline',
+  // The app's own accent scale, not Tailwind's stock `teal-*`: the brand scale
+  // in tailwind.config.js is the one with measured AA contrast. Now Royal Blue
+  // (8.01:1) - see the note above on why the key is still called `teal`.
   teal: 'bg-brand-50 text-brand-800 border-brand-200',
   amber: 'bg-amber-50 text-amber-700 border-amber-200/70',
   emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200/70',
@@ -86,8 +93,18 @@ export function Pill({
     <span
       title={title}
       className={cn(
-        // Compact: a row of five of these must read as labels, not as buttons.
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-px text-[11px] font-semibold leading-[18px] tracking-[0.01em]',
+        /*
+         * Roomier than it was: px-1.5/py-px squeezed the text against the
+         * border, which is what made a row of them read as cramped stickers
+         * rather than finished labels. The extra horizontal room does the most
+         * work here - a badge is scanned by its WORD, and that word needs space
+         * either side of it to register as one.
+         *
+         * Still deliberately not button-sized: five of these sit on one table
+         * row, and matching a control's height would make the row read as a
+         * toolbar.
+         */
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1 text-[11px] font-semibold leading-[14px] tracking-[0.01em]',
         TONE_STYLES[tone],
         className
       )}

@@ -67,11 +67,11 @@ function FieldShell({
  * colour; the 4px ring is soft so it never looks like an error outline).
  */
 const inputClasses =
-  'w-full rounded-xl border border-slate-900/10 bg-white/85 px-3 py-2 text-sm text-slate-900 shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] outline-none transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-slate-400 hover:border-slate-900/20 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-slate-100/70 disabled:text-slate-500 disabled:hover:border-slate-900/10';
+  'w-full rounded-xl border border-line bg-white/85 px-3 py-2 text-sm text-slate-900 shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] outline-none transition-[border-color,box-shadow,background-color] duration-200 placeholder:text-slate-400 hover:border-slate-500/55 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/15 disabled:cursor-not-allowed disabled:bg-slate-100/70 disabled:text-slate-500 disabled:hover:border-slate-500/55';
 /*
  * `!` (important) on purpose. `cn` is plain clsx with no Tailwind conflict
  * resolution, so these sit in the class list beside inputClasses' own
- * `border-slate-900/10` / `hover:` / `focus:` colours, and stylesheet order -
+ * `border-line` / `hover:` / `focus:` colours, and stylesheet order -
  * not class order - picks the winner. Without `!` the slate border won and an
  * invalid field showed its red message under an ordinary grey box.
  */

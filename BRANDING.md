@@ -29,6 +29,36 @@ before anything is applied to the app.
 The shield mark is a monogram: a navy shield divided into four quadrants forming "UC"
 twice (mirrored), with one letter picked out in the brand's light-blue accent.
 
+## Accent system — superseded (Royal Blue / Electric Cyan)
+
+> **The teal below is no longer the app's accent.** On 2026-10-18 the product accent
+> was deliberately changed to **Royal Blue / Electric Cyan**. Everything in this file
+> about how the UEducate assets were *obtained* remains accurate and is kept as the
+> record of the logo and favicon, which are unchanged and still shipped.
+>
+> | Token | Hex | Contrast vs white | Role |
+> |---|---|---|---|
+> | Royal Blue (primary) | `#2563EB` | **5.17:1** | Buttons, links, focus rings — AA for text |
+> | Royal Blue (strong) | `#1D4ED8` | **6.70:1** | Hover / active fills |
+> | Electric Cyan (accent) | `#06B6D4` | **2.43:1** | **Decorative only** — gradients, accent bars, chart marks |
+> | Cyan (deep) | `#0E7490` | **5.36:1** | Cyan that must carry text |
+> | Hairline border | `#E2E8F0` | 1.23:1 | Borders only, never text |
+>
+> The same rule the teal needed still applies, for the same reason: the headline
+> accent fails AA for text (Electric Cyan at 2.43:1, almost exactly where the
+> authentic teal sat at 2.49:1), so a darker sibling carries any text. Ratios were
+> computed, not eyeballed.
+>
+> Two consequences worth knowing:
+>
+> 1. **The `brand-*` scale was re-based, not replaced.** Components referencing
+>    `brand-600`, `Pill` tone `teal`, and the `.glass-*` surface utilities all kept
+>    their names and inherited the new palette with no call-site edits.
+> 2. **The UEducate logo still ships and is still teal.** The sidebar and login
+>    lockup use the real asset documented below, so the mark and the chrome no
+>    longer share a hue. If that reads as a mismatch, the fix is a new logo asset —
+>    not re-tinting the real one, which would misrepresent the brand.
+
 ## Colors (confirmed, not guessed)
 
 | Token | Hex | Where it's confirmed | Role in UEducate's own site |

@@ -1,7 +1,31 @@
 import { type ClassValue, clsx } from 'clsx';
+import { extendTailwindMerge } from 'tailwind-merge';
+
+/**
+ * `cn` now resolves Tailwind conflicts instead of just concatenating.
+ *
+ * Previously this was plain `clsx`, so `cn('px-3', props.className)` with a
+ * caller passing `px-6` emitted BOTH - and which one won came down to their
+ * order in the compiled stylesheet, not the call site. That is the bug every
+ * variant-driven component eventually hits, and it gets worse as the component
+ * count grows, so it is fixed before the new primitives land rather than after.
+ *
+ * The merger is EXTENDED rather than used bare: tailwind.config.js defines font
+ * sizes and shadows that stock tailwind-merge has never heard of. Without these
+ * registrations it treats `text-md` and `text-sm` as unrelated classes and
+ * keeps both, which is precisely the conflict this is meant to resolve.
+ */
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      'font-size': [{ text: ['2xs', 'xs', 'sm', 'base', 'md', 'lg', 'xl', '2xl', '3xl'] }],
+      shadow: [{ shadow: ['hairline', 'raised', 'soft', 'lifted', 'float', 'overlay', 'ring', 'card', 'glass', 'glow'] }],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]): string {
-  return clsx(inputs);
+  return twMerge(clsx(inputs));
 }
 
 export function formatDate(iso: string): string {

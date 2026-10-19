@@ -84,16 +84,16 @@ function AttachmentEditor({
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700">
         <label className="inline-flex items-center gap-2">
-          <input type="checkbox" checked={form.isObsolete} onChange={(e) => setForm({ ...form, isObsolete: e.target.checked })} className="rounded border-slate-300 text-brand-700 focus:ring-brand-600" />
+          <input type="checkbox" checked={form.isObsolete} onChange={(e) => setForm({ ...form, isObsolete: e.target.checked })} className="rounded border-line text-brand-700 focus:ring-brand-600" />
           Obsolete - superseded by a newer file
         </label>
         <label className="inline-flex items-center gap-2">
-          <input type="checkbox" checked={form.isPatch} onChange={(e) => setForm({ ...form, isPatch: e.target.checked })} className="rounded border-slate-300 text-brand-700 focus:ring-brand-600" />
+          <input type="checkbox" checked={form.isPatch} onChange={(e) => setForm({ ...form, isPatch: e.target.checked })} className="rounded border-line text-brand-700 focus:ring-brand-600" />
           Patch
         </label>
         {privateAllowed && (
           <label className="inline-flex items-center gap-2">
-            <input type="checkbox" checked={form.isPrivate} onChange={(e) => setForm({ ...form, isPrivate: e.target.checked })} className="rounded border-slate-300 text-brand-700 focus:ring-brand-600" />
+            <input type="checkbox" checked={form.isPrivate} onChange={(e) => setForm({ ...form, isPrivate: e.target.checked })} className="rounded border-line text-brand-700 focus:ring-brand-600" />
             Private
           </label>
         )}

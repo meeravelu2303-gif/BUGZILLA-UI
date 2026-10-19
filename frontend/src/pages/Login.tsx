@@ -1,41 +1,150 @@
-import {
-  AlertCircle,
-  ArrowRight,
-  BarChart3,
-  Bug,
-  CheckSquare,
-  Eye,
-  EyeOff,
-  Loader2,
-  Lock,
-  Mail,
-  Search,
-  ShieldCheck,
-} from 'lucide-react';
+import { Activity, AlertCircle, ArrowRight, Database, Eye, EyeOff, Info, Loader2, Lock, Mail, Rocket, ScrollText, ShieldCheck, Sparkles, Target, Users, Zap } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLogin } from '../api/hooks';
+import { BugzillaMark } from '../components/brand/BugzillaMark';
 import { UEducateLogo } from '../components/brand/UEducateLogo';
 import { getSignInErrorMessage } from '../lib/authErrorMessage';
+import { listVariants, pageVariants } from '../lib/motion';
+import { cn } from '../lib/utils';
 
 /**
  * The sign-in screen.
  *
- * Deep-teal brand hero (desktop only) beside the form on soft ice blue. The
- * palette is fixed - #0d6875 hero, #eef7fa form side - and the card stays white
- * in every case.
+ * Pristine light, asymmetric: product showcase on the left, auth panel on the
+ * right. Depth comes from two very soft corner pools and one real shadow -
+ * there is no grid and no texture, because on a light canvas those read as
+ * noise rather than craft.
  *
- * There is deliberately no `dark:` variant anywhere on this page:
- * `tailwind.config.js` declares no `darkMode` key, so Tailwind falls back to
- * `media` and a stray dark utility would fire off the viewer's OS setting
- * alone, darkening this page inside an app that stays light everywhere else.
+ * Colours are MEASURED against the #F8FAFC canvas, not eyeballed:
+ *
+ *   slate-900  17.11:1   headings
+ *   slate-600   7.26:1   body copy
+ *   slate-500   4.56:1   muted copy - the LIGHTEST text allowed here
+ *   slate-400   2.46:1   decorative ONLY: icons, rules, placeholders
+ *   blue-600    4.95:1   links and accents
+ *
+ * The button gradient was checked at BOTH ends, the check a gradient fill
+ * otherwise fails at its lightest stop: white on blue-600 is 5.17:1 and on
+ * indigo-600 6.29:1, so the label is compliant across the whole ramp.
+ *
+ * No `dark:` utilities anywhere: tailwind.config.js declares no `darkMode`
+ * key, so Tailwind falls back to `media` and a stray dark class would fire off
+ * the viewer's OS setting rather than any decision made here.
  */
 
+/**
+ * Every colour on this page, in one place.
+ *
+ * This screen has been re-themed repeatedly - light, dark, light again - and
+ * each pass meant hunting the same values through ~400 lines of JSX. The slots
+ * below are semantic ("canvas", "muted", "fieldFocus"), so swapping the palette
+ * is editing this object rather than rewriting the component.
+ *
+ * ── THE ONE RULE ──────────────────────────────────────────────────────────
+ * Every value must be a COMPLETE, LITERAL Tailwind class string.
+ *
+ * Tailwind generates CSS by scanning source files for class names as plain
+ * text. It cannot evaluate expressions, so a constructed name like
+ * `text-${tone}-600` or `bg-slate-${n}` produces NO CSS at all - the class
+ * lands in the DOM and silently does nothing. Write the whole string, even
+ * when that means repeating a prefix.
+ * ───────────────────────────────────────────────────────────────────────────
+ *
+ * Contrast is MEASURED against the #F8FAFC canvas, not eyeballed:
+ *
+ *   slate-900  17.11:1   headings
+ *   slate-600   7.26:1   body copy
+ *   slate-500   4.56:1   muted copy - the LIGHTEST text allowed here
+ *   slate-400   2.46:1   decorative ONLY: icons, rules, placeholders
+ *   blue-600    4.95:1   links and accents
+ *
+ * The button gradient is checked at BOTH ends - the check a gradient fill
+ * otherwise fails at its lightest stop: white on blue-600 is 5.17:1 and on
+ * indigo-600 6.29:1, so the label clears AA across the whole ramp.
+ */
+const THEME = {
+  /* ---------------------------------------------------------- canvas --- */
+  canvas: 'bg-[#FAFAFB]',
+  glowTopLeft: 'bg-[radial-gradient(circle,rgba(37,99,235,0.08)_0%,transparent_70%)]',
+  glowBottomRight: 'bg-[radial-gradient(circle,rgba(14,165,233,0.07)_0%,transparent_70%)]',
+
+  /* ------------------------------------------------------------ text --- */
+  heading: 'text-slate-900',
+  body: 'text-slate-600',
+  muted: 'text-slate-500',
+  /** Decorative only - fails AA for text on this canvas. */
+  faint: 'text-slate-400',
+  label: 'text-slate-700',
+  link: 'text-blue-600 hover:text-blue-700',
+  /** The headline's accent run. */
+  gradientText: 'bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent',
+
+  /* --------------------------------------------------------- surfaces --- */
+  authCard:
+    'border border-slate-200/70 bg-white/85 shadow-[0_25px_60px_-15px_rgba(37,99,235,0.14)] backdrop-blur-2xl',
+  /*
+   * The glass is carried by the BORDER and the SHADOW, not the blur.
+   *
+   * `backdrop-blur-xl` over a near-white canvas has almost nothing to refract,
+   * so on its own it would be invisible. What reads as glass here is the
+   * white/80 hairline catching the ambient pools behind it, plus a blue-tinted
+   * shadow - the blur only softens whatever glow passes underneath.
+   */
+  featureCard:
+    'border border-white/80 bg-white/75 shadow-[0_10px_30px_rgba(37,99,235,0.06)] backdrop-blur-xl ' +
+    'hover:-translate-y-1 hover:border-blue-400/40 hover:shadow-[0_20px_40px_rgba(37,99,235,0.12)]',
+  featureIcon:
+    'bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600 ring-1 ring-inset ring-blue-100 group-hover:from-blue-100 group-hover:to-indigo-100',
+  badge: 'border border-blue-200/70 bg-white shadow-sm shadow-blue-900/5 ring-4 ring-blue-500/[0.06]',
+  divider: 'bg-slate-200',
+
+  /* ----------------------------------------------------------- fields --- */
+  field: 'bg-slate-50/80 text-slate-900 placeholder:text-slate-400',
+  fieldIdle:
+    'border-slate-200/80 hover:border-slate-300 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-500/15',
+  fieldError: 'border-rose-300 bg-rose-50/60 focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-500/10',
+  fieldIconIdle: 'text-slate-400',
+  fieldIconError: 'text-rose-400',
+  errorText: 'text-rose-600',
+  errorBanner: 'border border-rose-200 bg-rose-50 text-rose-700',
+  reveal: 'text-slate-400 hover:bg-slate-100 hover:text-slate-700',
+
+  /* -------------------------------------------------------------- tabs --- */
+  tabBar: 'border border-white/80 bg-white/70 shadow-[0_10px_30px_rgba(37,99,235,0.06)] backdrop-blur-xl',
+  tabIdle: 'text-slate-500 hover:bg-white/80 hover:text-slate-900 hover:shadow-sm',
+  tabActive: 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20',
+  panelCard: 'border border-white/80 bg-white/75 shadow-[0_10px_30px_rgba(37,99,235,0.06)] backdrop-blur-xl',
+  accentChip: 'border border-blue-200/70 bg-blue-50 text-blue-700',
+
+  /* ----------------------------------------------------------- button --- */
+  button:
+    'bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 text-white shadow-lg shadow-blue-500/30 ' +
+    'hover:scale-[1.01] hover:shadow-xl hover:shadow-blue-500/40',
+} as const;
+
 const FEATURES = [
-  { icon: CheckSquare, title: 'Track & triage', text: 'File, filter and update bugs across every product.' },
-  { icon: BarChart3, title: 'Live reports', text: 'Breakdowns by status, severity, product and owner.' },
-  { icon: Search, title: 'Find anything fast', text: 'Advanced search and a ⌘K command palette.' },
-  { icon: ShieldCheck, title: 'Your permissions', text: 'Access respects the groups your account belongs to.' },
+  {
+    /*
+     * `Activity`, not `Zap`. Zap now belongs exclusively to the bench pipeline
+     * card in Specs & Automation - reusing it here would visually re-link the
+     * two panels this split exists to separate.
+     */
+    icon: Activity,
+    title: 'Real-time defect lifecycle & triage',
+    text: 'End-to-end visibility from initial logging through verification to sign-off, so no defect lands in a ghost state and triage is clear at a glance.',
+  },
+  {
+    icon: Target,
+    title: 'Role-driven workflow engine',
+    text: 'Tailored execution queues for QA, developers and product leads. Every user sees exact actionable items, without noise or clutter.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Dynamic ownership & assignment',
+    text: 'Defects route automatically to designated module owners based on component architecture, ensuring rapid triage and resolution.',
+  },
 ];
 
 /**
@@ -43,20 +152,21 @@ const FEATURES = [
  * (blank, no `@`, no dot in the domain, embedded spaces) and lets everything
  * else through to the server.
  *
- * A stricter regex is the wrong trade here. This check exists to save a
- * pointless round trip and to put the error next to the field, NOT to decide
- * what a valid address is - RFC 5322 allows addresses that most "clever"
- * patterns reject, and the only authority on whether an account exists is
- * Bugzilla. Anything this lets through still gets a real answer from the API.
+ * A stricter regex is the wrong trade. This exists to save a pointless round
+ * trip and put the error beside the field, NOT to decide what a valid address
+ * is - RFC 5322 allows addresses most "clever" patterns reject, and the only
+ * authority on whether an account exists is Bugzilla.
  */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Shared field styling. `pl-10` reserves the gutter the lead icon sits in. */
-const FIELD_BASE =
-  'h-12 w-full rounded-xl border bg-slate-50 pl-10 text-sm text-slate-900 placeholder:text-slate-400 ' +
-  'outline-none transition-all';
-const FIELD_OK = 'border-slate-200/80 focus:border-[#0d6875] focus:bg-white focus:ring-4 focus:ring-[#0d6875]/15';
-const FIELD_ERROR = 'border-rose-400 bg-rose-50/20 focus:border-rose-400 focus:ring-4 focus:ring-rose-200/60';
+/* `pl-11` reserves the lead icon's gutter. */
+/* Geometry stays here; colour comes from THEME. `pl-11` reserves the lead
+   icon's gutter. */
+const FIELD_BASE = cn(
+  'h-12 w-full rounded-xl border pl-11 text-sm font-medium placeholder:font-normal',
+  'outline-none transition-[background-color,border-color,box-shadow] duration-premium ease-premium',
+  THEME.field
+);
 
 export function Login() {
   const [login, setLogin] = useState('');
@@ -87,12 +197,12 @@ export function Login() {
   }
 
   /*
-   * Presence only, deliberately. There is no minimum length or complexity rule
-   * here because the password being checked was set in Bugzilla - possibly
-   * years ago, under whatever policy applied then. A client-side "at least N
+   * Presence only, deliberately. There is no length or complexity rule here
+   * because the password being checked was set in Bugzilla - possibly years
+   * ago, under whatever policy applied then. A client-side "at least N
    * characters" would refuse to even attempt a password that is genuinely
-   * correct, and the user would have no way to tell the difference between
-   * "this app will not send it" and "the server rejected it".
+   * correct, and the user could not tell "this app will not send it" from
+   * "the server rejected it".
    */
   function validatePassword(value: string): boolean {
     if (!value) {
@@ -108,30 +218,20 @@ export function Login() {
     setServerError(null);
 
     /*
-     * Validate before the request, not after: a malformed address cannot
-     * succeed, and sending it anyway spends one of the ten attempts the rate
-     * limiter allows for this (IP, account) pair. Someone fixing a typo should
-     * not be moved closer to a five-minute lockout by it.
+     * Validate before the request. A malformed address cannot succeed, and
+     * sending it anyway spends one of the attempts the rate limiter allows for
+     * this (IP, account) pair - someone fixing a typo should not be moved
+     * closer to a lockout by it.
      *
-     * Both checks run before either result is acted on. Guarding with `&&`, or
-     * returning early on the email, would short-circuit - leaving an empty
-     * password unreported until the address was fixed and the form submitted a
-     * second time. Two blank fields are two problems, and the form should say
-     * so in one pass rather than revealing them one at a time.
+     * Both checks run before either result is acted on: guarding with `&&`
+     * would short-circuit and leave an empty password unreported until the
+     * address was fixed and the form submitted a second time.
      */
     const emailOk = validateEmail(login);
     const passwordOk = validatePassword(password);
     if (!emailOk || !passwordOk) {
-      /*
-       * Move focus to the first field that needs attention.
-       *
-       * This is what the previous `if (!password) return;` was missing: it
-       * bailed silently, so pressing Sign in with an empty password did
-       * nothing at all - no message, no focus change, no request. A control
-       * that appears to ignore the click is indistinguishable from one that is
-       * broken. Focusing also announces the message to a screen reader, which
-       * a purely visual error below the field does not.
-       */
+      // Focus the first field needing attention. This also announces the
+      // message to a screen reader, which a visual-only error does not.
       (emailOk ? passwordRef : emailRef).current?.focus();
       return;
     }
@@ -149,270 +249,63 @@ export function Login() {
   const busy = loginMutation.isPending;
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      {/* ---------------------------------------------------------- hero ---- */}
-      {/* Lit from the top-right so the panel has a light source, rather than
-          reading as one flat fill. Both stops stay on the brand teal. */}
-      <aside className="relative hidden overflow-hidden bg-[#0d6875] bg-[radial-gradient(120%_100%_at_85%_0%,#15879b_0%,#0d6875_55%,#0a525d_100%)] lg:flex lg:flex-col lg:justify-between">
-        {/*
-          Dot grid at 22px. Static, not animated: it sits behind text people
-          read while typing a password, and motion there is a distraction rather
-          than delight. `opacity-15` on a white dot lands soft enough to read as
-          paper texture instead of a visible pattern.
-        */}
-        <div
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] bg-[size:22px_22px] opacity-15"
-          aria-hidden
-        />
+    <div className={cn('relative min-h-screen overflow-hidden', THEME.canvas)}>
+      <AmbientGlow />
 
-        {/*
-          Circuit traces, weighted to the right edge so they read as texture
-          behind the panel's seam rather than clutter behind the headline.
-          Inline SVG rather than an asset: it is a few hundred bytes, needs no
-          extra request, and inherits the panel's colour.
-        */}
-        <svg
-          className="pointer-events-none absolute inset-y-0 right-0 h-full w-3/4 text-white/[0.13]"
-          viewBox="0 0 400 800"
-          fill="none"
-          preserveAspectRatio="xMaxYMid slice"
-          aria-hidden
-        >
-          {/*
-            Fine runs with right-angle turns and terminating pads, clustered in
-            the top-right and bottom-right so the middle band stays quiet behind
-            the headline and the bento cards. Hairline weight (1px) keeps it as
-            texture: heavier strokes stop reading as circuitry and start
-            competing with the copy.
-          */}
-          <g stroke="currentColor" strokeWidth="1" strokeLinecap="round">
-            <path d="M400 60 H336 a8 8 0 0 0-8 8 V104 a8 8 0 0 1-8 8 H262" />
-            <path d="M400 96 H360 a8 8 0 0 0-8 8 V150" />
-            <path d="M300 0 V38 a8 8 0 0 0 8 8 H400" />
-            <path d="M262 112 V168 a8 8 0 0 0 8 8 H328" />
-            <path d="M400 168 H372 a8 8 0 0 0-8 8 V214 a8 8 0 0 1-8 8 H300" />
-            <path d="M352 150 H400" />
-            <path d="M236 40 H196 a8 8 0 0 0-8 8 V96" />
+      <motion.main
+        variants={listVariants}
+        initial="hidden"
+        animate="visible"
+        className="relative z-10 mx-auto grid min-h-screen max-w-[1220px] grid-cols-1 items-center gap-14 px-6 py-14 sm:px-10 lg:grid-cols-[1.1fr_minmax(0,27rem)] lg:gap-20 lg:py-0"
+      >
+        <Showcase />
 
-            <path d="M400 590 H344 a8 8 0 0 1-8-8 V536 a8 8 0 0 0-8-8 H272" />
-            <path d="M400 648 H366 a8 8 0 0 0-8 8 V700" />
-            <path d="M272 528 V470 a8 8 0 0 1 8-8 H400" />
-            <path d="M228 800 V744 a8 8 0 0 1 8-8 H316 a8 8 0 0 0 8-8 V690" />
-            <path d="M324 690 H400" />
-            <path d="M180 660 H140 a8 8 0 0 0-8 8 V730" />
-            <path d="M400 740 H380 a8 8 0 0 0-8 8 V800" />
-          </g>
-          <g fill="currentColor">
-            {[
-              [262, 112], [352, 150], [328, 176], [300, 222], [188, 96], [300, 0], [400, 60],
-              [272, 528], [324, 690], [358, 700], [132, 730], [372, 800], [400, 590],
-            ].map(([cx, cy]) => (
-              <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2.5" />
-            ))}
-          </g>
-        </svg>
-
-        {/*
-          A few bug marks drifting over the panel - the product's own motif,
-          at a weight that reads on a second look rather than the first.
-        */}
-        {[
-          /*
-           * Positioned in the panel's empty margins, never in the text column.
-           * One of these previously sat at 52% - immediately beside the
-           * subtitle - where it read as a stray glyph attached to the sentence
-           * rather than as background texture.
-           */
-          { top: '13%', left: '61%', size: 'h-5 w-5' },
-          { top: '55%', left: '78%', size: 'h-6 w-6' },
-          { top: '88%', left: '30%', size: 'h-4 w-4' },
-        ].map((b) => (
-          <Bug
-            key={`${b.top}-${b.left}`}
-            className={`pointer-events-none absolute ${b.size} text-white/20`}
-            style={{ top: b.top, left: b.left }}
-            aria-hidden
-          />
-        ))}
-
-        {/*
-          A broad spotlight from the top-left, plus two tighter pools. Written
-          as an explicit `radial-gradient(...)`: `bg-gradient-radial from-… via-…`
-          is NOT a stock Tailwind utility (only the linear directions ship, and
-          this config adds no plugin for it), so that shorthand compiles to
-          nothing and the glow silently never renders.
-        */}
-        <div
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_20%_20%,rgba(45,212,191,0.10)_0%,transparent_70%)]"
-          aria-hidden
-        />
-        <div className="pointer-events-none absolute -left-32 -top-24 h-96 w-96 rounded-full bg-ueducate-accent/20 blur-3xl" aria-hidden />
-        <div className="pointer-events-none absolute -bottom-32 right-[-8rem] h-96 w-96 rounded-full bg-ueducate-primary/15 blur-3xl" aria-hidden />
-
-        <div className="relative z-10 p-10">
-          {/*
-            Glassmorphic pill holding the crest and the product name.
-
-            The logo sits on its own white chip inside the glass rather than
-            directly on it. The asset is a PNG whose wordmark is charcoal
-            (#2F383A - measured for white backgrounds, see BRANDING.md), so on a
-            10%-white pane over teal it would all but disappear. Backing it keeps
-            the mark legible and on-brand while the container itself stays
-            genuinely translucent.
-          */}
-          {/*
-            The brandmark is NOT split into "crest + UEDUCATE text".
-            `ueducate-logo.png` is the shield AND the wordmark together - the
-            asset lifted from the live site header (BRANDING.md) - so rendering
-            it beside a separate "UEDUCATE" label would print the company name
-            twice. Cropping to the shield alone would mean guessing where the
-            crest ends inside a raster image, and any drift there mangles the
-            mark. Instead the whole mark is scaled up on a white chip, which is
-            what makes it legible: the wordmark is charcoal (#2F383A, measured
-            for white backgrounds), and on a 10%-white pane over teal it would
-            all but disappear.
-          */}
-          <div className="inline-flex items-center gap-3.5 rounded-2xl border border-white/20 bg-white/10 px-5 py-3 shadow-lg shadow-black/5 backdrop-blur-xl">
-            <span className="flex items-center rounded-xl bg-white px-3 py-2">
-              <UEducateLogo height={30} />
-            </span>
-            <span className="h-5 w-px bg-white/30" aria-hidden />
-            <span className="text-sm font-semibold tracking-wide text-teal-100">Bug Tracker</span>
-          </div>
-        </div>
-
-        <div className="relative z-10 px-10">
-          {/*
-            Two lines, two weights.
-
-            Previously both sentences were extrabold at leading-[1.12]: nothing
-            led, and at that size the descenders of "every bug." crowded the
-            "Ship" beneath them, which is what made the block read as a dense
-            slab rather than a headline. Opening the leading to 1.15 and letting
-            the second line drop to semibold in a softer teal gives the pair a
-            clear first and second beat, and the eye lands on "Track every bug."
-            before reading on.
-
-            `max-w-[19ch]` measures in characters, not pixels, so the break
-            stays put if the type scale or font ever changes - a pixel width
-            silently re-wraps and produces an orphan.
-          */}
-          <h2 className="max-w-[19ch] text-4xl font-extrabold leading-[1.15] tracking-tight text-white">
-            Track every bug.
-            <span className="mt-1 block font-semibold text-teal-100">Ship with confidence.</span>
-          </h2>
-          <p className="mt-6 max-w-sm text-base leading-relaxed text-teal-100/75">
-            One clean, fast workspace for every defect across your products — for the whole team.
-          </p>
-
-          <ul className="mt-10 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
-            {FEATURES.map((f) => (
-              <li
-                key={f.title}
-                className="group flex items-start gap-3 rounded-2xl border border-white/15 bg-white/10 p-5 shadow-sm backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/15"
-              >
-                <span className="flex shrink-0 items-center justify-center rounded-lg bg-white/15 p-2 text-teal-100 transition-colors group-hover:bg-white/25">
-                  <f.icon className="h-4 w-4" aria-hidden />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white">{f.title}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-teal-100/80">{f.text}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="relative z-10 p-10 text-sm text-teal-100/70">
-          Your single system of record for product quality and defect tracking.
-        </div>
-      </aside>
-
-      {/* ---------------------------------------------------------- form ---- */}
-      <main className="relative flex items-center justify-center overflow-hidden bg-[#eef7fa] px-5 py-12">
-        {/*
-          Ambient glow behind the card, tying the form side back to the teal.
-          Written as an arbitrary `radial-gradient(...)` rather than
-          `bg-gradient-radial from-… to-…`: that utility does NOT exist in stock
-          Tailwind (only the linear directions ship), and this config adds no
-          plugin for it - so the shorthand compiles to nothing and the glow
-          silently never renders.
-        */}
-        <div
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[40rem] w-[40rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(153,246,228,0.45)_0%,rgba(204,251,241,0.22)_45%,transparent_70%)] blur-2xl"
-          aria-hidden
-        />
-
-        {/* A single four-point sparkle, low in the panel - the one decorative
-            flourish, kept away from the card so it never competes with it. */}
-        <svg
-          className="pointer-events-none absolute bottom-16 right-14 h-16 w-16 text-white/70"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          aria-hidden
-        >
-          <path d="M12 0c.4 6.3 5.3 11.2 11.6 11.6C17.3 12 12.4 16.9 12 23.2 11.6 16.9 6.7 12 .4 11.6 6.7 11.2 11.6 6.3 12 0Z" />
-        </svg>
-
-        <div className="relative z-10 w-full max-w-md">
-          {/* Brand mark for small screens, where the hero panel is hidden. */}
-          <div className="mb-8 flex flex-col items-center gap-3 lg:hidden">
-            <UEducateLogo height={40} />
-            <span className="rounded-full bg-[#0d6875]/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[#0d6875]">
-              Bug Tracker
-            </span>
-          </div>
-
-          <div className="mb-7 hidden lg:block">
-            <h1 className="text-[1.75rem] font-bold leading-tight tracking-tight text-ueducate-ink">Welcome back</h1>
-            <p className="mt-1.5 text-sm text-slate-500">Sign in to your workspace.</p>
-          </div>
-
+        <motion.section variants={pageVariants} className="w-full justify-self-center lg:justify-self-end">
           <form
             onSubmit={onSubmit}
             /*
              * `noValidate` hands validation to this component alone. Without it
              * the browser's own bubble fires first on `type="email"`, in its own
-             * wording and its own position, and the field-level message below
-             * never gets a chance to render - two validators disagreeing about
-             * the same field.
+             * wording and position, and the message below never renders - two
+             * validators disagreeing about the same field.
              */
             noValidate
-            className="w-full overflow-hidden rounded-3xl border border-slate-100/80 bg-white shadow-2xl shadow-teal-950/10"
+            className={cn('rounded-3xl p-8 sm:p-10', THEME.authCard)}
           >
-            {/* Brand accent capping the card. `overflow-hidden` on the form is
-                what lets it sit flush inside the rounded corners. */}
-            <div className="h-1.5 bg-gradient-to-r from-ueducate-primary via-ueducate-accent to-ueducate-hover" aria-hidden />
-
-            <div className="p-9">
-              <h1 className="mb-6 text-lg font-semibold tracking-tight text-ueducate-ink lg:hidden">
-                Sign in to Bug Tracker
-              </h1>
+            <div className="mb-7">
+              <h1 className={cn('font-display text-2xl font-bold tracking-tight', THEME.heading)}>Welcome back</h1>
+              <p className={cn('mt-1.5 text-sm', THEME.muted)}>Sign in to your Bug Tracker workspace.</p>
+            </div>
 
             <div className="flex flex-col gap-4">
               {/* ---- email ---- */}
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="login-email" className="text-sm font-medium text-slate-700">
+                <label htmlFor="login-email" className={cn('text-xs font-semibold', THEME.label)}>
                   Email
                 </label>
                 <div className="relative">
                   <Mail
-                    className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${
-                      emailError ? 'text-rose-400' : 'text-slate-400'
-                    }`}
+                    className={cn(
+                      'pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors',
+                      emailError ? THEME.fieldIconError : THEME.fieldIconIdle
+                    )}
                     aria-hidden
                   />
                   <input
                     id="login-email"
                     ref={emailRef}
+                    /* `name` is not used by the current Playwright suite, which
+                       selects by label and by the error ids below - but a login
+                       field should carry one regardless: password managers key
+                       their autofill off it. */
+                    name="email"
                     type="email"
                     autoComplete="username"
                     value={login}
                     onChange={(e) => {
                       setLogin(e.target.value);
-                      // Re-check only once an error is showing, so the message
-                      // clears as soon as it is fixed but never appears while
-                      // someone is still part-way through typing.
+                      // Re-check only once an error is showing, so it clears as
+                      // soon as it is fixed but never appears mid-typing.
                       if (emailError) validateEmail(e.target.value);
                     }}
                     onBlur={() => login && validateEmail(login)}
@@ -420,11 +313,11 @@ export function Login() {
                     autoFocus
                     aria-invalid={emailError ? true : undefined}
                     aria-describedby={emailError ? 'login-email-error' : undefined}
-                    className={`${FIELD_BASE} pr-3.5 ${emailError ? FIELD_ERROR : FIELD_OK}`}
+                    className={cn(FIELD_BASE, 'pr-4', emailError ? THEME.fieldError : THEME.fieldIdle)}
                   />
                 </div>
                 {emailError && (
-                  <p id="login-email-error" className="text-xs font-medium text-rose-600">
+                  <p id="login-email-error" className={cn('text-xs font-medium', THEME.errorText)}>
                     {emailError}
                   </p>
                 )}
@@ -433,43 +326,44 @@ export function Login() {
               {/* ---- password ---- */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-baseline justify-between">
-                  <label htmlFor="login-password" className="text-sm font-medium text-slate-700">
+                  <label htmlFor="login-password" className={cn('text-xs font-semibold', THEME.label)}>
                     Password
                   </label>
-                  {/* Beside the label, not under the button: it is read at the
-                      moment the password is being remembered, not after a failure. */}
+                  {/* Beside the label, not under the button: it is read while
+                      the password is being recalled, not after a failure. */}
                   <Link
                     to="/forgot-password"
-                    className="rounded text-xs font-medium text-[#0d6875] outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[#0d6875]/30"
+                    className={cn('focus-ring rounded text-xs font-medium transition-colors', THEME.link)}
                   >
                     Forgot password?
                   </Link>
                 </div>
                 <div className="relative">
                   <Lock
-                    className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${
-                      passwordError ? 'text-rose-400' : 'text-slate-400'
-                    }`}
+                    className={cn(
+                      'pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors',
+                      passwordError ? THEME.fieldIconError : THEME.fieldIconIdle
+                    )}
                     aria-hidden
                   />
                   <input
                     id="login-password"
                     ref={passwordRef}
+                    name="password"
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
-                      // Clear as soon as it is fixed. There is no onBlur check
-                      // to match the email field's: presence is the only rule,
-                      // so blurring an empty box would flag it the moment
-                      // someone tabbed past on their way to the reveal toggle.
+                      // No onBlur counterpart: presence is the only rule, so
+                      // blurring an empty box would flag it the moment someone
+                      // tabbed past on the way to the reveal toggle.
                       if (passwordError) validatePassword(e.target.value);
                     }}
                     placeholder="••••••••"
                     aria-invalid={passwordError ? true : undefined}
                     aria-describedby={passwordError ? 'login-password-error' : undefined}
-                    className={`${FIELD_BASE} ${passwordError ? FIELD_ERROR : FIELD_OK} pr-11`}
+                    className={cn(FIELD_BASE, 'pr-12', passwordError ? THEME.fieldError : THEME.fieldIdle)}
                   />
                   <button
                     /*
@@ -482,13 +376,13 @@ export function Login() {
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                     aria-pressed={showPassword}
                     aria-controls="login-password"
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 outline-none transition-colors hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-[#0d6875]/30"
+                    className={cn('focus-ring absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 transition-colors', THEME.reveal)}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
                   </button>
                 </div>
                 {passwordError && (
-                  <p id="login-password-error" className="text-xs font-medium text-rose-600">
+                  <p id="login-password-error" className={cn('text-xs font-medium', THEME.errorText)}>
                     {passwordError}
                   </p>
                 )}
@@ -498,17 +392,24 @@ export function Login() {
               {serverError && (
                 <p
                   role="alert"
-                  className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm leading-relaxed text-rose-700"
+                  className={cn('flex items-start gap-2.5 rounded-xl p-3.5 text-sm leading-relaxed', THEME.errorBanner)}
                 >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   <span>{serverError}</span>
                 </p>
               )}
 
+              {/* The arrow slides via `transform` on a child, so it composites
+                  on the GPU and never reflows the label beside it. */}
               <button
                 type="submit"
                 disabled={busy}
-                className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0d6875] text-sm font-semibold text-white shadow-md shadow-[#0d6875]/20 outline-none transition-all hover:bg-[#0a525d] focus-visible:ring-2 focus-visible:ring-[#0d6875]/40 focus-visible:ring-offset-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                className={cn(
+                  'focus-ring group mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl',
+                  'text-sm font-semibold transition-all duration-200 ease-premium active:scale-[0.98]',
+                  THEME.button,
+                  'disabled:cursor-not-allowed disabled:opacity-60'
+                )}
               >
                 {busy ? (
                   <>
@@ -517,21 +418,341 @@ export function Login() {
                   </>
                 ) : (
                   <>
-                    <ArrowRight className="h-4 w-4" aria-hidden />
                     Sign in
+                    <ArrowRight
+                      className="h-4 w-4 transition-transform duration-premium ease-premium group-hover:translate-x-1"
+                      aria-hidden
+                    />
                   </>
                 )}
               </button>
             </div>
-            </div>
           </form>
 
-          <p className="mt-5 text-center text-xs text-slate-500">
-            {/* Accurate: sign-in is verified against Bugzilla's own accounts, with per-group access control. No SSO is offered. */}
-            Secured by centralized team access control.
+          {/*
+            Accurate as written: the BFF keeps sessions server-side (an opaque
+            signed cookie, never the Bugzilla token - see lib/sessionStore.ts),
+            and every route is gated by the caller's Bugzilla groups.
+          */}
+          <p className={cn('mt-5 text-center text-xs', THEME.muted)}>
+            Protected by enterprise session &amp; RBAC middleware
+          </p>
+        </motion.section>
+      </motion.main>
+    </div>
+  );
+}
+
+/**
+ * The left column: lockup, headline, and three feature cards.
+ *
+ * Hidden below `lg`. On a phone the form is the only thing that matters, and a
+ * product showcase above it just pushes the password field off the fold.
+ */
+type TabId = 'overview' | 'why-bugzilla' | 'specs';
+
+const TABS: Array<{ id: TabId; label: string; icon: typeof Rocket }> = [
+  { id: 'overview', label: 'Platform overview', icon: Rocket },
+  { id: 'why-bugzilla', label: 'About', icon: Info },
+  { id: 'specs', label: 'Specs & automation', icon: Zap },
+];
+
+/**
+ * The left column: a three-tab product showcase.
+ *
+ * Hidden below `lg`. On a phone the form is the only thing that matters, and a
+ * showcase above it would push the password field off the fold - so the tabs
+ * are never rendered there rather than being stacked and scrolled past.
+ */
+function Showcase() {
+  const [tab, setTab] = useState<TabId>('overview');
+
+  return (
+    <motion.section variants={pageVariants} className="hidden lg:block">
+      {/*
+        The real brand asset on white. `ueducate-logo.png` carries a charcoal
+        wordmark measured for white backgrounds (BRANDING.md), so this canvas
+        suits it exactly - no chip or re-tinting needed, unlike on a dark one.
+      */}
+      <div className={cn('inline-flex items-center gap-3 rounded-full px-4 py-2', THEME.badge)}>
+        <UEducateLogo height={22} />
+        <span className={cn('h-4 w-px', THEME.divider)} aria-hidden />
+        {/* Text only here. At 20px the mark was squeezed between a rule and a
+            tracked-out caption, reading as clutter rather than as a brand -
+            it gets a proper showcase in the "Why Bugzilla?" tab instead. */}
+        <span className={cn('text-2xs font-semibold uppercase tracking-[0.12em]', THEME.muted)}>
+          Bugzilla reimagined · Enterprise defect tracker
+        </span>
+      </div>
+
+      {/*
+        A real tablist: `role="tablist"` plus `aria-selected` and `aria-controls`
+        on each trigger, so the group is announced as tabs rather than as three
+        unrelated buttons. Native buttons keep Space and Enter working for free.
+      */}
+      <div
+        role="tablist"
+        aria-label="Product showcase"
+        className={cn('mt-8 inline-flex items-center gap-1 rounded-full p-1', THEME.tabBar)}
+      >
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            type="button"
+            id={`showcase-tab-${t.id}`}
+            aria-selected={tab === t.id}
+            aria-controls={`showcase-panel-${t.id}`}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              'focus-ring inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all duration-premium ease-premium',
+              tab === t.id ? THEME.tabActive : THEME.tabIdle
+            )}
+          >
+            <t.icon className="h-3.5 w-3.5" aria-hidden />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/*
+        `key={tab}` restarts the entrance on every switch, so the panel animates
+        in rather than its text swapping underneath a static box.
+        `min-h` holds the column height steady across tabs of different lengths -
+        without it the auth card beside this jumps as you switch.
+      */}
+      <motion.div
+        key={tab}
+        role="tabpanel"
+        id={`showcase-panel-${tab}`}
+        aria-labelledby={`showcase-tab-${tab}`}
+        variants={pageVariants}
+        initial="hidden"
+        animate="visible"
+        className="mt-8 min-h-[27rem]"
+      >
+        {tab === 'overview' && <OverviewPanel />}
+        {tab === 'why-bugzilla' && <WhyBugzillaPanel />}
+        {tab === 'specs' && <SpecsPanel />}
+      </motion.div>
+    </motion.section>
+  );
+}
+
+function OverviewPanel() {
+  return (
+    <>
+      <h2 className={cn('max-w-[16ch] font-display text-[2.6rem] font-extrabold leading-[1.07] tracking-[-0.03em]', THEME.heading)}>
+        {/*
+          `pb-[0.08em]` is functional, not spacing: `bg-clip-text` crops to the
+          glyph box and would otherwise shave the descender on "g".
+        */}
+        <span className={cn('pb-[0.08em]', THEME.gradientText)}>Modern defect intelligence</span> for
+        high-velocity teams.
+      </h2>
+      <p className={cn('mt-5 max-w-md text-md leading-relaxed', THEME.body)}>
+        The speed and visual elegance of Linear, backed by the industrial reliability of Bugzilla.
+      </p>
+
+      <ul className="mt-8 flex max-w-lg flex-col gap-3">
+        {FEATURES.map((f) => (
+          <li
+            key={f.title}
+            className={cn('group flex items-start gap-4 rounded-2xl p-5 transition-all duration-300 ease-out', THEME.featureCard)}
+          >
+            <span className={cn('mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors', THEME.featureIcon)}>
+              <f.icon className="h-[18px] w-[18px]" aria-hidden />
+            </span>
+            <span className="min-w-0">
+              <span className={cn('block text-sm font-semibold', THEME.heading)}>{f.title}</span>
+              {/* slate-500, not slate-400: on this canvas slate-400 measures
+                  2.46:1 and is decorative only. */}
+              <span className={cn('mt-1 block text-xs leading-relaxed', THEME.muted)}>{f.text}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * The four pillars.
+ *
+ * Each is a claim about software this team actually runs, so each is one they
+ * could be asked to defend:
+ *
+ *   State integrity  - Bugzilla validates transitions against `status_workflow`
+ *                      and refuses one that is not defined. We hit this
+ *                      ourselves: REOPENED is not configured here, so the
+ *                      engine rejects the move rather than half-applying it.
+ *   RBAC             - group membership gates products and bugs; the BFF reads
+ *                      the same groups rather than keeping a second model.
+ *   Audit log        - every field change lands in `bugs_activity` with who and
+ *                      when. It is what we queried to prove no open bug had
+ *                      ever been reassigned.
+ *   Architecture     - the BFF speaks Bugzilla's API; no schema is forked and
+ *                      no data lives outside it.
+ */
+const BUGZILLA_PILLARS = [
+  {
+    icon: Lock,
+    title: 'Uncompromising state integrity',
+    text: 'Strict workflow validation refuses a transition the instance does not define, so a defect cannot land in a ghost state. Once a bench failure is logged, its lifecycle is complete and ordered.',
+  },
+  {
+    icon: Users,
+    title: 'Granular enterprise RBAC',
+    text: 'Group-level access decides which products and defects each person can reach. Developers, testers and admins see exactly their own scope — enforced by the engine, not by hidden buttons.',
+  },
+  {
+    icon: ScrollText,
+    title: 'Complete field-level audit log',
+    text: 'A time-stamped record of every edit, attachment, priority change and status move, attributed to the account that made it, for the whole life of the defect.',
+  },
+  {
+    icon: Zap,
+    title: 'Open architecture, modern BFF',
+    text: 'Legacy Perl rendering is replaced by a Node.js BFF and React UI, with per-user caching that collapses repeated round trips. Bugzilla stays the system of record — no forked schema, no vendor lock-in.',
+  },
+];
+
+function WhyBugzillaPanel() {
+  return (
+    <>
+      {/*
+        Hero banner: emblem left, headline right.
+
+        `sm:grid-cols-[auto_minmax(0,1fr)]` rather than two equal columns - the
+        emblem card is a fixed size, so giving it half the width would strand it
+        in whitespace while the copy beside it wrapped early. `auto` takes
+        exactly what it needs and hands the rest to the text.
+      */}
+      <div className={cn('grid grid-cols-1 items-center gap-6 rounded-3xl p-6 sm:grid-cols-[auto_minmax(0,1fr)] sm:p-7', THEME.panelCard)}>
+        {/*
+          The official mark, inlined unmodified from bugzilla.org's own header
+          asset - see the trademark note in BugzillaMark.tsx.
+
+          On a WHITE plate deliberately: the artwork carries its own colours,
+          and tinting the surface behind it would change how the mark reads.
+          The blue glow sits on the card, never on the logo.
+        */}
+        <div className="grid h-[8.5rem] w-[8.5rem] shrink-0 place-items-center rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xl shadow-blue-500/10">
+          <BugzillaMark height={88} />
+        </div>
+
+        <div className="min-w-0">
+          <span className={cn('inline-block rounded-full px-3 py-1 text-2xs font-semibold uppercase tracking-[0.12em]', THEME.accentChip)}>
+            Powered by the Bugzilla engine
+          </span>
+          <h3 className={cn('mt-3 font-display text-2xl font-extrabold leading-tight tracking-[-0.02em]', THEME.heading)}>
+            The industrial core behind our{' '}
+            {/* `pb-[0.08em]`: `bg-clip-text` crops to the glyph box and would
+                otherwise shave the descender on "p". */}
+            <span className={cn('pb-[0.08em]', THEME.gradientText)}>defect platform</span>
+          </h3>
+          <p className={cn('mt-2.5 text-xs leading-relaxed', THEME.muted)}>
+            Why engineering teams trust Bugzilla as the single source of truth for software quality.
           </p>
         </div>
-      </main>
-    </div>
+      </div>
+
+      {/* 2x2 on anything wide enough; a single column below, where two
+          cards side by side would leave the text two or three words wide. */}
+      <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {BUGZILLA_PILLARS.map((pillar) => (
+          <li
+            key={pillar.title}
+            className={cn('group rounded-2xl p-5 transition-all duration-300 ease-out', THEME.featureCard)}
+          >
+            <span className={cn('mb-3 flex h-9 w-9 items-center justify-center rounded-xl transition-colors', THEME.featureIcon)}>
+              <pillar.icon className="h-[17px] w-[17px]" aria-hidden />
+            </span>
+            <p className={cn('text-sm font-semibold', THEME.heading)}>{pillar.title}</p>
+            <p className={cn('mt-1.5 text-xs leading-relaxed', THEME.muted)}>{pillar.text}</p>
+          </li>
+        ))}
+      </ul>
+
+      <div className={cn('mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold', THEME.accentChip)}>
+        <Sparkles className="h-3.5 w-3.5" aria-hidden />
+        100% Bugzilla reliability, reimagined for high-velocity engineering teams
+      </div>
+    </>
+  );
+}
+
+/**
+ * Specifications.
+ *
+ * Every figure here was read out of this codebase rather than written to sound
+ * impressive: 3 concurrent devices is MAX_SESSIONS_PER_USER, and the 5-minute
+ * cooldown after 10 failures is LOGIN_LOCKOUT_MS / LOGIN_MAX_FAILURES. Nothing
+ * on this panel is a claim the team could not defend if asked.
+ */
+const SPECS = [
+  {
+    icon: Zap,
+    title: 'Test bench pipeline',
+    text: 'Automated API and UI test suites log failures directly into the defect tracker, fully classified with stack traces and logs.',
+  },
+  {
+    icon: Database,
+    title: 'Zero-triage classification',
+    text: 'Stack traces, request payloads and environment context are mapped into the Bugzilla schema on arrival and attached to the defect as evidence.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'RBAC & session security',
+    text: 'Server-side sessions holding an opaque cookie - never a Bugzilla token - capped at 3 concurrent devices, with a 5-minute cooldown after 10 failed sign-ins per device and account.',
+  },
+];
+
+function SpecsPanel() {
+  return (
+    <>
+      <h2 className={cn('max-w-[18ch] font-display text-[2.4rem] font-extrabold leading-[1.08] tracking-[-0.03em]', THEME.heading)}>
+        From bench failure to{' '}
+        <span className={cn('pb-[0.08em]', THEME.gradientText)}>triaged defect</span>, automatically.
+      </h2>
+
+      <ul className="mt-7 flex max-w-lg flex-col gap-3">
+        {SPECS.map((spec) => (
+          <li
+            key={spec.title}
+            className={cn('group flex items-start gap-4 rounded-2xl p-5 transition-all duration-300 ease-out', THEME.featureCard)}
+          >
+            <span className={cn('mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors', THEME.featureIcon)}>
+              <spec.icon className="h-[18px] w-[18px]" aria-hidden />
+            </span>
+            <span className="min-w-0">
+              <span className={cn('block text-sm font-semibold', THEME.heading)}>{spec.title}</span>
+              <span className={cn('mt-1 block text-xs leading-relaxed', THEME.muted)}>{spec.text}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function AmbientGlow() {
+  return (
+    <>
+      {/*
+        Written as explicit `radial-gradient(...)`: `bg-gradient-radial` is NOT
+        a stock Tailwind utility (only the linear directions ship) and this
+        config adds no plugin for it, so that shorthand compiles to nothing and
+        the glow silently never renders.
+      */}
+      <div
+        className={cn('pointer-events-none absolute -left-[22rem] -top-[22rem] h-[48rem] w-[48rem] rounded-full blur-3xl', THEME.glowTopLeft)}
+        aria-hidden
+      />
+      <div
+        className={cn('pointer-events-none absolute -bottom-[24rem] -right-[20rem] h-[46rem] w-[46rem] rounded-full blur-3xl', THEME.glowBottomRight)}
+        aria-hidden
+      />
+    </>
   );
 }

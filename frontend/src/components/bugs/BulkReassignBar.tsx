@@ -1,4 +1,5 @@
 import { ArchiveRestore, Trash2, UserCheck, X } from 'lucide-react';
+import { assigneeLabel } from '../../lib/roles';
 import { useState } from 'react';
 import { ApiError } from '../../api/client';
 import { useAssignableUsers, useBulkReassign, useRestoreBugs } from '../../api/hooks';
@@ -112,7 +113,7 @@ export function BulkReassignBar({
         </option>
         {(assignable?.users ?? []).map((u) => (
           <option key={u.email} value={u.email} title={u.email}>
-            {u.name}
+            {assigneeLabel(u)}
           </option>
         ))}
       </Select>

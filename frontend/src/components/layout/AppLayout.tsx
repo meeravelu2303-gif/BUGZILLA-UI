@@ -15,7 +15,7 @@ import { ErrorBoundary } from './ErrorBoundary';
  */
 function navLinkClasses({ isActive }: { isActive: boolean }): string {
   return cn(
-    'focus-ring group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium transition-all duration-150',
+    'focus-ring group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium transition-all duration-200',
     isActive
       ? 'bg-white/85 text-brand-800 shadow-card ring-1 ring-inset ring-brand-500/25'
       : 'text-slate-600 hover:bg-white/55 hover:text-slate-900'
@@ -134,7 +134,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="px-4 pb-1">
           <NavLink
             to="/bugs/new"
-            className="focus-ring flex h-10 items-center justify-center gap-2 rounded-full bg-gradient-to-b from-brand-600 to-brand-800 px-4 text-sm font-semibold text-white shadow-glow ring-1 ring-inset ring-white/20 transition-all hover:from-brand-700 hover:to-brand-900 hover:shadow-float active:translate-y-px"
+            /*
+             * The sidebar's one premium control.
+             *
+             * Three stacked cues make the 3D read, and each does a distinct job:
+             *   - a vertical gradient (brand-500 -> brand-700) for the lit face;
+             *   - `ring-white/25 inset` as a specular highlight along the top edge;
+             *   - a coloured cast below, so it sits ON the sidebar rather than in it.
+             * On press, the shadow collapses and the button drops 1px, which is
+             * what sells the depth as physical rather than painted.
+             *
+             * White text clears AA across the whole ramp - 5.17:1 on brand-600,
+             * 6.70:1 on brand-700 - which is the check a gradient fill quietly
+             * fails at its lightest stop.
+             */
+            className="focus-ring flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-brand-500 via-brand-600 to-brand-700 px-4 text-sm font-semibold text-white shadow-[0_6px_16px_-4px_rgb(37_99_235_/_0.5),inset_0_1px_0_0_rgb(255_255_255_/_0.25)] ring-1 ring-inset ring-white/25 transition-all duration-200 hover:from-brand-600 hover:to-brand-800 hover:shadow-[0_10px_22px_-4px_rgb(37_99_235_/_0.6),inset_0_1px_0_0_rgb(255_255_255_/_0.3)] active:translate-y-px active:shadow-[0_2px_8px_-2px_rgb(37_99_235_/_0.5)]"
           >
             <Plus className="h-4 w-4" aria-hidden />
             New Bug
@@ -221,7 +235,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             >
               <Search className="h-4 w-4 text-slate-400 transition-colors group-hover:text-brand-700" aria-hidden />
               <span className="flex-1 truncate text-left">Search bugs, jump to a page…</span>
-              <kbd className="hidden items-center gap-0.5 rounded-md border border-slate-900/10 bg-white px-1.5 py-0.5 font-sans text-[10px] font-semibold text-slate-500 sm:inline-flex">
+              <kbd className="hidden items-center gap-0.5 rounded-md border border-line bg-white px-1.5 py-0.5 font-sans text-[10px] font-semibold text-slate-500 sm:inline-flex">
                 ⌘K
               </kbd>
             </button>

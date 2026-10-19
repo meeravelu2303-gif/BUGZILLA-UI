@@ -64,7 +64,7 @@ export function DeleteBugsDialog({
       onClose={onClose}
       onClick={(e) => e.target === ref.current && !del.isPending && onClose()}
       aria-labelledby="delete-title"
-      className="w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 backdrop:backdrop-blur-[2px]"
+      className="w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-hairline bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 backdrop:backdrop-blur-[2px]"
     >
       <form
         method="dialog"
@@ -101,7 +101,7 @@ export function DeleteBugsDialog({
             autoFocus
             maxLength={1000}
             placeholder="e.g. Filed twice by the test bench during the 14 Oct rerun."
-            className="focus-ring w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm placeholder:text-slate-400"
+            className="focus-ring w-full resize-y rounded-xl border border-hairline px-3 py-2 text-sm placeholder:text-slate-400"
           />
         </div>
 

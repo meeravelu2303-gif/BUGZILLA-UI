@@ -1,4 +1,4 @@
-import { Check, Copy, TriangleAlert } from 'lucide-react';
+import { Check, ChevronRight, Copy, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { copyText } from '../../lib/clipboard';
 
@@ -193,8 +193,10 @@ export function DescriptionReport({ description }: { description: string }) {
   const parsed = parse(description);
 
   if (!parsed) {
+    // `[overflow-wrap:anywhere]` not `break-all`: long tokens still break, but
+    // ordinary sentences keep wrapping at spaces instead of mid-word.
     return (
-      <pre className="max-w-full whitespace-pre-wrap break-all rounded-xl bg-slate-50 p-4 font-mono text-[12.5px] leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200">
+      <pre className="max-w-full whitespace-pre-wrap rounded-xl bg-slate-50 p-4 font-mono text-[12.5px] leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200 [overflow-wrap:anywhere]">
         {description}
       </pre>
     );
@@ -296,6 +298,26 @@ export function DescriptionReport({ description }: { description: string }) {
           {parsed.repro && <CodeBlock title="Playwright" code={parsed.repro} />}
         </div>
       )}
+
+      {/*
+        The original text, always reachable.
+        
+        `parse` keeps only the anchors it knows and DISCARDS everything else -
+        a line under an unrecognised heading is dropped on the floor. That is
+        fine for the tidy view above, but it means the structured render is not
+        guaranteed to be complete, and a reader has no way to tell what was
+        lost. Collapsed by default so it costs nothing, open when something
+        does not add up.
+      */}
+      <details className="group rounded-xl border border-hairline bg-white">
+        <summary className="focus-ring flex cursor-pointer list-none items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900">
+          <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" aria-hidden />
+          Full original description
+        </summary>
+        <pre className="max-w-full whitespace-pre-wrap border-t border-hairline px-4 py-3.5 font-mono text-[12.5px] leading-relaxed text-slate-700 [overflow-wrap:anywhere]">
+          {description}
+        </pre>
+      </details>
     </div>
   );
 }

@@ -1,6 +1,12 @@
 import { AlertCircle, AlertOctagon, Bug as BugIcon, CheckCircle2, CircleDot, LayoutDashboard, Loader2, Lock, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useBugCounts, useBugStats, useBugs, useMeta } from '../api/hooks';
+import { useEffect, useState } from 'react';
+import { useBugCounts, useBugStats, useBugs, useMe, useMeta } from '../api/hooks';
+import { AdminDashboard } from '../components/dashboard/AdminDashboard';
+import { DeveloperDashboard } from '../components/dashboard/DeveloperDashboard';
+import { QaDashboard } from '../components/dashboard/QaDashboard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/primitives/tabs';
+import { VIEW_LABELS, useDashboardView, type DashboardView } from '../lib/useRole';
 import { BarListChart, type BarListItem } from '../components/dashboard/BarListChart';
 import { SeverityCategoryMatrix } from '../components/dashboard/SeverityCategoryMatrix';
 import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
@@ -23,7 +29,17 @@ function listUrl(filters: Record<string, string[]>): string {
   return `/bugs?${q.toString()}`;
 }
 
-export function Dashboard() {
+/**
+ * The shared overview - defect load across everything the viewer can see.
+ *
+ * Kept as its own tab rather than deleted when the role dashboards landed: the
+ * severity x category matrix and the component breakdown answer a question no
+ * role board does ("where is the load, across the whole product"), and a lead
+ * reads it regardless of which role they hold.
+ */
+function OverviewPanel() {
+  // Read early: the REOPENED gate below needs it before `meta` is declared.
+  const { data: metaForGate } = useMeta();
   const { data: stats, isLoading, isError, error } = useBugStats();
   const { data: recentData, isLoading: recentLoading } = useBugs({
     limit: RECENT_LIMIT,
@@ -37,7 +53,15 @@ export function Dashboard() {
    * Reopened: a fix that did not hold. Counted and listed on their own because they are the
    * bugs a lead most needs to see - each one is work that was believed finished.
    */
-  const { data: reopenedCount } = useBugCounts({ status: ['REOPENED'] });
+  /*
+   * Gated on the instance actually defining REOPENED.
+   *
+   * Bugzilla drops a `bug_status` it does not recognise rather than matching
+   * nothing, so on an instance without the status this counted EVERY bug the
+   * viewer could see and presented it as "fixes that did not hold".
+   */
+  const hasReopenedStatus = (metaForGate?.statuses ?? []).includes('REOPENED');
+  const { data: reopenedCount } = useBugCounts({ status: ['REOPENED'] }, { enabled: hasReopenedStatus });
   const { data: reopenedData, isLoading: reopenedLoading } = useBugs({
     status: ['REOPENED'],
     limit: REOPENED_LIMIT,
@@ -103,13 +127,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
-      <PageHeader
-        icon={LayoutDashboard}
-        title="Dashboard"
-        description="Defect load by severity and category, across the products you can access."
-      />
-
+    <div>
       {isLoading || !stats ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -129,7 +147,25 @@ export function Dashboard() {
             tone="rose"
             to={listUrl({ severity: ['Critical'], status: openStatuses })}
           />
-          <StatCard icon={RotateCcw} label="Reopened" value={reopenedTotal ?? '…'} tone="rose" to="/bugs?status=REOPENED" hint="Fixes that didn't hold" />
+          {/*
+            Always shown, unlike the role boards' per-user versions: Overview
+            reports the whole accessible scope, so this is every reopened bug
+            across the products you can see.
+            
+            Safe to render even where the status does not exist, now that the
+            BFF answers an unknown `bug_status` with an empty result instead of
+            letting Bugzilla drop the filter and return everything. The hint
+            carries the reason for a zero, which is more useful than the tile
+            quietly disappearing.
+          */}
+          <StatCard
+            icon={RotateCcw}
+            label="Reopened"
+            value={hasReopenedStatus ? (reopenedTotal ?? '…') : 0}
+            tone="amber"
+            to={hasReopenedStatus ? listUrl({ status: ['REOPENED'] }) : undefined}
+            hint={hasReopenedStatus ? "Fixes that didn't hold" : 'REOPENED status not configured in Bugzilla'}
+          />
         </div>
       )}
 
@@ -277,3 +313,91 @@ function ChartSkeleton() {
     </div>
   );
 }
+
+/**
+ * The dashboard, routed by role.
+ *
+ * The view is DERIVED from the permissions the BFF already returns (see
+ * lib/useRole.ts), so it cannot claim a role the server would disagree with.
+ * Accounts that can open more than one view get a tab rail; everyone else sees
+ * their own board with no chrome suggesting there is something they are missing.
+ *
+ * Every panel calls the same guarded endpoints as before. Switching view is a
+ * presentation choice, never a privilege - the admin board rendered without
+ * `editusers` simply shows an empty access matrix.
+ */
+export function Dashboard() {
+  const { view, setView, allowed } = useDashboardView();
+  const { data } = useMe();
+  const email = data?.user.email ?? '';
+
+  const tabs: Array<{ id: DashboardView | 'overview'; label: string }> = [
+    ...allowed.map((v) => ({ id: v, label: VIEW_LABELS[v] })),
+    { id: 'overview' as const, label: 'Overview' },
+  ];
+
+  const [tab, setTab] = useState<DashboardView | 'overview'>(view);
+
+  // Follow the derived role if it changes underneath us (permissions reloaded).
+  useEffect(() => {
+    setTab((current) => (current === 'overview' || allowed.includes(current as DashboardView) ? current : view));
+  }, [view, allowed]);
+
+  const select = (next: string) => {
+    const id = next as DashboardView | 'overview';
+    setTab(id);
+    // "Overview" is not a role, so it is not persisted as one.
+    if (id !== 'overview') setView(id);
+  };
+
+  return (
+    <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        icon={LayoutDashboard}
+        title="Dashboard"
+        description={DESCRIPTIONS[tab]}
+      />
+
+      {/* A single available view needs no rail - it would be a tab group of one. */}
+      {tabs.length > 2 ? (
+        <Tabs value={tab} onValueChange={select}>
+          <TabsList className="mb-5">
+            {tabs.map((t) => (
+              <TabsTrigger key={t.id} value={t.id}>
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {allowed.includes('qa') && (
+            <TabsContent value="qa">
+              <QaDashboard />
+            </TabsContent>
+          )}
+          {allowed.includes('developer') && (
+            <TabsContent value="developer">
+              <DeveloperDashboard email={email} />
+            </TabsContent>
+          )}
+          {allowed.includes('admin') && (
+            <TabsContent value="admin">
+              <AdminDashboard />
+            </TabsContent>
+          )}
+          <TabsContent value="overview">
+            <OverviewPanel />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <DeveloperDashboard email={email} />
+      )}
+    </div>
+  );
+}
+
+const DESCRIPTIONS: Record<DashboardView | 'overview', string> = {
+  qa: 'Incoming failures, the triage queue, and filing.',
+  developer: 'What is assigned to you, worst first.',
+  admin: 'Service health and who can reach what.',
+  overview: 'Defect load by severity and category, across the products you can access.',
+};

@@ -106,6 +106,11 @@ export function useMeta() {
 export interface AssignableUser {
   email: string;
   name: string;
+  /**
+   * Derived by the BFF from Bugzilla groups, not stored anywhere. Optional so
+   * a client running against an older backend still renders the name.
+   */
+  role?: 'admin' | 'developer';
 }
 
 /**
@@ -123,17 +128,26 @@ export function useAssignableUsers(product?: string | string[]) {
   return useQuery({
     queryKey: ['meta', 'assignable-users', products.join('|')],
     queryFn: () =>
-      api.get<{ users: AssignableUser[] }>(
+      api.get<{ users: AssignableUser[]; owners?: string[] }>(
         `/meta/assignable-users${buildQuery(products.length ? { product: products } : {})}`
       ),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function useProducts() {
+/**
+ * Products for the signed-in user.
+ *
+ * `forFiling` asks for everything Bugzilla will accept a bug into, rather than
+ * the narrower same-named-group scope used for filters and dashboards. The two
+ * are cached separately because they are genuinely different answers - sharing
+ * a key would let a filter's list leak into the filing form and back.
+ */
+export function useProducts(options?: { forFiling?: boolean }) {
+  const forFiling = options?.forFiling ?? false;
   return useQuery({
-    queryKey: ['products'],
-    queryFn: () => api.get<{ products: Product[] }>('/products'),
+    queryKey: ['products', forFiling ? 'filing' : 'scoped'],
+    queryFn: () => api.get<{ products: Product[] }>(`/products${forFiling ? '?scope=filing' : ''}`),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -151,11 +165,20 @@ export function useBugs(params: BugQueryParams) {
  * useBugs is capped at 200 server-side - counting its results understates the
  * real number as soon as there are more bugs than one page.
  */
-export function useBugCounts(params: BugQueryParams = {}) {
+export function useBugCounts(params: BugQueryParams = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['bugs', 'count', params],
     queryFn: () => api.get<{ counts: BugCounts }>(`/bugs/count${buildQuery(params)}`),
     staleTime: 30 * 1000,
+    /*
+     * Lets a caller skip a count that cannot be answered truthfully.
+     *
+     * Bugzilla DROPS a `bug_status` value it does not recognise rather than
+     * matching nothing, so counting a status this instance has never heard of
+     * returns the caller's ENTIRE accessible scope. A filter that silently
+     * becomes "everything" is worse than no filter: it reads as a real number.
+     */
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -418,5 +441,39 @@ export function useCreateComponent(productId: number) {
   return useMutation({
     mutationFn: (input: CreateComponentInput) => api.post<{ product: Product }>(`/admin/products/${productId}/components`, input),
     onSuccess: () => invalidateProductLists(qc),
+  });
+}
+
+/**
+ * Live service health, for the admin dashboard's system metrics.
+ *
+ * `?deep=1` makes the BFF additionally call Bugzilla on the SERVICE key, so a
+ * green light here means the whole chain is up - the browser reached the BFF,
+ * and the BFF reached Bugzilla - not merely that this process is running.
+ *
+ * Note what it cannot tell you: the BFF holds no database driver (it proxies
+ * Bugzilla's API and nothing else), so there is no MariaDB probe to read. A
+ * failing database surfaces INDIRECTLY, as `bugzilla.ok === false` with
+ * Bugzilla's own error, because Bugzilla is the thing that talks to it.
+ *
+ * Polled rather than fetched once: this is a status panel, and a stale green
+ * light is worse than no light. `retry: false` so an outage shows as an outage
+ * instead of spinning.
+ */
+export interface HealthResponse {
+  ok: boolean;
+  uptimeSeconds: number;
+  sessionStore: string;
+  bugzilla?: { ok: boolean; version?: string; error?: string };
+}
+
+export function useHealth(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['health'],
+    queryFn: () => api.get<HealthResponse>('/health?deep=1'),
+    refetchInterval: 30 * 1000,
+    staleTime: 15 * 1000,
+    retry: false,
+    enabled: options?.enabled ?? true,
   });
 }

@@ -1,4 +1,5 @@
 import { Check, Eye, FilePlus2, FileText, MonitorSmartphone, Paperclip, Plus, Server, Sparkles, X } from 'lucide-react';
+import { assigneeLabel } from '../lib/roles';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
@@ -91,7 +92,7 @@ function Segmented<T extends string>({
 function Section({ step, title, subtitle, children }: { step: number; title: string; subtitle: string; children: ReactNode }) {
   return (
     <Card>
-      <div className="flex items-center gap-3 border-b border-slate-900/[0.06] px-6 py-4">
+      <div className="flex items-center gap-3 border-b border-hairline px-6 py-4">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-semibold text-white shadow-sm ring-1 ring-inset ring-white/30">
           {step}
         </span>
@@ -151,7 +152,12 @@ function focusField(key: string) {
 export function CreateBug() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data: productsData, isLoading: productsLoading } = useProducts();
+  /*
+   * `forFiling` - every product Bugzilla will accept a bug into, not just the
+   * ones matching this user's same-named groups. Finding a defect in another
+   * team's product is normal, and the narrower list refused to report it.
+   */
+  const { data: productsData, isLoading: productsLoading } = useProducts({ forFiling: true });
   const { data: me } = useMe();
   const createBug = useCreateBug();
 
@@ -164,6 +170,8 @@ export function CreateBug() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<string>('Functional');
   const [level, setLevel] = useState<SeverityLevel>('HIGH');
+  /** Empty = let Bugzilla apply the component's default owner. */
+  const [assignee, setAssignee] = useState('');
   const [classification, setClassification] = useState('');
   const [method, setMethod] = useState<string>('POST');
   const [path, setPath] = useState('');
@@ -198,6 +206,11 @@ export function CreateBug() {
   const products = productsData?.products ?? [];
   const selectedProduct = useMemo(() => products.find((p) => p.name === product), [products, product]);
   const { data: assignable } = useAssignableUsers(product || undefined);
+  // Ownership comes from the BFF (component `initialowner`), so this view and
+  // the quick-file dialog cannot disagree about who owns a product.
+  const ownerSet = new Set((assignable?.owners ?? []).map((e) => e.toLowerCase()));
+  const ownerUsers = (assignable?.users ?? []).filter((u) => ownerSet.has(u.email.toLowerCase()));
+  const otherUsers = (assignable?.users ?? []).filter((u) => !ownerSet.has(u.email.toLowerCase()));
 
   const ownerEmail = selectedProduct?.components.find((c) => c.name === component)?.defaultAssignee ?? '';
   const ownerName = assignable?.users.find((u) => u.email === ownerEmail)?.name ?? '';
@@ -302,6 +315,12 @@ export function CreateBug() {
         platform: 'All',
         severity: levelFields.severity,
         priority: levelFields.priority,
+        /*
+         * Sent only when a person was chosen. Left blank, Bugzilla applies the
+         * component's default owner - the same routing the automated bench
+         * depends on, so filing by hand and filing by bench stay consistent.
+         */
+        ...(assignee ? { assignedTo: assignee } : {}),
       });
       bugId = result.bug.id;
     } catch (err) {
@@ -355,7 +374,7 @@ export function CreateBug() {
           <p className="-mb-2 text-xs text-slate-600">
             Fields marked <RequiredMark /> are required.
           </p>
-          <Section step={1} title="Where" subtitle="Product and module. The module's maintainer is assigned automatically.">
+          <Section step={1} title="Where" subtitle="Product, module, and who picks it up.">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div data-field="product" data-invalid={invalid('product')}>
                 <Select
@@ -389,6 +408,52 @@ export function CreateBug() {
                       {c.name}
                     </option>
                   ))}
+                </Select>
+              </div>
+              {/*
+                Assignee, chosen at filing time.
+                
+                The module's maintainer is still the DEFAULT - leaving this
+                alone reproduces the old behaviour exactly, and is what the
+                automated bench does. Choosing a person here is what moves a
+                bug out of a component queue and onto someone's plate, which is
+                what the dashboard's "Picked up" tile measures.
+              */}
+              <div data-field="assignee">
+                <Select
+                  label="Assign to"
+                  value={assignee}
+                  onChange={(e) => setAssignee(e.target.value)}
+                  disabled={!product}
+                  hint={
+                    assignee
+                      ? undefined
+                      : ownerEmail
+                        ? `Defaults to ${ownerName || ownerEmail}`
+                        : 'Defaults to the module maintainer'
+                  }
+                >
+                  <option value="">Module maintainer (default)</option>
+                  {/* Owners of the selected product first; everyone in
+                      engineering stays reachable below. */}
+                  {ownerUsers.length > 0 && (
+                    <optgroup label={`Owns ${product}`}>
+                      {ownerUsers.map((u) => (
+                        <option key={u.email} value={u.email}>
+                          {assigneeLabel(u)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {otherUsers.length > 0 && (
+                    <optgroup label="Other engineers">
+                      {otherUsers.map((u) => (
+                        <option key={u.email} value={u.email}>
+                          {assigneeLabel(u)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </Select>
               </div>
             </div>
@@ -430,7 +495,7 @@ export function CreateBug() {
                       <span
                         className={cn(
                           'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-colors',
-                          active ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white',
+                          active ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-white',
                         )}
                         aria-hidden
                       >
@@ -505,7 +570,7 @@ export function CreateBug() {
                           <span
                             className={cn(
                               'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                              on ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white',
+                              on ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-white',
                             )}
                             aria-hidden
                           >
@@ -729,7 +794,7 @@ export function CreateBug() {
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">Evidence</span>
-              <label className="focus-within:ring-brand-600 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-300 bg-white/50 px-4 py-5 text-center text-sm text-slate-600 transition-colors hover:border-brand-500 hover:bg-white/70">
+              <label className="focus-within:ring-brand-600 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line bg-white/50 px-4 py-5 text-center text-sm text-slate-600 transition-colors hover:border-brand-500 hover:bg-white/70">
                 <Paperclip className="h-4 w-4 text-slate-500" aria-hidden />
                 <span>
                   <span className="font-medium text-brand-700">Choose files</span> - screenshot, video, HAR or log
@@ -807,7 +872,7 @@ export function CreateBug() {
         {/* What will be filed, rendered the way the bug page will show it. */}
         <aside className="min-w-0 xl:sticky xl:top-20">
           <Card>
-            <div className="flex items-center justify-between gap-3 border-b border-slate-900/[0.06] px-6 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-hairline px-6 py-4">
               <div className="flex items-center gap-2">
                 <Eye className="h-4 w-4 text-brand-700" aria-hidden />
                 <h2 className="text-[15px] font-semibold text-slate-900">Preview</h2>
@@ -851,9 +916,9 @@ export function CreateBug() {
                 </div>
                 <p className="font-mono text-[11px] text-slate-500">whiteboard {whiteboard}</p>
               </div>
-              <div className="border-t border-slate-900/[0.06]" />
+              <div className="border-t border-hairline" />
               {!product || !title.trim() ? (
-                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white/40 px-6 py-10 text-center">
+                <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-white/40 px-6 py-10 text-center">
                   <FileText className="h-6 w-6 text-slate-400" aria-hidden />
                   <p className="text-sm font-medium text-slate-700">The filed bug will appear here</p>
                   <p className="max-w-xs text-xs leading-5 text-slate-500">Choose a product and give it a title - the report builds itself as you fill in the form.</p>

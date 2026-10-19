@@ -170,7 +170,7 @@ export function UserDetail() {
                 type="checkbox"
                 checked={disabled}
                 onChange={(e) => setDisabled(e.target.checked)}
-                className="focus-ring mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600"
+                className="focus-ring mt-0.5 h-4 w-4 rounded border-line text-brand-600"
               />
               <span className="text-sm">
                 <span className="font-medium text-slate-900">Disable this account</span>
@@ -202,7 +202,7 @@ export function UserDetail() {
                 key={r}
                 className={cn(
                   'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
-                  role === r ? 'border-brand-500 bg-brand-50/50' : 'border-slate-200 hover:bg-slate-50'
+                  role === r ? 'border-brand-500 bg-brand-50/50' : 'border-hairline hover:bg-slate-50'
                 )}
               >
                 <input
@@ -230,7 +230,7 @@ export function UserDetail() {
             {(productsData?.products ?? []).map((p) => (
               <label
                 key={p.name}
-                className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3 text-sm transition-colors hover:bg-slate-50"
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-hairline p-3 text-sm transition-colors hover:bg-slate-50"
               >
                 <input
                   type="checkbox"
@@ -240,7 +240,7 @@ export function UserDetail() {
                       prev.includes(p.name) ? prev.filter((x) => x !== p.name) : [...prev, p.name]
                     )
                   }
-                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus-ring"
+                  className="h-4 w-4 rounded border-line text-brand-600 focus-ring"
                 />
                 <span className="text-slate-800">{p.name}</span>
               </label>

@@ -313,6 +313,18 @@ export const listBugsQuerySchema = z.object({
 
   // --- single-valued filters ---
   assignedTo: z.string().optional(),
+  /**
+   * Narrows by WHO owns the bug, in the sense the dashboard tiles use:
+   *
+   *   picked  the assignee is a person someone chose
+   *   queued  the assignee is still the component's default owner
+   *
+   * Not expressible as a Bugzilla search term - "unassigned" has no
+   * representation there, since `assigned_to` is NOT NULL and a new bug is
+   * given the component's `initialowner`. So it is resolved in the BFF against
+   * the component owner map, the same way the counts are.
+   */
+  assignment: z.enum(['picked', 'queued', 'reassigned']).optional(),
   creator: z.string().optional(),
   cc: z.string().optional(),
   search: z.string().optional(),
@@ -347,6 +359,7 @@ export const countBugsQuerySchema = listBugsQuerySchema.pick({
   category: true,
   browser: true,
   assignedTo: true,
+  assignment: true,
   creator: true,
   cc: true,
   search: true,
@@ -376,11 +389,47 @@ export const bugCountRowSchema = z
     is_open: z.boolean(),
     status: z.string(),
     severity: z.string(),
+    /* For the unassigned tally below - optional so an older caller that does
+       not ask for them still parses. */
+    assigned_to: z.string().optional(),
+    product: z.string().optional(),
+    component: z.string().optional(),
   })
   .passthrough();
 
 export interface BugCounts {
   total: number;
+  /**
+   * Open bugs still sitting with their component's default assignee - parked in
+   * that component's queue, not yet routed to a person.
+   *
+   * NOT called "unassigned": Bugzilla's `assigned_to` is NOT NULL, so there is
+   * no unassigned state to count. A bug always has an owner; the question is
+   * whether that owner is the component default or a person someone chose.
+   *
+   * 0 when the caller did not supply the component owner map.
+   */
+  queued: number;
+  /**
+   * Open bugs whose assignee differs from the component default.
+   *
+   * A weak signal on its own: it cannot tell a bug that was REASSIGNED from one
+   * that was simply FILED to that person. Use `reassigned` for the strict
+   * reading. `queued + picked === open` whenever the owner map is available.
+   */
+  picked: number;
+  /**
+   * Open bugs genuinely handed off: the assignee differs from the component
+   * default AND `bugs_activity` records an `assigned_to` change since filing.
+   *
+   * This is the honest "a human routed this to someone" number. It is a subset
+   * of `picked` - always less than or equal to it - and is the one safe to put
+   * in front of people, because it cannot be inflated by a bench run that fills
+   * in an assignee at creation time.
+   *
+   * 0 when the caller did not resolve bug history.
+   */
+  reassigned: number;
   open: number;
   resolved: number;
   blockerCritical: number;
@@ -392,20 +441,84 @@ export interface BugCounts {
 /** Severities the "Blocker / Critical" stat card counts, per Bugzilla's own field values. */
 const HIGH_SEVERITIES = new Set(['blocker', 'critical']);
 
-export function tallyBugCounts(rows: z.infer<typeof bugCountRowSchema>[]): BugCounts {
+/**
+ * `product::component` -> that component's default assignee, lower-cased.
+ *
+ * Keyed by both because component names repeat across products - "API" exists
+ * under more than one - and matching on the component name alone would compare
+ * a bug against another product's default owner.
+ */
+export type ComponentOwners = Map<string, string>;
+
+export function componentOwnerKey(product: string, component: string): string {
+  return `${product.toLowerCase()}::${component.toLowerCase()}`;
+}
+
+/**
+ * Open bugs whose assignee is NOT the component default - the only bugs that
+ * could possibly have been reassigned, and so the only ones worth a history
+ * lookup. Everything still sitting with its default owner is excluded by
+ * definition.
+ */
+export function reassignmentCandidates(
+  rows: z.infer<typeof bugCountRowSchema>[],
+  defaultOwners: ComponentOwners
+): number[] {
+  const ids: number[] = [];
+  for (const row of rows) {
+    if (!row.is_open || !row.assigned_to || !row.product || !row.component) continue;
+    const owner = defaultOwners.get(componentOwnerKey(row.product, row.component));
+    if (owner && owner !== row.assigned_to.toLowerCase()) ids.push(row.id);
+  }
+  return ids;
+}
+
+export function tallyBugCounts(
+  rows: z.infer<typeof bugCountRowSchema>[],
+  defaultOwners?: ComponentOwners
+): BugCounts {
   let open = 0;
   let blockerCritical = 0;
+  let queued = 0;
+  let picked = 0;
   const byStatus: Record<string, number> = {};
   const bySeverity: Record<string, number> = {};
 
   for (const row of rows) {
     if (row.is_open) open += 1;
     if (HIGH_SEVERITIES.has(row.severity)) blockerCritical += 1;
+
+    /*
+     * Open only: a resolved bug still sitting with the default owner was
+     * closed by someone, so counting it as "waiting to be picked up" would be
+     * wrong - and would make this tile grow forever.
+     */
+    if (row.is_open && defaultOwners && row.assigned_to && row.product && row.component) {
+      const owner = defaultOwners.get(componentOwnerKey(row.product, row.component));
+      // An unknown component (owner undefined) counts as neither, rather than
+      // being guessed into one bucket and skewing both.
+      if (owner) {
+        if (owner === row.assigned_to.toLowerCase()) queued += 1;
+        else picked += 1;
+      }
+    }
+
     byStatus[row.status] = (byStatus[row.status] ?? 0) + 1;
     bySeverity[row.severity] = (bySeverity[row.severity] ?? 0) + 1;
   }
 
-  return { total: rows.length, open, resolved: rows.length - open, blockerCritical, byStatus, bySeverity };
+  return {
+    total: rows.length,
+    open,
+    resolved: rows.length - open,
+    blockerCritical,
+    queued,
+    picked,
+    // Filled in by the caller, which alone can reach bug history.
+    reassigned: 0,
+    byStatus,
+    bySeverity,
+  };
 }
 
 export const createBugSchema = z.object({
@@ -420,6 +533,15 @@ export const createBugSchema = z.object({
   priority: z.string().optional(),
   /** `[cat:Xxx]` (+ `[browser:…]`) - the same tags the test bench writes. */
   whiteboard: z.string().max(255).optional(),
+  /**
+   * Who to hand the bug to, as a Bugzilla login.
+   *
+   * Optional, and omitting it is the NORMAL path: Bugzilla then applies the
+   * component's `initialowner`, which is how the test bench's bugs reach the
+   * right queue without the bench knowing anything about people. A tester
+   * filing by hand can route it to a developer immediately instead.
+   */
+  assignedTo: z.string().email('Enter a valid assignee email').optional(),
 });
 
 /**

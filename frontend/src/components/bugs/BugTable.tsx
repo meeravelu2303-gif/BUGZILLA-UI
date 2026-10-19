@@ -113,12 +113,12 @@ export function BugTable({
             column labels. Over the white card the flat tint lands in the same
             place visually, without that cost.
           */}
-          <tr className="border-b border-slate-200/80 bg-slate-50 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+          <tr className="border-b border-hairline bg-slate-50 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-slate-500">
             {selection && (
               <th scope="col" className="w-9 px-2.5 py-3">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-600 focus-ring"
+                  className="h-4 w-4 cursor-pointer rounded border-line text-brand-600 focus-ring"
                   checked={selection.allOnPageSelected}
                   onChange={selection.onToggleAll}
                   aria-label="Select all bugs on this page"
@@ -172,7 +172,7 @@ export function BugTable({
               const isOpen = expanded === bug.id;
               return (
                 <Fragment key={bug.id}>
-                  <tr className="group/row border-b border-slate-100 align-middle transition-colors last:border-0 hover:bg-brand-50/50">
+                  <tr className="group/row border-b border-hairline align-middle transition-colors last:border-0 hover:bg-brand-50/50">
                     {selection && (
                       <td className="px-2.5 py-3">
                         {/*
@@ -192,7 +192,7 @@ export function BugTable({
                         */}
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus-ring enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                          className="h-4 w-4 rounded border-line text-brand-600 focus-ring enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                           checked={selection.selectedIds.has(bug.id)}
                           disabled={!selection.canSelect(bug)}
                           onChange={() => selection.onToggle(bug.id)}
@@ -276,7 +276,7 @@ export function BugTable({
                   </tr>
 
                   {isOpen && (
-                    <tr className="border-b border-slate-100 bg-slate-50/60">
+                    <tr className="border-b border-hairline bg-slate-50/60">
                       {selection && <td />}
                       <td />
                       <td colSpan={columns.length} className="px-3 py-3">

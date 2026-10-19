@@ -69,7 +69,7 @@ function FieldEditor({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
-          className="focus-ring h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400"
+          className="focus-ring h-9 w-full rounded-xl border border-hairline bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400"
         />
       ) : (
         <AutoTextarea
@@ -82,7 +82,7 @@ function FieldEditor({
           className={
             field.kind === 'code'
               ? 'border-slate-800 bg-slate-900 font-mono text-[12.5px] leading-relaxed text-slate-100 placeholder:text-slate-500'
-              : 'border-slate-200 bg-white leading-6 text-slate-900 placeholder:text-slate-400'
+              : 'border-hairline bg-white leading-6 text-slate-900 placeholder:text-slate-400'
           }
         />
       )}
@@ -257,7 +257,7 @@ export function ReportEditor({ bug, onClose }: { bug: Bug; onClose: () => void }
                       id="report-category"
                       value={category}
                       onChange={(e) => changeCategory(e.target.value)}
-                      className="focus-ring h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 sm:w-64"
+                      className="focus-ring h-9 w-full rounded-xl border border-hairline bg-white px-3 text-sm text-slate-900 sm:w-64"
                     >
                       {CATEGORIES.map((c) => (
                         <option key={c} value={c}>
@@ -301,13 +301,13 @@ export function ReportEditor({ bug, onClose }: { bug: Bug; onClose: () => void }
                       <input
                         value={segment.body}
                         onChange={(e) => setDoc((d) => setSegmentBody(d, index, e.target.value))}
-                        className="focus-ring h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                        className="focus-ring h-9 w-full rounded-xl border border-hairline bg-white px-3 text-sm"
                       />
                     ) : (
                       <AutoTextarea
                         value={segment.body}
                         onChange={(e) => setDoc((d) => setSegmentBody(d, index, e.target.value))}
-                        className="border-slate-200 bg-white leading-6 text-slate-900"
+                        className="border-hairline bg-white leading-6 text-slate-900"
                       />
                     )}
                   </div>
@@ -348,7 +348,7 @@ export function ReportEditor({ bug, onClose }: { bug: Bug; onClose: () => void }
             minRows={16}
             maxRows={40}
             spellCheck={false}
-            className="border-slate-200 bg-white font-mono text-[12.5px] leading-relaxed text-slate-900"
+            className="border-hairline bg-white font-mono text-[12.5px] leading-relaxed text-slate-900"
           />
           <p className="text-xs text-slate-500">
             Keep the <code className="rounded bg-slate-100 px-1">Heading:</code> lines (Expected:, Actual:, curl:, How to fix: …) - the bug page and the Excel export
@@ -358,14 +358,14 @@ export function ReportEditor({ bug, onClose }: { bug: Bug; onClose: () => void }
       )}
 
       {mode === 'preview' && (
-        <div className="rounded-xl border border-dashed border-slate-300 p-5">
+        <div className="rounded-xl border border-dashed border-line p-5">
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Preview - as it will appear after saving</p>
           <DescriptionReport description={text} />
         </div>
       )}
 
       {/* Footer */}
-      <div className="flex flex-col gap-3 border-t border-slate-200/70 pt-4 sm:flex-row sm:items-end">
+      <div className="flex flex-col gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-end">
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
           Edit note <span className="font-normal text-slate-400">(optional - why, kept in the history)</span>
           <input
@@ -373,7 +373,7 @@ export function ReportEditor({ bug, onClose }: { bug: Bug; onClose: () => void }
             onChange={(e) => setNote(e.target.value)}
             maxLength={1000}
             placeholder="e.g. Corrected the expected status after re-testing on staging."
-            className="focus-ring h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 placeholder:text-slate-400"
+            className="focus-ring h-9 rounded-xl border border-hairline bg-white px-3 text-sm font-normal text-slate-900 placeholder:text-slate-400"
           />
         </label>
         <div className="flex shrink-0 gap-2">

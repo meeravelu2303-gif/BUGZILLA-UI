@@ -9,7 +9,7 @@ import { z } from 'zod';
 import type { Env } from '../config/env';
 import { requireAuth, requirePermission } from '../middleware/auth';
 import { getCategoryIndex } from '../lib/categoryIndex';
-import { scopeToAccessibleProducts } from '../lib/access';
+import { accessSnapshot, scopeToAccessibleProducts } from '../lib/access';
 import {
   CATEGORIES,
   SEVERITIES,
@@ -21,7 +21,8 @@ import {
   type Severity,
 } from '../lib/classification';
 import type { BugzillaClient } from '../lib/bugzillaClient';
-import { closedStatuses } from '../lib/bugStatus';
+import { reassignedBugIds } from '../lib/bugHistory';
+import { closedStatuses, narrowStatusFilter } from '../lib/bugStatus';
 import { allGroupNames, bugFeatures } from '../lib/bugFeatures';
 import { CURRENT_BUG_FIELDS, toBugzillaUpdate, validateBugUpdate, type CurrentBug } from '../lib/bugUpdate';
 import { groupNameForProduct } from '../lib/productGroups';
@@ -55,7 +56,10 @@ import {
   restoreSchema,
   softDeleteSchema,
   transferBugSchema,
+  componentOwnerKey,
+  reassignmentCandidates,
   tallyBugCounts,
+  type ComponentOwners,
   updateAttachmentSchema,
   updateBugSchema,
   updateCommentTagsSchema,
@@ -648,24 +652,123 @@ export function bugsRouter(env: Env): Router {
   const auth = requireAuth(env);
 
   // GET /api/bugs
+  /**
+   * `product::component` -> the component's default assignee, for this caller's
+   * accessible products.
+   *
+   * Read from the access snapshot, which is cached per user, so the hot paths
+   * pay nothing extra. Returns undefined if the shape is not what we expect -
+   * callers then skip the assignment split rather than failing the request over
+   * a derived number.
+   */
+  async function componentOwners(req: Request): Promise<ComponentOwners | undefined> {
+    try {
+      const snapshot = await accessSnapshot(req.bugzilla!, req.sessionUser!.bzUserId);
+      const owners: ComponentOwners = new Map();
+      for (const product of snapshot.products) {
+        const components =
+          (product as { components?: Array<{ name?: string; default_assigned_to?: string }> }).components ?? [];
+        for (const c of components) {
+          if (c.name && c.default_assigned_to) {
+            owners.set(componentOwnerKey(product.name, c.name), c.default_assigned_to.toLowerCase());
+          }
+        }
+      }
+      return owners;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Does this bug's assignee match its component's default owner? */
+  function isQueued(
+    bug: { product: string; component: string; assignedTo?: { email: string } | null },
+    owners: ComponentOwners
+  ): boolean {
+    const owner = owners.get(componentOwnerKey(bug.product, bug.component));
+    return owner !== undefined && owner === (bug.assignedTo?.email ?? '').toLowerCase();
+  }
+
   router.get('/', auth, async (req, res, next) => {
     try {
       const query = parseInput(listBugsQuerySchema, req.query);
       const order = buildOrder(query.sortBy, query.sortDir);
 
+      /*
+       * An assignment filter cannot be pushed to Bugzilla - it depends on each
+       * bug's component owner, which only this layer knows. So that case fetches
+       * the whole matching set and paginates AFTER filtering; anything else
+       * keeps the cheap windowed fetch.
+       */
+      const filteringByAssignment = query.assignment !== undefined;
       const params: Record<string, string | number> = {
-        limit: query.limit + 1, // fetch one extra to detect a next page
-        offset: query.offset,
+        limit: filteringByAssignment ? 0 : query.limit + 1, // one extra detects a next page
+        ...(filteringByAssignment ? {} : { offset: query.offset }),
         order,
       };
       applyBugFilters(params, query);
+
+      /*
+       * Same guard as the count route, for the same reason - and so the two can
+       * never disagree. A list that quietly ignored an unknown status would
+       * show every bug under a heading saying "Reopened".
+       */
+      if (query.status?.length) {
+        const narrowed = await narrowStatusFilter(req.bugzilla!, query.status);
+        if (narrowed === null) {
+          res.json({ bugs: [], hasMore: false, limit: query.limit, offset: query.offset });
+          return;
+        }
+        params.bug_status = narrowed as unknown as string;
+      }
+
       // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
       // never count another product's bugs. No-op when an explicit product filter is set.
       await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
 
       const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
-      const hasMore = raw.bugs.length > query.limit;
-      const page = raw.bugs.slice(0, query.limit).map((b) => normalizeBug(rawBugSchema.parse(b)));
+
+      let hasMore: boolean;
+      let page: ReturnType<typeof normalizeBug>[];
+      if (filteringByAssignment) {
+        const owners = await componentOwners(req);
+        const all = raw.bugs.map((b) => normalizeBug(rawBugSchema.parse(b)));
+        // No owner map means the split cannot be computed; returning everything
+        // would be a silent lie, so it returns nothing and the empty state shows.
+        /*
+         * OPEN only, matching how `tallyBugCounts` tallies queued/picked.
+         *
+         * Without this the list answered a different question from the count
+         * above it: the count said "6 open bugs are picked up" while the list
+         * showed every bug ever assigned to a person, resolved ones included -
+         * so a tile reading 6 opened a page of long-closed bugs.
+         *
+         * Open-only is also the honest reading of the filter. Assignment
+         * describes who is carrying work NOW; on a resolved bug it is history,
+         * and "who picked this up" stops being a live question once it is done.
+         */
+        let matching = owners
+          ? all.filter(
+              (bug) =>
+                bug.isOpen && (query.assignment === 'queued' ? isQueued(bug, owners) : !isQueued(bug, owners))
+            )
+          : [];
+
+        /*
+         * `reassigned` narrows the `picked` set further to bugs with a real
+         * assigned_to change in their history - the same rule the stat card
+         * uses, so the tile and the list it links to cannot disagree.
+         */
+        if (query.assignment === 'reassigned' && matching.length > 0) {
+          const changed = await reassignedBugIds(req.bugzilla!, matching.map((b) => b.id));
+          matching = matching.filter((b) => changed.has(b.id));
+        }
+        page = matching.slice(query.offset, query.offset + query.limit);
+        hasMore = matching.length > query.offset + query.limit;
+      } else {
+        hasMore = raw.bugs.length > query.limit;
+        page = raw.bugs.slice(0, query.limit).map((b) => normalizeBug(rawBugSchema.parse(b)));
+      }
 
       /*
        * Category needs the description, which a bug search never returns, so it
@@ -713,9 +816,28 @@ export function bugsRouter(env: Env): Router {
 
       const params: Record<string, string | number> = {
         limit: 0,
-        include_fields: 'id,is_open,status,severity',
+        // assigned_to/product/component feed the "unassigned" tally - the bugs
+        // still sitting with their component's default owner.
+        include_fields: 'id,is_open,status,severity,assigned_to,product,component',
       };
       applyBugFilters(params, query);
+
+      /*
+       * A status this instance does not define cannot match anything - and
+       * Bugzilla would DROP it rather than say so, turning the filter into "no
+       * filter" and the count into the caller's whole accessible scope. That is
+       * a wrong number presented as a real one, so it is answered here instead
+       * of being forwarded.
+       */
+      if (query.status?.length) {
+        const narrowed = await narrowStatusFilter(req.bugzilla!, query.status);
+        if (narrowed === null) {
+          res.json({ counts: tallyBugCounts([]) });
+          return;
+        }
+        params.bug_status = narrowed as unknown as string;
+      }
+
       // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
       // never count another product's bugs. No-op when an explicit product filter is set.
       await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
@@ -723,7 +845,57 @@ export function bugsRouter(env: Env): Router {
       const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
       const rows = raw.bugs.map((b) => bugCountRowSchema.parse(b));
 
-      res.json({ counts: tallyBugCounts(rows) });
+      /*
+       * The component default-owner map, for the unassigned tally.
+       *
+       * Read from the access snapshot, which is already cached per user and was
+       * just populated by scopeToAccessibleProducts above - so this costs no
+       * extra upstream call on the hot path.
+       *
+       * Best effort: if the product shapes are not what we expect, the tally is
+       * simply 0 rather than the whole count failing over one derived number.
+       */
+      const owners = await componentOwners(req);
+
+      const counts = tallyBugCounts(rows, owners);
+
+      /*
+       * The strict hand-off number: of the bugs whose assignee is not the
+       * component default, how many were actually CHANGED rather than filed
+       * that way.
+       *
+       * Only the candidates are looked up - typically a handful - so this is
+       * one extra upstream call, and none at all when nothing qualifies.
+       * Best effort: a history failure leaves the figure at 0 rather than
+       * failing the whole count, because every other tile on the page depends
+       * on this response.
+       */
+      if (owners) {
+        const candidates = reassignmentCandidates(rows, owners);
+        if (candidates.length > 0) {
+          try {
+            counts.reassigned = (await reassignedBugIds(req.bugzilla!, candidates)).size;
+          } catch (err) {
+            console.warn('[counts] bug history unavailable; reassigned reported as 0:', err instanceof Error ? err.message : err);
+          }
+        }
+      }
+      /*
+       * With an assignment filter the caller asked about ONE side of the split,
+       * so `total` must describe that side rather than the whole result set -
+       * otherwise the number above the list counts rows the list will not show.
+       */
+      if (query.assignment && owners) {
+        const side =
+          query.assignment === 'queued'
+            ? counts.queued
+            : query.assignment === 'reassigned'
+              ? counts.reassigned
+              : counts.picked;
+        res.json({ counts: { ...counts, total: side, open: side } });
+        return;
+      }
+      res.json({ counts });
     } catch (err) {
       next(err);
     }
@@ -1594,6 +1766,12 @@ export function bugsRouter(env: Env): Router {
         ...(input.severity ? { severity: input.severity } : {}),
         ...(input.priority ? { priority: input.priority } : {}),
         ...(input.whiteboard ? { status_whiteboard: input.whiteboard } : {}),
+        /*
+         * Omitted unless the filer chose someone. Bugzilla then falls back to
+         * the component's `initialowner` - which is exactly what the automated
+         * bench relies on, so leaving this out keeps bench filing unchanged.
+         */
+        ...(input.assignedTo ? { assigned_to: input.assignedTo } : {}),
       };
 
       const created = await client.post<{ id: number }>('/bug', payload);

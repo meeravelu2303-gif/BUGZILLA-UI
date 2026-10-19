@@ -16,9 +16,15 @@ export type CardVariant = 'glass' | 'solid' | 'raised';
 
 const CARD_VARIANTS: Record<CardVariant, string> = {
   glass: 'glass-surface rounded-2xl',
-  // Pure white on the page's mesh, so the data reads at full contrast while the
-  // tinted background still shows around the card.
-  solid: 'rounded-xl border border-slate-200/70 bg-white shadow-glass',
+  /*
+   * Pure white, with depth carried by the shadow rather than the border.
+   *
+   * `rounded-xl` is deliberate and must stay: e2e/tests/ui-theme.spec.ts finds
+   * the bug-list card with `ancestor::div[contains(@class,"rounded-xl")]`, so
+   * rounding this to 2xl like the others would silently detach that whole
+   * tripwire from the element it is meant to be asserting about.
+   */
+  solid: 'rounded-xl border border-hairline bg-white shadow-soft',
   raised: 'glass-raised rounded-2xl',
 };
 
@@ -33,7 +39,7 @@ export function Card({
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex items-center justify-between gap-4 border-b border-slate-900/[0.06] px-5 py-4', className)}
+      className={cn('flex items-center justify-between gap-4 border-b border-hairline px-5 py-4', className)}
       {...props}
     />
   );

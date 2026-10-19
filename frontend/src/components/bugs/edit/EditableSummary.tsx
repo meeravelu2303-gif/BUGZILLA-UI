@@ -90,8 +90,21 @@ export function EditableSummary({ editor, readOnly = false }: { editor: BugEdito
   }
 
   return (
-    <div className={cn('group mt-2 flex items-start gap-2', changed && 'relative pl-3 before:absolute before:inset-y-1 before:left-0 before:w-[3px] before:rounded-full before:bg-brand-500')}>
-      <h1 className="text-[1.6rem] font-semibold leading-snug tracking-tight text-slate-900">{editor.draft.summary}</h1>
+    <div className={cn('group mt-2 flex min-w-0 items-start gap-2', changed && 'relative pl-3 before:absolute before:inset-y-1 before:left-0 before:w-[3px] before:rounded-full before:bg-brand-500')}>
+      {/*
+        `min-w-0` on the heading AND the flex row above it: a flex child's
+        default `min-width:auto` refuses to shrink below its content, so a
+        single long token - a URL, or a bench payload name like
+        [KP-UI-KDIRNONAMES] - pushes the whole row wider than the card and the
+        edit button off the edge.
+        
+        `[overflow-wrap:anywhere]` rather than `break-all`: it breaks only when
+        a word genuinely cannot fit, so ordinary prose still wraps at spaces
+        instead of mid-word.
+      */}
+      <h1 className="min-w-0 flex-1 text-[1.6rem] font-semibold leading-snug tracking-tight text-slate-900 hyphens-auto [overflow-wrap:anywhere]">
+        {editor.draft.summary}
+      </h1>
       {!readOnly && <button
         type="button"
         onClick={() => setEditing(true)}

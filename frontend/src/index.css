@@ -4,38 +4,52 @@
 
 @layer base {
   html {
-    font-family: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
-    /* Poppins' lining figures sit high; tabular digits keep columns of numbers aligned. */
-    font-feature-settings: 'tnum' 1, 'cv11' 1;
+    font-family: 'Inter', 'Poppins', ui-sans-serif, system-ui, sans-serif;
+    /* 15px root. The whole scale is relative, so this lifts body copy a step
+       without touching a single component. */
+    font-size: 15px;
+    /* Tabular digits keep columns of ids, counts and dates aligned in the bug table. */
+    font-feature-settings: 'tnum' 1, 'cv11' 1, 'ss01' 1;
+    -webkit-font-smoothing: antialiased;
   }
   body {
-    @apply text-slate-900 antialiased;
+    @apply bg-white text-slate-900 antialiased;
     /*
-     * The canvas the glass frosts. Glass only reads when something is behind it,
-     * so the washes are a touch richer than a plain tint: UEducate teal
-     * (#3AB2CC / #5BC9ED / #2B9FB7) at low alpha, one cool lavender for depth,
-     * and a white bloom at the top-left where the content starts. Fixed, so the
-     * frosting stays steady while the page scrolls. See BRANDING.md.
+     * PRISTINE WHITE. The previous canvas was #e9f1f6 washed with six radial
+     * teal/lavender gradients, because the frosted-glass surfaces needed
+     * something behind them to frost. That is gone: on a Linear-grade layout
+     * the page is plain white and depth comes from a hairline border plus a
+     * near-invisible shadow, not from translucency over a tinted field.
+     *
+     * Nothing replaces the gradients. A white page with a single accent is the
+     * whole point of the aesthetic - adding a "subtle" wash back is how it
+     * drifts into the old look again.
      */
-    background-color: #e9f1f6;
-    background-image:
-      radial-gradient(at 8% 0%, rgba(255, 255, 255, 0.9) 0px, transparent 42%),
-      radial-gradient(at 18% 14%, rgba(58, 178, 204, 0.22) 0px, transparent 46%),
-      radial-gradient(at 85% 8%, rgba(91, 201, 237, 0.2) 0px, transparent 44%),
-      radial-gradient(at 72% 58%, rgba(165, 180, 252, 0.14) 0px, transparent 42%),
-      radial-gradient(at 40% 96%, rgba(43, 159, 183, 0.16) 0px, transparent 48%),
-      radial-gradient(at 98% 90%, rgba(148, 163, 184, 0.14) 0px, transparent 40%);
-    background-attachment: fixed;
-    background-repeat: no-repeat;
   }
-  ::selection {
-    @apply bg-brand-200 text-brand-900;
+  /*
+   * Headings take the display face everywhere, rather than each page
+   * remembering to ask for it. Anything that needs Inter at heading size (a
+   * table caption, a dense panel label) opts back out with `font-sans`.
+   */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.015em;
+  }
+  /* Form controls do NOT inherit the page font by default - every browser
+     substitutes its own UI face, which is why an <input> can look subtly wrong
+     beside the label above it. */
+  input, textarea, select, button {
+    font-family: inherit;
   }
 
-  /* A quiet scrollbar that matches the glass, instead of the OS default grey bar. */
+  ::selection {
+    @apply bg-brand-100 text-brand-900;
+  }
+
+  /* A quiet scrollbar, now neutral against white rather than tinted. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgb(100 116 139 / 0.35) transparent;
+    scrollbar-color: rgb(148 163 184 / 0.45) transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
@@ -45,13 +59,13 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: rgb(100 116 139 / 0.3);
+    background: rgb(148 163 184 / 0.4);
     border: 3px solid transparent;
     border-radius: 999px;
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: rgb(100 116 139 / 0.5);
+    background: rgb(100 116 139 / 0.55);
     background-clip: padding-box;
     border: 3px solid transparent;
   }
@@ -66,9 +80,9 @@
     opacity: 0.85;
   }
 
-  /* Checkboxes in the brand teal, without pulling in the forms plugin. */
+  /* Checkboxes in Royal Blue (was the teal #257b8e). */
   input[type='checkbox'] {
-    accent-color: #257b8e;
+    accent-color: #2563eb;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -83,43 +97,78 @@
 }
 
 @layer utilities {
-  /* brand-600 (3.26:1 vs white) rather than brand-500 (2.49:1): WCAG requires a
-     3:1 minimum for non-text focus indicators. */
+
+  /*
+   * brand-600 is #2563EB at 5.17:1 against white - comfortably past the 3:1
+   * WCAG minimum for a non-text focus indicator, and past 4.5:1 besides.
+   */
   .focus-ring {
     @apply outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
   }
 
   /*
-   * Three tiers of glass. Each pairs a translucent white fill with a blur and a
-   * saturation lift (so the colour washes behind read as colour, not grey), a
-   * hairline border, and the `shadow-glass` inner highlight along the top edge
-   * that reads as a lit frosted edge.
+   * The three surface tiers.
    *
-   *   glass-panel    the shell: sidebar and top bar
-   *   glass-surface  resting cards
-   *   glass-raised   popovers, menus, the save bar, dialogs
+   * These keep their `glass-*` names ON PURPOSE even though nothing is frosted
+   * any more: they are referenced across the component tree, and renaming them
+   * would mean touching every one of those files to achieve exactly the same
+   * rendered result. The names are now a tier label - shell, resting, raised -
+   * and the implementation underneath is solid white with a hairline.
+   *
+   * Each tier is opaque. The old versions were white/55 to white/90 with a
+   * backdrop blur, which let table rows ghost through sticky headers; the e2e
+   * theme tripwire asserts an opaque sticky header for exactly that reason.
    */
   .glass-panel {
-    @apply border border-white/60 bg-white/55 shadow-glass backdrop-blur-2xl backdrop-saturate-150;
+    /* `border-hairline` alone only sets the colour - the width utility is what
+       actually draws the rule, and without it the shell had no edge at all. */
+    @apply border border-hairline bg-white shadow-hairline;
   }
   .glass-surface {
-    @apply border border-white/70 bg-white/70 shadow-glass backdrop-blur-xl backdrop-saturate-150;
-    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.55) 0%, rgb(255 255 255 / 0) 38%);
+    @apply rounded-2xl border border-hairline bg-white shadow-sm;
   }
   .glass-raised {
-    @apply border border-white/80 bg-white/90 shadow-float backdrop-blur-2xl backdrop-saturate-150;
+    @apply rounded-2xl border border-hairline bg-white shadow-md;
   }
 
-  /* Text in the brand gradient - for the one headline number that may shout. */
+  /*
+   * Semantic aliases for new work, so new components stop saying "glass".
+   *
+   * DEPTH NOW COMES FROM THE SHADOW, not the border. The border is still
+   * present but dropped to slate-100, where it does one job: keeping the card's
+   * edge crisp against white at the exact pixel the shadow is weakest. Removing
+   * it entirely makes a card on a white page read as a smudge rather than a
+   * plane, which is the failure mode of shadow-only elevation.
+   */
+  .surface {
+    @apply rounded-2xl border border-hairline bg-white shadow-sm;
+  }
+  .surface-raised {
+    @apply rounded-2xl border border-hairline bg-white shadow-md;
+  }
+  /* A resting card that lifts on hover - rows, nav items, clickable tiles. */
+  .surface-interactive {
+    @apply rounded-2xl border border-hairline bg-white shadow-sm transition-all duration-premium ease-premium hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  /* Text in the accent gradient - for the one headline number that may shout. */
   .text-gradient-brand {
-    @apply bg-gradient-to-br from-brand-700 to-brand-500 bg-clip-text text-transparent;
+    @apply bg-gradient-to-br from-brand-700 to-cyan-500 bg-clip-text text-transparent;
+  }
+
+  /*
+   * The only place Electric Cyan appears at full strength. At 2.43:1 it can
+   * never sit under text, so it is confined to decorative rules like this.
+   */
+  .accent-bar {
+    @apply bg-gradient-to-r from-brand-600 to-cyan-500;
   }
 
   .skeleton {
-    @apply relative overflow-hidden rounded-md bg-slate-200/70;
+    @apply relative overflow-hidden rounded-md bg-slate-100;
   }
   .skeleton::after {
     content: '';
-    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/60 to-transparent;
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white to-transparent;
   }
 }
