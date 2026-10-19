@@ -1,4 +1,4 @@
-import { AlertCircle, ArchiveRestore, ArrowLeft, ArrowRightLeft, ImagePlus, Layers, Pencil, Trash2, User } from 'lucide-react';
+import { AlertCircle, ArchiveRestore, ArrowLeft, ArrowRightLeft, CheckCheck, ImagePlus, Layers, Pencil, Trash2, User } from 'lucide-react';
 import { TransferBugDialog } from '../components/bugs/TransferBugDialog';
 import { AttachmentUploader } from '../components/bugs/AttachmentUploader';
 import { ReportEditor } from '../components/bugs/ReportEditor';
@@ -38,7 +38,7 @@ export function BugDetail() {
       <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
         <Skeleton className="h-6 w-24" />
         <Skeleton className="mt-4 h-8 w-2/3" />
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Skeleton className="h-64" />
           <Skeleton className="h-96" />
         </div>
@@ -125,6 +125,43 @@ function BugDetailView({
     bug.isOpen &&
     (canTriage || (!!currentUser && bug.assignedTo?.email.toLowerCase() === currentUser.toLowerCase())) &&
     (meta?.transferRoutes?.[bug.product.toLowerCase()]?.length ?? 0) > 0;
+
+  /*
+   * The one-click end of the re-test loop.
+   *
+   * Offered only when the workflow really allows it: `editor.allowedStatuses`
+   * is Bugzilla's own `status_workflow` for this bug's stored status, so this
+   * button can never lead to a refusal on save. That same check is why there is
+   * no "CLOSED" action here - this instance has no such status, and VERIFIED is
+   * already `is_open = 0`, i.e. closed as far as every list and count goes.
+   */
+  const canVerify = !isDeleted && canTriage && bug.status === 'RESOLVED' && editor.allowedStatuses.includes('VERIFIED');
+
+  async function onVerify() {
+    try {
+      await updateBug.mutateAsync({
+        status: 'VERIFIED',
+        // A status alone does not say who re-tested it or when; six months on,
+        // the comment is the part a reader sees without opening the history.
+        comment: {
+          body: `Verified by QA on ${formatDateTime(new Date().toISOString())} - re-test passed, closing.`,
+        },
+      });
+      editor.markSaved();
+      toast({
+        variant: 'success',
+        title: `${bugDisplayId(bug)} verified`,
+        description: 'Re-test recorded as a comment. It has left the re-test queue.',
+      });
+      await onReload();
+    } catch (err) {
+      toast({
+        variant: 'error',
+        title: 'Could not verify',
+        description: err instanceof ApiError ? err.message : 'Please try again.',
+      });
+    }
+  }
 
   async function onRestore() {
     try {
@@ -256,14 +293,20 @@ function BugDetailView({
         </div>
 
         {facts?.owner && (
-          <p className="mt-4 flex items-center gap-1.5 border-t border-slate-200/70 pt-3 text-xs text-slate-500">
+          <p className="mt-4 flex items-center gap-1.5 border-t border-hairline pt-3 text-xs text-slate-500">
             <User className="h-3.5 w-3.5" aria-hidden /> {facts.owner}
           </p>
         )}
       </header>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="flex min-w-0 flex-col gap-6">
+      {/*
+        Three columns, main spanning two. `min-w-0` on the main column is what
+        lets its children (tables, code blocks, long titles) shrink rather than
+        forcing the grid wider than the viewport - a grid track's default
+        `min-width:auto` otherwise sizes to the widest unbreakable content.
+      */}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           {/*
            * The blast radius. This is what makes one grouped ticket worth more
            * than the many per-endpoint tickets it replaces, so it sits above the
@@ -395,10 +438,41 @@ function BugDetailView({
           </Card>
         </div>
 
-        {/* A disabled fieldset turns every control inside read-only in one place. */}
-        <fieldset disabled={isDeleted} className="min-w-0">
-          <MetadataSidebar bug={bug} meta={meta} editor={editor} products={products} currentUser={currentUser} />
-        </fieldset>
+        <div className="flex min-w-0 flex-col gap-4">
+          {canVerify && (
+            <div className="surface p-4">
+              <p className="text-sm font-semibold text-slate-900">Ready for re-test</p>
+              <p className="mt-1 text-[13px] leading-snug text-slate-500">
+                The fix is in. Verify it and this bug leaves the QA queue.
+              </p>
+              {/*
+                Disabled while there are unsaved edits, rather than silently
+                dropping them: this sends status + comment only, so a half-typed
+                severity change beside it would survive the save and read as
+                lost work. Save or discard first, then verify.
+              */}
+              <Button
+                className="mt-3 w-full"
+                onClick={() => void onVerify()}
+                loading={updateBug.isPending}
+                disabled={editor.dirty.length > 0}
+              >
+                <CheckCheck className="h-4 w-4" aria-hidden />
+                Mark as verified &amp; close
+              </Button>
+              {editor.dirty.length > 0 && (
+                <p className="mt-2 text-xs leading-snug text-slate-400">
+                  Save or discard your edits first - this action records only the status and the re-test note.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* A disabled fieldset turns every control inside read-only in one place. */}
+          <fieldset disabled={isDeleted} className="min-w-0">
+            <MetadataSidebar bug={bug} meta={meta} editor={editor} products={products} currentUser={currentUser} />
+          </fieldset>
+        </div>
       </div>
 
       <DeleteBugsDialog open={confirmDelete} ids={[bug.id]} onClose={() => setConfirmDelete(false)} />
