@@ -358,6 +358,7 @@ export function CreateBug() {
   return (
     <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
+        back={{ to: '/', label: 'Back to dashboard' }}
         icon={FilePlus2}
         title="New bug"
         description="Uses the same structure as test-bench bugs, so every ticket reads the same way."

@@ -8,6 +8,7 @@ export const rawAdminUserSchema = z
     real_name: z.string().default(''),
     can_login: z.boolean().default(true),
     login_denied_text: z.string().default(''),
+    email_enabled: z.boolean().default(true),
     groups: z.array(z.object({ name: z.string() }).passthrough()).default([]),
   })
   .passthrough();
@@ -20,6 +21,8 @@ export interface AdminUser {
   fullName: string;
   isEnabled: boolean;
   disabledReason: string;
+  /** Bug mail on/off (Bugzilla's disable_mail, inverted). */
+  emailEnabled: boolean;
   groups: string[];
 }
 
@@ -30,6 +33,7 @@ export function normalizeAdminUser(raw: RawAdminUser): AdminUser {
     fullName: raw.real_name,
     isEnabled: raw.login_denied_text === '',
     disabledReason: raw.login_denied_text,
+    emailEnabled: raw.email_enabled,
     groups: raw.groups.map((g) => g.name),
   };
 }
@@ -58,6 +62,9 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
 export const updateUserSchema = z
   .object({
     fullName: z.string().optional(),
+    /** The login. Bugzilla checks the format and that no other account uses it. */
+    email: z.string().trim().email('Enter a valid email address').max(255).optional(),
+    emailEnabled: z.boolean().optional(),
     password: z.string().min(6, 'Password must be at least 6 characters long').optional(),
     disabled: z.boolean().optional(),
     disabledReason: z.string().optional(),

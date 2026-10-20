@@ -351,7 +351,11 @@ export function Dashboard() {
    * same terms as the developer picker above.
    */
   const canPickReporter = allowed.includes('admin');
-  const reporterEmail = canPickReporter ? (params.get('reporter') ?? '') : '';
+  /*
+   * Testers who are not admins only ever see the bugs THEY reported on the QA
+   * board; the team-wide picture stays on the Overview tab.
+   */
+  const reporterEmail = canPickReporter ? (params.get('reporter') ?? '') : email;
   const pickReporter = (next: string) => {
     setParams(
       (p) => {
@@ -399,7 +403,13 @@ export function Dashboard() {
         icon={LayoutDashboard}
         title="Dashboard"
         description={
-          tab === 'developer' && devEmail ? `What is assigned to ${devName || devEmail}, worst first.` : DESCRIPTIONS[tab]
+          tab === 'developer' && devEmail
+            ? `What is assigned to ${devName || devEmail}, worst first.`
+            : tab === 'developer' && canPickDeveloper
+              ? 'What is assigned across all developers, worst first.'
+            : tab === 'qa' && !canPickReporter
+              ? 'The bugs you reported, the triage queue, and filing.'
+              : DESCRIPTIONS[tab]
         }
       />
 
@@ -418,18 +428,23 @@ export function Dashboard() {
             <TabsContent value="qa">
               {canPickReporter && <ReporterPicker value={reporterEmail} onChange={pickReporter} />}
               {/* Keyed by reporter so lists and dialogs reset on a switch. */}
-              <QaDashboard key={reporterEmail || 'everyone'} reporter={reporterEmail || undefined} />
+              {/* Wait for the signed-in email, or a tester would briefly see everyone's bugs. */}
+              {(canPickReporter || email) && (
+                <QaDashboard key={reporterEmail || 'everyone'} reporter={reporterEmail || undefined} mine={!canPickReporter} />
+              )}
             </TabsContent>
           )}
           {allowed.includes('developer') && (
             <TabsContent value="developer">
-              {canPickDeveloper && (
-                <DeveloperPicker value={devEmail} onChange={pickDeveloper} meName={data?.user.realName || email} />
-              )}
-              {/* Keyed by person so the selected bug and list state reset on a switch. */}
+              {canPickDeveloper && <DeveloperPicker value={devEmail} onChange={pickDeveloper} />}
+              {/*
+                Keyed by person so the selected bug and list state reset on a switch.
+                Admins and testers open on the whole team; a developer sees only their own.
+              */}
               <DeveloperDashboard
-                key={devEmail || email}
-                email={devEmail || email}
+                key={canPickDeveloper ? devEmail || 'all' : email}
+                email={canPickDeveloper ? devEmail : email}
+                all={canPickDeveloper && !devEmail}
                 name={devEmail ? devName || devEmail : undefined}
               />
             </TabsContent>
@@ -443,6 +458,9 @@ export function Dashboard() {
             <OverviewPanel />
           </TabsContent>
         </Tabs>
+      ) : allowed[0] === 'qa' ? (
+        // A reporter's single view: their own reported bugs (no rail, no picker).
+        email && <QaDashboard key={email} reporter={email} mine />
       ) : (
         <DeveloperDashboard email={email} />
       )}

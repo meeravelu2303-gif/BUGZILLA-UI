@@ -249,6 +249,14 @@ function BugDetailView({
           <span className="rounded-md bg-slate-900/[0.04] px-2 py-0.5 font-mono font-semibold text-slate-700 ring-1 ring-inset ring-slate-900/10" title={`Bug #${bug.id}`}>
             {bugDisplayId(bug)}
           </span>
+          {bug.mantisRef && (
+            <span
+              className="rounded-md bg-amber-50 px-2 py-0.5 font-mono text-amber-800 ring-1 ring-inset ring-amber-600/20"
+              title="Imported from Mantis - the original Mantis issue number"
+            >
+              Mantis #{bug.mantisRef}
+            </span>
+          )}
           <span className="text-slate-400">·</span>
           <span className="font-medium text-slate-600">{bug.product}</span>
           <span className="text-slate-400">/</span>

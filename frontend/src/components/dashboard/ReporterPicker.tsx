@@ -17,6 +17,9 @@ export function ReporterPicker({ value, onChange }: { value: string; onChange: (
   const people = data?.users ?? [];
   const testers = people.filter((p) => p.role === 'tester');
   const admins = people.filter((p) => p.role === 'admin');
+  const staff = people.filter((p) => p.role === 'reporter');
+  // Developers appear only if they have actually filed a bug (the BFF reads that from the bugs).
+  const developers = people.filter((p) => p.role === 'developer');
   const selected = people.find((p) => p.email === value);
 
   return (
@@ -33,6 +36,24 @@ export function ReporterPicker({ value, onChange }: { value: string; onChange: (
           {testers.length > 0 && (
             <optgroup label="Testers">
               {testers.map((p) => (
+                <option key={p.email} value={p.email}>
+                  {p.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {staff.length > 0 && (
+            <optgroup label="Reporters (office staff)">
+              {staff.map((p) => (
+                <option key={p.email} value={p.email}>
+                  {p.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {developers.length > 0 && (
+            <optgroup label="Developers (who have filed bugs)">
+              {developers.map((p) => (
                 <option key={p.email} value={p.email}>
                   {p.name}
                 </option>

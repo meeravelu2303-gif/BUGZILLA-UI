@@ -4,7 +4,7 @@ import { useBrowserScope } from '../../lib/useBrowserScope';
 import type { FacetStats } from '../../lib/useFacetStats';
 import { FACET_LABELS, RESOLUTION_VALUES, type UseBugFilters } from '../../lib/useBugFilters';
 import { useDebounce } from '../../lib/useDebounce';
-import { CATEGORIES, PRIORITIES, SEVERITIES, type BugMeta, type Product } from '../../types';
+import { CATEGORIES, PRIORITIES, SEVERITIES, SOURCES, type BugMeta, type Product } from '../../types';
 import { DateRangeFilter } from './DateRangeFilter';
 import { MultiSelect, type MultiSelectOption } from '../ui/MultiSelect';
 
@@ -181,6 +181,15 @@ export function FilterBar({
           selected={filters.category}
           onToggle={(v) => toggleFacet('category', v)}
           onClear={() => setFacet('category', [])}
+        />
+        {/* Who filed it: the test benches (Automation) or a person (Manual). */}
+        <MultiSelect
+          label={FACET_LABELS.source}
+          className="w-40"
+          options={withCounts(SOURCES, stats?.for('source')?.bySource)}
+          selected={filters.source}
+          onToggle={(v) => toggleFacet('source', v)}
+          onClear={() => setFacet('source', [])}
         />
         {showBrowser && (
           <MultiSelect

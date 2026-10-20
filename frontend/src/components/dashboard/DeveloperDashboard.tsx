@@ -55,20 +55,36 @@ const severityOf = (bug: Bug): Severity => bug.triage?.severity ?? 'Unclassified
  * viewed (an admin or tester picking a developer on the Dashboard); unset, it
  * is the signed-in user's own, and the wording stays first-person.
  */
-export function DeveloperDashboard({ email, name }: { email: string; name?: string }) {
+/**
+ * `all` = the team-wide board: every developer's assigned work in one view
+ * (what admins and testers open by default). Then `email` is ignored and no
+ * query carries an assignee.
+ */
+export function DeveloperDashboard({ email, name, all = false }: { email: string; name?: string; all?: boolean }) {
+  // The assignee scope every query below carries: one person, or nobody (everyone).
+  const who = all ? {} : { assignedTo: email };
+  const whoQs = all ? '' : `&assignedTo=${encodeURIComponent(email)}`;
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const isSelf = !name;
+  const isSelf = !name && !all;
   const first = name?.trim().split(/\s+/)[0] ?? '';
-  // Wording that follows whose board this is.
-  const t = {
-    openBacklog: isSelf ? 'My open backlog' : 'Open backlog',
-    highSeverity: isSelf ? 'My blockers / critical' : 'Blockers / critical',
-    resolved: isSelf ? 'Resolved by me' : `Resolved by ${first}`,
-    backlog: isSelf ? 'My backlog' : `${first}'s backlog`,
-    empty: isSelf ? 'No open bugs are assigned to you right now.' : `No open bugs are assigned to ${name} right now.`,
-  };
-  // "My Bugs" is the SIGNED-IN user's page; someone else's full list is a search.
-  const fullListHref = isSelf ? '/my-bugs' : `/bugs?assignedTo=${encodeURIComponent(email)}`;
+  // Wording that follows whose board this is: mine, one developer's, or everyone's.
+  const t = all
+    ? {
+        openBacklog: 'Open backlog',
+        highSeverity: 'Blockers / critical',
+        resolved: 'Resolved',
+        backlog: 'Team backlog',
+        empty: 'No open bugs are assigned to any developer right now.',
+      }
+    : {
+        openBacklog: isSelf ? 'My open backlog' : 'Open backlog',
+        highSeverity: isSelf ? 'My blockers / critical' : 'Blockers / critical',
+        resolved: isSelf ? 'Resolved by me' : `Resolved by ${first}`,
+        backlog: isSelf ? 'My backlog' : `${first}'s backlog`,
+        empty: isSelf ? 'No open bugs are assigned to you right now.' : `No open bugs are assigned to ${name} right now.`,
+      };
+  // "My Bugs" is the SIGNED-IN user's page; anyone else's full list is a search.
+  const fullListHref = isSelf ? '/my-bugs' : all ? '/bugs' : `/bugs?assignedTo=${encodeURIComponent(email)}`;
 
   const { data: meta } = useMeta();
   const openStatusList = (meta?.workflow ?? []).filter((w) => w.isOpen).map((w) => w.status);
@@ -84,14 +100,14 @@ export function DeveloperDashboard({ email, name }: { email: string; name?: stri
    */
   const { data, isLoading: backlogQueryLoading, isError } = useBugs(
     {
-      assignedTo: email,
+      ...who,
       status: openStatusList,
       limit: BACKLOG_LIMIT,
       offset: 0,
       sortBy: 'importance',
       sortDir: 'asc',
     },
-    { enabled: email !== '' && openStatusList.length > 0 }
+    { enabled: (all || email !== '') && openStatusList.length > 0 }
   );
   const isLoading = backlogQueryLoading || openStatusList.length === 0;
 
@@ -101,7 +117,7 @@ export function DeveloperDashboard({ email, name }: { email: string; name?: stri
    * is known, so a half-loaded session cannot briefly render instance-wide
    * totals as if they were personal ones.
    */
-  const scoped = email !== '';
+  const scoped = all || email !== '';
 
   /*
    * Open statuses come from the live workflow rather than a hard-coded list.
@@ -114,9 +130,10 @@ export function DeveloperDashboard({ email, name }: { email: string; name?: stri
 
   /** Cards 1 and 2: my open work, and how much of it is severe. */
   const { data: myOpen } = useBugCounts(
-    { assignedTo: email, status: openStatuses },
+    { ...who, status: openStatuses },
     { enabled: scoped && openStatuses.length > 0 }
   );
+
 
   /*
    * Card 3 - handed back by QA. Gated on the status existing: Bugzilla drops an
@@ -125,7 +142,7 @@ export function DeveloperDashboard({ email, name }: { email: string; name?: stri
    */
   const hasReopened = (meta?.statuses ?? []).includes('REOPENED');
   const { data: reopenedCounts } = useBugCounts(
-    { assignedTo: email, status: ['REOPENED'] },
+    { ...who, status: ['REOPENED'] },
     { enabled: scoped && hasReopened }
   );
 
@@ -135,7 +152,7 @@ export function DeveloperDashboard({ email, name }: { email: string; name?: stri
    * without a code change.
    */
   const { data: myResolved } = useBugCounts(
-    { assignedTo: email, status: closedStatuses },
+    { ...who, status: closedStatuses },
     { enabled: scoped && closedStatuses.length > 0 }
   );
 
@@ -191,7 +208,8 @@ export function DeveloperDashboard({ email, name }: { email: string; name?: stri
             value={myOpen?.counts.total ?? 0}
             icon={Inbox}
             tone="brand"
-            to={`/bugs?assignedTo=${encodeURIComponent(email)}`}
+            // Open statuses in the link too, so the list matches the count rather than showing everything ever assigned.
+            to={`/bugs?${openStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}${whoQs}`}
             hint="Active bugs to fix"
           />
         </motion.div>
@@ -201,6 +219,7 @@ export function DeveloperDashboard({ email, name }: { email: string; name?: stri
             value={myHighSeverity}
             icon={AlertOctagon}
             tone="rose"
+            to={`/bugs?${openStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}&severity=Critical${whoQs}`}
             hint="Open bugs, blocker or critical"
           />
         </motion.div>
@@ -212,7 +231,7 @@ export function DeveloperDashboard({ email, name }: { email: string; name?: stri
             tone="amber"
             to={
               (reopenedCounts?.counts.total ?? 0) > 0
-                ? `/bugs?status=REOPENED&assignedTo=${encodeURIComponent(email)}`
+                ? `/bugs?status=REOPENED${whoQs}`
                 : undefined
             }
             hint={
@@ -230,6 +249,7 @@ export function DeveloperDashboard({ email, name }: { email: string; name?: stri
             value={myResolved?.counts.total ?? 0}
             icon={CheckCircle2}
             tone="emerald"
+            to={`/bugs?${closedStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}${whoQs}&sortBy=last_change_time&sortDir=desc`}
             hint="Lifetime fixes"
           />
         </motion.div>

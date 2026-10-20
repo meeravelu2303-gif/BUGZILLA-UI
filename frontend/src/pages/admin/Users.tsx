@@ -1,7 +1,7 @@
-import { Plus, Search, Users as UsersIcon } from 'lucide-react';
+import { Eye, Pencil, Plus, Search, Trash2, Users as UsersIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAdminUsers, useProducts } from '../../api/hooks';
+import { useAdminUsers, useMe, useProducts } from '../../api/hooks';
 import {
   ROLES,
   ROLE_DESCRIPTIONS,
@@ -11,6 +11,7 @@ import {
   roleFromGroups as roleOf,
   type Role,
 } from '../../lib/roles';
+import { DeleteUserDialog } from '../../components/admin/DeleteUserDialog';
 import { Avatar } from '../../components/ui/Avatar';
 import { Card } from '../../components/ui/Card';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -22,12 +23,16 @@ import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useDebounce } from '../../lib/useDebounce';
 
 export function Users() {
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounce(searchInput, 350);
   const [productFilter, setProductFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>('');
   const { data, isLoading, isFetching } = useAdminUsers(search);
   const { data: productsData } = useProducts();
+  // Testers see this list read-only: no create, edit or delete (the BFF refuses those too).
+  const { data: me } = useMe();
+  const canManage = Boolean(me?.user.permissions.canManageUsers);
 
   const allUsers = data?.users ?? [];
   // Product access in Bugzilla is granted through a group; on this instance each product has a
@@ -49,7 +54,7 @@ export function Users() {
    * already selected.
    */
   const roleCounts = useMemo(() => {
-    const counts: Record<Role, number> = { developer: 0, tester: 0, admin: 0 };
+    const counts: Record<Role, number> = { reporter: 0, developer: 0, tester: 0, admin: 0 };
     for (const u of allUsers) counts[roleOf(u.groups)] += 1;
     return counts;
   }, [allUsers]);
@@ -60,15 +65,17 @@ export function Users() {
         icon={UsersIcon}
         eyebrow="Administration"
         title="Users"
-        description="Search, create, and enable or disable Bugzilla accounts."
+        description={canManage ? "Search, create, edit, disable and delete Bugzilla accounts." : "Search Bugzilla accounts and see their role and product access."}
         actions={
-          <Link
-            to="/admin/users/new"
-            className="focus-ring inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-b from-brand-600 to-brand-800 px-5 text-sm font-semibold text-white shadow-glow ring-1 ring-inset ring-white/20 transition-all hover:from-brand-700 hover:to-brand-900 hover:shadow-float"
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-            New user
-          </Link>
+          canManage && (
+            <Link
+              to="/admin/users/new"
+              className="focus-ring inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-b from-brand-600 to-brand-800 px-5 text-sm font-semibold text-white shadow-glow ring-1 ring-inset ring-white/20 transition-all hover:from-brand-700 hover:to-brand-900 hover:shadow-float"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              New user
+            </Link>
+          )
         }
       />
 
@@ -148,7 +155,7 @@ export function Users() {
                   ]
                     .filter(Boolean)
                     .join(' and ')}.`
-                : 'Create the first account with “New user”.'
+                : canManage ? 'Create the first account with “New user”.' : 'There are no accounts to show.'
             }
             action={
               search.trim() || productFilter || roleFilter ? (
@@ -169,8 +176,8 @@ export function Users() {
         ) : (
           <ul className={`divide-y divide-white/30 ${isFetching ? 'opacity-60 transition-opacity' : ''}`}>
             {users.map((u) => (
-              <li key={u.id}>
-                <Link to={`/admin/users/${u.id}`} className="focus-ring flex items-center gap-3 px-5 py-3.5 hover:bg-white/50">
+              <li key={u.id} className="flex items-center gap-2 pr-3 hover:bg-white/50">
+                <Link to={`/admin/users/${u.id}`} className="focus-ring flex min-w-0 flex-1 items-center gap-3 px-5 py-3.5">
                   <Avatar name={u.fullName || u.email} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-900">{u.fullName || u.email}</p>
@@ -191,6 +198,28 @@ export function Users() {
                   </Pill>
                   <Pill tone={u.isEnabled ? 'emerald' : 'rose'}>{u.isEnabled ? 'Enabled' : 'Disabled'}</Pill>
                 </Link>
+                {/* Visible actions, so editing is not a hidden row click. */}
+                <div className="flex shrink-0 items-center gap-1">
+                  <Link
+                    to={`/admin/users/${u.id}`}
+                    className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-slate-600 hover:bg-white hover:text-slate-900"
+                    aria-label={`${canManage ? 'Edit' : 'View'} ${u.fullName || u.email}`}
+                  >
+                    {canManage ? <Pencil className="h-3.5 w-3.5" aria-hidden /> : <Eye className="h-3.5 w-3.5" aria-hidden />}
+                    {canManage ? 'Edit' : 'View'}
+                  </Link>
+                  {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setDeletingId(u.id)}
+                    className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                    aria-label={`Delete ${u.fullName || u.email}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete
+                  </button>
+                  )}
+                </div>
+                {canManage && deletingId === u.id && <DeleteUserDialog open user={u} onClose={() => setDeletingId(null)} />}
               </li>
             ))}
           </ul>

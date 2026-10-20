@@ -1,7 +1,7 @@
-import { ArrowRightLeft, CircleDashed, FilePlus2, Inbox, RotateCcw, Siren } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle2, CircleDashed, FilePlus2, Inbox, RotateCcw, Siren } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useBugCounts, useBugs, useMeta, useProducts } from '../../api/hooks';
+import { useBugCounts, useBugs, useMeta } from '../../api/hooks';
 import { bugDisplayId, timeAgo } from '../../lib/utils';
 import { TransferBugDialog } from '../bugs/TransferBugDialog';
 import { Button } from '../ui/Button';
@@ -9,7 +9,6 @@ import { EmptyState } from '../ui/EmptyState';
 import { CategoryPill, SeverityPill, StatusPill } from '../ui/Pill';
 import { Skeleton } from '../ui/Skeleton';
 import { StatCard } from '../ui/StatCard';
-import { QuickFileDialog } from './QuickFileDialog';
 import type { Bug } from '../../types';
 
 /**
@@ -29,8 +28,9 @@ const TRIAGE_LIMIT = 8;
  * person reported - Bugzilla's own reporter field, the API's `creator` filter.
  * Unset, the board covers everyone.
  */
-export function QaDashboard({ reporter }: { reporter?: string } = {}) {
-  const [filing, setFiling] = useState(false);
+export function QaDashboard({ reporter, mine = false }: { reporter?: string; mine?: boolean } = {}) {
+  // `mine`: the board is the signed-in tester's own reports, so every label says so.
+  const yours = (text: string, otherwise: string) => (mine ? `Reported by you · ${text}` : otherwise);
   // Spread into every query below, so a card and the list behind it always agree.
   const who = useMemo(() => (reporter ? { creator: reporter } : {}), [reporter]);
   const withWho = (path: string) =>
@@ -38,9 +38,6 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
   const [transferId, setTransferId] = useState<number | null>(null);
 
   const { data: meta } = useMeta();
-  // Feeds the quick-file dialog, so it wants the filing list rather than the
-  // narrower filter scope.
-  const { data: products } = useProducts({ forFiling: true });
 
   /*
    * UNCONFIRMED is deliberately NOT used here.
@@ -70,6 +67,9 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
    * for on an instance that has no such status.
    */
   const openStatuses = (meta?.workflow ?? []).filter((w) => w.isOpen).map((w) => w.status);
+  // Query-string form of the same list, so a card that COUNTS open bugs links
+  // to a list showing only open bugs - "265 open" must not open 3,214 rows.
+  const openQs = openStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&');
 
   /*
    * "Longest open": the oldest OPEN bugs, oldest first.
@@ -124,6 +124,8 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
    * Soft-deleted bugs are excluded by the API's default `deleted=exclude`.
    */
   const { data: retestCounts } = useBugCounts({ ...who, status: ['RESOLVED'] });
+  /** Closed for good: re-tested and VERIFIED (fixed, invalid, duplicate, won't fix…). */
+  const { data: closedCounts } = useBugCounts({ ...who, status: ['VERIFIED'] });
   /*
    * Scoped to the open statuses so `blockerCritical` counts CURRENT load.
    *
@@ -139,8 +141,6 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
 
   const feed = feedData?.bugs ?? [];
 
-
-  const productNames = useMemo(() => (products?.products ?? []).map((p) => p.name), [products]);
 
   /*
    * The oldest OPEN bugs - what has been waiting longest for a fix.
@@ -175,14 +175,14 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
         verification. Nothing here describes how a bug was filed or who owns it
         - that is the product owner's concern, not the tester's.
       */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           label="Open defects"
           value={allCounts?.counts.open ?? 0}
           icon={Inbox}
           tone="brand"
-          to={withWho('/bugs')}
-          hint="Everything still broken"
+          to={withWho(`/bugs?${openQs}`)}
+          hint={yours('still broken', 'Everything still broken')}
         />
 
         <StatCard
@@ -193,8 +193,8 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
           to={(unconfirmedCounts?.counts.total ?? 0) > 0 ? withWho('/bugs?status=UNCONFIRMED') : undefined}
           hint={
             (unconfirmedCounts?.counts.total ?? 0) > 0
-              ? 'Unconfirmed - waiting on QA'
-              : 'Nothing awaiting confirmation'
+              ? yours('unconfirmed', 'Unconfirmed - waiting on QA')
+              : yours('nothing to confirm', 'Nothing awaiting confirmation')
           }
         />
 
@@ -203,8 +203,8 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
           value={openCounts?.counts.blockerCritical ?? 0}
           icon={Siren}
           tone="rose"
-          to={withWho('/bugs?severity=Critical')}
-          hint="Open, high severity"
+          to={withWho(`/bugs?${openQs}&severity=Critical`)}
+          hint={yours('open, high severity', 'Open, high severity')}
         />
 
         <StatCard
@@ -213,16 +213,29 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
           icon={RotateCcw}
           tone="emerald"
           to={withWho('/bugs?status=RESOLVED&sortBy=last_change_time&sortDir=desc')}
-          hint="Fixed - waiting on your verification"
+          hint={yours('fixed, waiting on your verification', 'Fixed - waiting on your verification')}
+        />
+
+        <StatCard
+          label="Closed"
+          value={closedCounts?.counts.total ?? 0}
+          icon={CheckCircle2}
+          tone="slate"
+          to={withWho('/bugs?status=VERIFIED&sortBy=last_change_time&sortDir=desc')}
+          hint={yours('verified and closed', 'Verified and closed')}
         />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => setFiling(true)}>
-          <FilePlus2 className="h-3.5 w-3.5" /> Quick file a bug
-        </Button>
-        <Button asChild variant="secondary">
-          <Link to="/bugs/new">Full filing form</Link>
+        {/*
+          One way to file, deliberately. A "quick file" dialog used to sit here;
+          it let a bug in with just a summary, which made the full form's
+          required fields (steps, expected, actual) optional in practice.
+        */}
+        <Button asChild>
+          <Link to="/bugs/new">
+            <FilePlus2 className="h-3.5 w-3.5" /> File a bug
+          </Link>
         </Button>
         <Button asChild variant="secondary">
           <Link to="/search">Advanced search</Link>
@@ -232,8 +245,8 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Queue
           title="Longest open"
-          subtitle="Open the longest - still waiting on a fix"
-          to={withWho('/bugs?sortBy=creation_time&sortDir=asc')}
+          subtitle={yours('open the longest, still waiting on a fix', 'Open the longest - still waiting on a fix')}
+          to={withWho(`/bugs?${openQs}&sortBy=creation_time&sortDir=asc`)}
           loading={triageLoading}
           bugs={triage}
           emptyTitle="Nothing is ageing"
@@ -243,7 +256,7 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
 
         <Queue
           title="Latest incoming"
-          subtitle="Newest first - what the bench has just filed"
+          subtitle={yours('newest first', reporter ? 'Newest first - the latest reports filed' : 'Newest first - what the bench has just filed')}
           to={withWho('/bugs?sortBy=creation_time&sortDir=desc')}
           loading={feedLoading}
           bugs={feed}
@@ -252,14 +265,6 @@ export function QaDashboard({ reporter }: { reporter?: string } = {}) {
           onTransfer={setTransferId}
         />
       </div>
-
-      <QuickFileDialog
-        open={filing}
-        onClose={() => setFiling(false)}
-        products={products?.products ?? []}
-        productNames={productNames}
-        severities={meta?.severities ?? []}
-      />
 
       {/*
         Reuses the existing transfer dialog rather than a new one: it already

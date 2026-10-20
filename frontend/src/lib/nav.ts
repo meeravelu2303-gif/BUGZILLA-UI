@@ -68,8 +68,8 @@ export const NAV_SECTIONS: NavSection[] = [
     title: 'Administration',
     adminOnly: true,
     items: [
-      { to: '/admin/users', label: 'Users', icon: UsersIcon, permission: 'canManageUsers', description: 'Create, search and enable/disable accounts' },
-      { to: '/admin/products', label: 'Products', icon: Boxes, permission: 'canManageProducts', description: 'Manage products and their components' },
+      { to: '/admin/users', label: 'Users', icon: UsersIcon, permission: 'canViewUsers', description: 'Create, search and enable/disable accounts' },
+      { to: '/admin/products', label: 'Products', icon: Boxes, permission: 'canViewProducts', description: 'Manage products and their components' },
       { to: '/admin/field-values', label: 'Field Values', icon: Tags, description: 'Allowed values for status, severity, priority and more' },
       { to: '/admin/workflow', label: 'Status Workflow', icon: Workflow, description: 'The allowed status transitions, visualized' },
       { to: '/admin/groups', label: 'Groups & Permissions', icon: ShieldCheck, description: 'Group memberships for your account' },
@@ -87,3 +87,19 @@ export const PREFERENCE_TABS: { tab: string; title: string; blurb: string }[] = 
   { tab: 'apikey', title: 'API Keys', blurb: 'Create and revoke personal API keys.' },
   { tab: 'permissions', title: 'Permissions', blurb: 'The groups and privileges your account holds.' },
 ];
+
+/**
+ * The items of one section this user may see.
+ *
+ * An item with a `permission` shows exactly when that permission is held - which
+ * is how a tester sees Users and Products (read-only) inside Administration. An
+ * item without one, in an admin-only section, needs a real admin (either manage
+ * permission): Field Values, Parameters and the rest stay admin screens.
+ */
+export function visibleNavItems(section: NavSection, permissions?: Permissions): NavItem[] {
+  const isAdmin = Boolean(permissions?.canManageUsers || permissions?.canManageProducts);
+  return section.items.filter((item) => {
+    if (item.permission) return Boolean(permissions?.[item.permission]);
+    return !section.adminOnly || isAdmin;
+  });
+}

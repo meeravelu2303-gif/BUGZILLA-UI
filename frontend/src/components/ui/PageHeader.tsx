@@ -1,7 +1,33 @@
-import { ChevronRight, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/utils';
+
+/**
+ * "Back" for pages reached from somewhere else (filing, search, reports).
+ *
+ * Goes to the previous page when this tab has one - so a tester who came from
+ * the QA board lands back on the QA board, filters intact - and to the given
+ * route when the page was opened directly (a bookmark, a pasted link), where
+ * browser-back would leave the app entirely.
+ */
+export function BackLink({ to, label = 'Back', className }: { to: string; label?: string; className?: string }) {
+  const navigate = useNavigate();
+  const hasHistory = typeof window !== 'undefined' && (window.history.state?.idx ?? 0) > 0;
+  return (
+    <Link
+      to={to}
+      onClick={(e) => {
+        if (!hasHistory) return;
+        e.preventDefault();
+        navigate(-1);
+      }}
+      className={cn('focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-900', className)}
+    >
+      <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> {label}
+    </Link>
+  );
+}
 
 export interface Crumb {
   label: string;
@@ -16,6 +42,7 @@ export function PageHeader({
   title,
   description,
   crumbs,
+  back,
   actions,
   icon: Icon,
   eyebrow,
@@ -24,6 +51,8 @@ export function PageHeader({
   title: ReactNode;
   description?: ReactNode;
   crumbs?: Crumb[];
+  /** A Back link above the title, for pages reached from another screen. `to` is the fallback route. */
+  back?: { to: string; label?: string };
   actions?: ReactNode;
   /** A glyph in a soft brand tile beside the title - for top-level pages. */
   icon?: LucideIcon;
@@ -33,6 +62,7 @@ export function PageHeader({
 }) {
   return (
     <div className={cn('mb-6', className)}>
+      {back && <BackLink to={back.to} label={back.label} className="mb-3" />}
       {crumbs && crumbs.length > 0 && (
         <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1.5 text-xs text-slate-500">
           {crumbs.map((c, i) => (

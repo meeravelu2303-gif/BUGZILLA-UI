@@ -1,3 +1,4 @@
+import type { Source, TestType } from '../../types';
 import {
   Accessibility,
   AlertOctagon,
@@ -229,6 +230,27 @@ export function BrowserPill({ browser, className }: { browser: string; className
   );
 }
 
+/**
+ * The Browser cell for a bug that has no browser: a pill like every other
+ * cell, not a bare dash. An API bug says so - no browser was involved - and a
+ * UI bug filed without the tag (Mantis imports, hand-filed bugs) says the
+ * browser was not recorded, which is different from "none".
+ */
+export function NoBrowserPill({ testType, className }: { testType?: TestType; className?: string }) {
+  if (testType === 'API') {
+    return (
+      <Pill tone="slate" icon={Workflow} className={cn('font-mono text-slate-500', className)} title="API test - no browser involved">
+        API
+      </Pill>
+    );
+  }
+  return (
+    <Pill tone="slate" icon={MonitorSmartphone} className={cn('font-mono text-slate-500', className)} title="No browser recorded on this bug">
+      Not recorded
+    </Pill>
+  );
+}
+
 /* ------------------------------------------------------------- test type */
 
 /**
@@ -249,24 +271,40 @@ export function BrowserPill({ browser, className }: { browser: string; className
  * but its name carries neither "API" nor "UI", so it is matched explicitly.
  * The UI test runs first, so a hypothetical "Admin UI" bench still reads as UI.
  */
-export function TestTypePill({ product, className }: { product: string; className?: string }) {
-  if (/\bUI\b/i.test(product)) {
+export function TestTypePill({
+  product,
+  source,
+  testType,
+  className,
+}: {
+  product: string;
+  /** From the backend's triage; when absent (older backend) the product name alone decides. */
+  source?: Source;
+  testType?: TestType;
+  className?: string;
+}) {
+  /*
+   * Four badges, two axes: WHO filed it (a bench, or a person) and WHAT was
+   * tested (UI or API). The backend derives both - source from the
+   * `[source:…]` tag, test type from the product - so the list, the detail
+   * page and the Excel export all say the same thing. Only the fallback below
+   * still guesses from the name, for a backend that predates `source`.
+   */
+  const kind: TestType = testType ?? (/\bUI\b/i.test(product) ? 'UI' : /\bAPI\b/i.test(product) || /\bAdmin\b/i.test(product) ? 'API' : 'UI');
+  const by: Source = source ?? 'Automation';
+  const label = by === 'Automation' ? `${kind} Automation` : `Manual ${kind} test`;
+  const what = kind === 'UI' ? 'the user interface' : 'the API';
+  const who = by === 'Automation' ? 'filed by the test bench' : 'filed by a tester';
+  if (kind === 'UI') {
     return (
-      <Pill tone="teal" icon={MonitorSmartphone} className={className} title={`${product} — browser-driven UI suite`}>
-        UI Automation
-      </Pill>
-    );
-  }
-  if (/\bAPI\b/i.test(product) || /\bAdmin\b/i.test(product)) {
-    return (
-      <Pill tone="indigo" icon={Workflow} className={className} title={`${product} — REST API suite`}>
-        API Automation
+      <Pill tone={by === 'Automation' ? 'teal' : 'amber'} icon={MonitorSmartphone} className={className} title={`${product} — ${what}, ${who}`}>
+        {label}
       </Pill>
     );
   }
   return (
-    <Pill tone="slate" className={className} title={product}>
-      {product}
+    <Pill tone={by === 'Automation' ? 'indigo' : 'violet'} icon={Workflow} className={className} title={`${product} — ${what}, ${who}`}>
+      {label}
     </Pill>
   );
 }

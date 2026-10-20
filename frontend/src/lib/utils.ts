@@ -58,12 +58,11 @@ export function timeAgo(iso: string): string {
  *
  * Bugzilla on this instance does not auto-assign the `KPA-` alias, so rather than fall back to
  * a bare `#<id>`, the label is derived from the bug id — `KPA-` plus the id zero-padded to at
- * least three digits. A real alias, if one is ever set, is preferred as-is. The numeric id is
- * still what links and sorting use; only the visible label changes.
+ * least three digits. Always - an alias (e.g. the `mantis-N` on imported Mantis bugs) is never
+ * the label, so every bug reads the same way; the Mantis number is shown separately from
+ * `mantisRef`. The numeric id is still what links and sorting use; only the visible label changes.
  */
-export function bugDisplayId(bug: { id: number; alias?: string[] }): string {
-  const real = bug.alias?.[0];
-  if (real) return real;
+export function bugDisplayId(bug: { id: number }): string {
   return `KPA-${String(bug.id).padStart(3, '0')}`;
 }
 

@@ -1,16 +1,37 @@
-import { Bug as BugIcon, ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { Boxes, Bug as BugIcon, ChevronDown, ChevronRight, ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { ApiError } from '../../api/client';
-import { useCreateComponent, useUpdateProduct } from '../../api/hooks';
+import { useAssignableUsers, useCreateComponent, useUpdateProduct } from '../../api/hooks';
 import { useToast } from '../../context/ToastContext';
 import type { Product } from '../../types';
 import { Button } from '../ui/Button';
 import { Card, CardBody, CardHeader, CardTitle } from '../ui/Card';
-import { Input } from '../ui/Field';
+import { Input, Select } from '../ui/Field';
 import { Pill } from '../ui/Pill';
 import { DeleteProductDialog } from './DeleteProductDialog';
 
-export function ProductAdminCard({ product, bugzillaWebUrl }: { product: Product; bugzillaWebUrl: string }) {
+/**
+ * One product on the admin page. Collapsed it is a single row - name, status,
+ * bug and component counts - so 50 products read as a list; expanded it is the
+ * full editor with components and actions. The page decides which one is open.
+ */
+export function ProductAdminCard({
+  product,
+  bugzillaWebUrl,
+  expanded,
+  onToggle,
+  canManage = true,
+  canAddComponent = true,
+}: {
+  product: Product;
+  bugzillaWebUrl: string;
+  expanded: boolean;
+  onToggle: () => void;
+  /** Edit / (de)activate / delete the product and edit components natively. False for testers. */
+  canManage?: boolean;
+  /** Add a component to this product. Testers and admins. */
+  canAddComponent?: boolean;
+}) {
   const updateProduct = useUpdateProduct(product.id);
   const createComponent = useCreateComponent(product.id);
   const { toast } = useToast();
@@ -84,13 +105,55 @@ export function ProductAdminCard({ product, bugzillaWebUrl }: { product: Product
     }
   }
 
+  const bugs = product.bugCount ?? 0;
+  const comps = product.components.length;
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={false}
+        className="focus-ring group flex w-full items-center gap-3 rounded-xl border border-hairline bg-white/80 px-4 py-3 text-left shadow-sm transition-all hover:border-brand-300 hover:bg-white hover:shadow-card"
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-600/15">
+          <Boxes className="h-4 w-4" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-slate-900 group-hover:text-brand-800">{product.name}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
+            <span className="inline-flex items-center gap-1">
+              <BugIcon className="h-3 w-3" aria-hidden />
+              {bugs.toLocaleString()} bug{bugs === 1 ? '' : 's'}
+            </span>
+            <span>
+              {comps} component{comps === 1 ? '' : 's'}
+            </span>
+          </span>
+        </span>
+        <Pill tone={product.isActive ? 'emerald' : 'slate'}>{product.isActive ? 'Active' : 'Inactive'}</Pill>
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" aria-hidden />
+      </button>
+    );
+  }
+
   return (
-    <Card>
+    <Card className="ring-2 ring-brand-500/20">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded
+            aria-label={`Collapse ${product.name}`}
+            className="focus-ring -ml-1 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          >
+            <ChevronDown className="h-4 w-4" aria-hidden />
+          </button>
           <CardTitle className="truncate">{product.name}</CardTitle>
           <Pill tone={product.isActive ? 'emerald' : 'slate'}>{product.isActive ? 'Active' : 'Inactive'}</Pill>
         </div>
+        {canManage && (
         <div className="flex shrink-0 items-center gap-1.5">
           <Button size="sm" variant="ghost" onClick={startEdit} disabled={editing}>
             <Pencil className="h-3.5 w-3.5" /> Edit
@@ -108,9 +171,10 @@ export function ProductAdminCard({ product, bugzillaWebUrl }: { product: Product
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </Button>
         </div>
+        )}
       </CardHeader>
       <CardBody className="flex flex-col gap-4">
-        {editing ? (
+        {canManage && editing ? (
           <form onSubmit={onSaveEdit} className="flex flex-col gap-3 rounded-xl border border-brand-200 bg-brand-50/40 p-4">
             <Input label="Name" required value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={64} />
             <Input
@@ -145,12 +209,14 @@ export function ProductAdminCard({ product, bugzillaWebUrl }: { product: Product
         <div className="rounded-xl border border-white/40 bg-white/40">
           <div className="flex items-center justify-between border-b border-white/30 px-4 py-2.5">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Components</span>
-            <button
-              onClick={() => setShowAddComponent((v) => !v)}
-              className="focus-ring flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-brand-700 hover:bg-white/60"
-            >
-              <Plus className="h-3 w-3" /> Add component
-            </button>
+            {canAddComponent && (
+              <button
+                onClick={() => setShowAddComponent((v) => !v)}
+                className="focus-ring flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-brand-700 hover:bg-white/60"
+              >
+                <Plus className="h-3 w-3" /> Add component
+              </button>
+            )}
           </div>
 
           {product.components.length === 0 && !showAddComponent ? (
@@ -161,6 +227,7 @@ export function ProductAdminCard({ product, bugzillaWebUrl }: { product: Product
                 <li key={c.name} className="flex items-center gap-3 px-4 py-2.5 text-sm">
                   <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{c.name}</span>
                   <span className="truncate text-xs text-slate-600">{c.defaultAssignee}</span>
+                  {canManage && (
                   <a
                     href={`${bugzillaWebUrl}/editcomponents.cgi?product=${encodeURIComponent(product.name)}&action=edit&component=${encodeURIComponent(c.name)}`}
                     target="_blank"
@@ -170,22 +237,17 @@ export function ProductAdminCard({ product, bugzillaWebUrl }: { product: Product
                   >
                     Edit <ExternalLink className="h-3 w-3" />
                   </a>
+                  )}
                 </li>
               ))}
             </ul>
           )}
 
-          {showAddComponent && (
+          {canAddComponent && showAddComponent && (
             <form onSubmit={onAddComponent} className="flex flex-col gap-3 border-t border-white/30 px-4 py-3">
               <div className="grid grid-cols-2 gap-3">
                 <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Component name" />
-                <Input
-                  label="Default assignee"
-                  type="email"
-                  value={defaultAssignee}
-                  onChange={(e) => setDefaultAssignee(e.target.value)}
-                  placeholder="name@example.com"
-                />
+                <DeveloperSelect product={product.name} value={defaultAssignee} onChange={setDefaultAssignee} />
               </div>
               <Input label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
               {formError && <p className="text-xs text-rose-600">{formError}</p>}
@@ -201,7 +263,55 @@ export function ProductAdminCard({ product, bugzillaWebUrl }: { product: Product
           )}
         </div>
       </CardBody>
-      <DeleteProductDialog open={deleting} product={product} onClose={() => setDeleting(false)} />
+      {canManage && <DeleteProductDialog open={deleting} product={product} onClose={() => setDeleting(false)} />}
     </Card>
+  );
+}
+
+/**
+ * Default assignee for a new component: a dropdown of the developers who can
+ * reach this product.
+ *
+ * Same source as the bug Assignee picker (the product's access group, strict
+ * testers already removed, each tagged with a role), narrowed to `developer` -
+ * a component's owner receives every new bug filed against it, and that is
+ * work for whoever changes the code. Only mounted while the add-component form
+ * is open, so a page of collapsed products does not fetch one list each.
+ */
+function DeveloperSelect({ product, value, onChange }: { product: string; value: string; onChange: (email: string) => void }) {
+  const { data, isLoading, isError } = useAssignableUsers(product);
+  const developers = useMemo(
+    () =>
+      (data?.users ?? [])
+        .filter((u) => u.role === 'developer' || u.role === undefined)
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [data]
+  );
+
+  return (
+    <Select
+      label="Default assignee"
+      required
+      value={value}
+      disabled={isLoading}
+      onChange={(e) => onChange(e.target.value)}
+      hint={
+        isLoading
+          ? 'Loading developers…'
+          : isError
+            ? 'Could not load the developers for this product.'
+            : developers.length === 0
+              ? 'No developer has access to this product yet - give one access first.'
+              : `${developers.length} developer${developers.length === 1 ? '' : 's'} with access to ${product}`
+      }
+    >
+      <option value="">Select a developer</option>
+      {developers.map((d) => (
+        <option key={d.email} value={d.email}>
+          {d.name} ({d.email})
+        </option>
+      ))}
+    </Select>
   );
 }

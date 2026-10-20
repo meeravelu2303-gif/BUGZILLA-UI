@@ -5,7 +5,7 @@ import { bugDisplayId, cn, timeAgo } from '../../lib/utils';
 import type { Bug } from '../../types';
 import { Avatar } from '../ui/Avatar';
 import { EmptyState } from '../ui/EmptyState';
-import { BrowserPills, CategoryPill, PriorityPill, SeverityPill, StatusPill, TestTypePill } from '../ui/Pill';
+import { BrowserPills, CategoryPill, NoBrowserPill, PriorityPill, SeverityPill, StatusPill, TestTypePill } from '../ui/Pill';
 import { TableSkeleton } from '../ui/Skeleton';
 
 interface Column {
@@ -231,7 +231,7 @@ export function BugTable({
                         {bug.summary}
                       </Link>
                       <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                        <TestTypePill product={bug.product} />
+                        <TestTypePill product={bug.product} source={bug.triage?.source} testType={bug.triage?.testType} />
                         <span className="text-slate-300" aria-hidden>
                           ·
                         </span>
@@ -251,11 +251,10 @@ export function BugTable({
                           /*
                            * The column is shown, so this scope has UI bugs -
                            * but an individual row may still be an API bug, or a
-                           * UI bug filed before browser tagging existed. An em
-                           * dash reads as "not applicable"; blank reads as a
-                           * value that failed to load.
+                           * UI bug filed without the tag. A pill, like every
+                           * other cell, saying which of the two it is.
                            */
-                          <span className="text-slate-400">—</span>
+                          <NoBrowserPill testType={triage?.testType} />
                         )}
                       </td>
                     )}

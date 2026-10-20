@@ -52,6 +52,7 @@ export function Reports() {
   return (
     <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
+        back={{ to: '/', label: 'Back to dashboard' }}
         title="Reports & Charts"
         description="Defect distribution across the two classification axes, computed over every bug."
       />

@@ -7,7 +7,7 @@ import { BugzillaClient } from '../lib/bugzillaClient';
 import { clearCategoryIndex } from '../lib/categoryIndex';
 import { deleteProductViaBugzilla } from '../lib/productDelete';
 import { groupNameForProduct } from '../lib/productGroups';
-import { parseTransferRoutes } from '../lib/productTransfer';
+import { directoryClient, parseTransferRoutes } from '../lib/productTransfer';
 import { requireAuth, requirePermission } from '../middleware/auth';
 import { parseInput } from '../lib/validate';
 import { AppError } from '../lib/errors';
@@ -41,13 +41,16 @@ async function fetchProduct(client: { get<T>(path: string, params?: Record<strin
 export function adminProductsRouter(env: Env): Router {
   const router = Router();
   const gate = [requireAuth(env), requirePermission('canManageProducts')];
+  // Testers may look at products and add components; everything else is admin-only.
+  const viewGate = [requireAuth(env), requirePermission('canViewProducts')];
+  const componentGate = [requireAuth(env), requirePermission('canCreateComponents')];
 
   // GET /api/admin/products
   // Uses product_accessible rather than the public /api/products' product_enterable:
   // Bugzilla excludes componentless products from "enterable" (nothing to file a bug
   // against yet), which would make a freshly created product invisible on the very
   // page meant to let you add its first component. "Accessible" has no such gate.
-  router.get('/', ...gate, async (req, res, next) => {
+  router.get('/', ...viewGate, async (req, res, next) => {
     try {
       const client = req.bugzilla!;
       const accessible = await client.get<{ ids: number[] }>('/product_accessible');
@@ -204,15 +207,28 @@ export function adminProductsRouter(env: Env): Router {
   });
 
   // POST /api/admin/products/:id/components
-  router.post('/:id/components', ...gate, async (req, res, next) => {
+  router.post('/:id/components', ...componentGate, async (req, res, next) => {
     try {
       const { id } = parseInput(idParamSchema, req.params);
       const input = parseInput(createComponentSchema, req.body);
       const client = req.bugzilla!;
 
+      // Read with the caller's own session: a product they cannot see 404s here,
+      // so a tester can only add components to products they already work on.
       const productBeforeCreate = await fetchProduct(client, id);
 
-      await client.post('/component', {
+      /*
+       * Bugzilla only lets `editcomponents` create a component, so for a tester
+       * the BFF does it with its service key - canCreateComponents (checked by
+       * the gate) is the permission that matters. Admins still write as
+       * themselves, as before.
+       */
+      const writer = req.sessionUser!.permissions.canManageProducts ? client : directoryClient(env);
+      if (writer !== client) {
+        console.info(`[admin] component "${input.name}" added to "${productBeforeCreate.name}" by ${req.sessionUser!.email} (via service key)`);
+      }
+
+      await writer.post('/component', {
         product: productBeforeCreate.name,
         name: input.name,
         description: input.description,

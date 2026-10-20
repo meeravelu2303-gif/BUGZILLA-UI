@@ -1,14 +1,14 @@
 import { RotateCcw } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useBugCounts, useBugs, useMeta, useProducts } from '../api/hooks';
+import { useAssignableUsers, useBugCounts, useBugs, useMeta, useProducts, useReporters } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
 import { ExportButton } from '../components/bugs/ExportButton';
 import { FilterBar } from '../components/bugs/FilterBar';
 import { Pagination } from '../components/bugs/Pagination';
 import { Button } from '../components/ui/Button';
 import { Card, CardBody } from '../components/ui/Card';
-import { Input } from '../components/ui/Field';
+import { Select } from '../components/ui/Field';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useBrowserScope } from '../lib/useBrowserScope';
 import { useFacetStats } from '../lib/useFacetStats';
@@ -32,6 +32,12 @@ export function AdvancedSearch() {
 
   const assignedTo = params.get('assignedTo') ?? '';
   const creator = params.get('creator') ?? '';
+
+  // The two person lists, sorted by name. Same sources as the dashboards' pickers.
+  const { data: assigneeData, isLoading: assigneesLoading } = useAssignableUsers();
+  const { data: reporterData, isLoading: reportersLoading } = useReporters();
+  const assignees = useMemo(() => (assigneeData?.users ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)), [assigneeData]);
+  const reporters = useMemo(() => (reporterData?.users ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)), [reporterData]);
 
   function setPerson(key: 'assignedTo' | 'creator', value: string) {
     const next = new URLSearchParams(params);
@@ -73,6 +79,7 @@ export function AdvancedSearch() {
   return (
     <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
+        back={{ to: '/', label: 'Back to dashboard' }}
         title="Advanced Search"
         description="Every axis at once — the resulting URL is the shareable query."
         // `scoped` includes the assignee/reporter fields, so the sheet matches the results.
@@ -82,20 +89,59 @@ export function AdvancedSearch() {
       <Card className="mt-6">
         <CardBody>
           <div className="flex flex-wrap items-end gap-3">
-            <Input
+            {/*
+              Dropdowns, not free-text email boxes: the people who can hold a
+              bug (assignable users, grouped by role) and the people who file
+              them (testers and admins) are both known lists, and a typed email
+              that is off by a letter silently matched nothing.
+            */}
+            <Select
               label="Assignee"
-              placeholder="name@example.com"
-              defaultValue={assignedTo}
-              onBlur={(e) => setPerson('assignedTo', e.target.value.trim())}
-              className="w-64"
-            />
-            <Input
+              value={assignedTo}
+              disabled={assigneesLoading}
+              onChange={(e) => setPerson('assignedTo', e.target.value)}
+              className="w-72"
+            >
+              <option value="">Anyone</option>
+              {(['developer', 'tester', 'admin'] as const).map((role) => {
+                const group = assignees.filter((u) => (u.role ?? 'developer') === role);
+                if (group.length === 0) return null;
+                return (
+                  <optgroup key={role} label={{ developer: 'Developers', tester: 'Testers', admin: 'Admins' }[role]}>
+                    {group.map((u) => (
+                      <option key={u.email} value={u.email}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })}
+            </Select>
+            <Select
               label="Reporter"
-              placeholder="name@example.com"
-              defaultValue={creator}
-              onBlur={(e) => setPerson('creator', e.target.value.trim())}
-              className="w-64"
-            />
+              value={creator}
+              disabled={reportersLoading}
+              onChange={(e) => setPerson('creator', e.target.value)}
+              className="w-72"
+            >
+              <option value="">Anyone</option>
+              {(['tester', 'reporter', 'developer', 'admin'] as const).map((role) => {
+                const group = reporters.filter((u) => u.role === role);
+                if (group.length === 0) return null;
+                return (
+                  <optgroup
+                    key={role}
+                    label={{ tester: 'Testers', reporter: 'Reporters (office staff)', developer: 'Developers (who have filed bugs)', admin: 'Admins' }[role]}
+                  >
+                    {group.map((u) => (
+                      <option key={u.email} value={u.email}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })}
+            </Select>
             <Button variant="ghost" onClick={resetAll} className="mb-0.5">
               <RotateCcw className="h-4 w-4" aria-hidden /> Reset everything
             </Button>

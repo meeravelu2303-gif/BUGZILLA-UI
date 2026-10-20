@@ -47,7 +47,7 @@ export function App() {
         path="/admin/users"
         element={
           <Protected>
-            <PermissionGate permission="canManageUsers">
+            <PermissionGate permission="canViewUsers">
               <Users />
             </PermissionGate>
           </Protected>
@@ -67,7 +67,7 @@ export function App() {
         path="/admin/users/:id"
         element={
           <Protected>
-            <PermissionGate permission="canManageUsers">
+            <PermissionGate permission="canViewUsers">
               <UserDetail />
             </PermissionGate>
           </Protected>
@@ -77,7 +77,7 @@ export function App() {
         path="/admin/products"
         element={
           <Protected>
-            <PermissionGate permission="canManageProducts">
+            <PermissionGate permission="canViewProducts">
               <Products />
             </PermissionGate>
           </Protected>

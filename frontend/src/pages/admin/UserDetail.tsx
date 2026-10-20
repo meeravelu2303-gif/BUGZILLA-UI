@@ -1,8 +1,9 @@
-import { AlertCircle, ArrowLeft, Save, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
-import { useAdminUser, useProducts, useUpdateUser } from '../../api/hooks';
+import { useAdminUser, useMe, useProducts, useUpdateUser } from '../../api/hooks';
+import { DeleteUserDialog } from '../../components/admin/DeleteUserDialog';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Card, CardBody, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -27,8 +28,14 @@ export function UserDetail() {
     [productsData]
   );
   const { toast } = useToast();
+  // Testers open accounts read-only; editing and deleting stay with canManageUsers.
+  const { data: me } = useMe();
+  const canManage = Boolean(me?.user.permissions.canManageUsers);
 
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [disabled, setDisabled] = useState(false);
   const [disabledReason, setDisabledReason] = useState('');
@@ -38,6 +45,8 @@ export function UserDetail() {
   useEffect(() => {
     if (!data) return;
     setFullName(data.user.fullName);
+    setEmail(data.user.email);
+    setEmailEnabled(data.user.emailEnabled ?? true);
     setDisabled(!data.user.isEnabled);
     setDisabledReason(data.user.disabledReason);
     setNewPassword('');
@@ -66,8 +75,11 @@ export function UserDetail() {
   }
 
   const { user } = data;
+  if (!canManage) return <ReadOnlyUser user={user} productNames={productNames} />;
   const original = {
     fullName: user.fullName,
+    email: user.email,
+    emailEnabled: user.emailEnabled ?? true,
     disabled: !user.isEnabled,
     disabledReason: user.disabledReason,
     role: roleFromGroups(user.groups),
@@ -75,18 +87,24 @@ export function UserDetail() {
     // different order does not read as a change.
     products: user.groups.filter((g) => productNames.has(g)).sort().join('|'),
   };
+  const emailChanged = email.trim().toLowerCase() !== original.email.toLowerCase();
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const isDirty =
     fullName !== original.fullName ||
+    emailChanged ||
+    emailEnabled !== original.emailEnabled ||
     newPassword.trim().length > 0 ||
     disabled !== original.disabled ||
     (disabled && disabledReason !== original.disabledReason) ||
     role !== original.role ||
     [...products].sort().join('|') !== original.products;
-  const canSave = isDirty && (!disabled || disabledReason.trim().length > 0) && (newPassword === '' || newPassword.length >= 6);
+  const canSave = isDirty && emailValid && (!disabled || disabledReason.trim().length > 0) && (newPassword === '' || newPassword.length >= 6);
 
   async function onSave() {
     const payload: UpdateUserInput = {};
     if (fullName !== original.fullName) payload.fullName = fullName;
+    if (emailChanged) payload.email = email.trim();
+    if (emailEnabled !== original.emailEnabled) payload.emailEnabled = emailEnabled;
     if (newPassword.trim()) payload.password = newPassword;
     if (disabled !== original.disabled) {
       payload.disabled = disabled;
@@ -142,8 +160,12 @@ export function UserDetail() {
             </Pill>
           )}
           <Pill tone={disabled ? 'rose' : 'emerald'}>{disabled ? 'Disabled' : 'Enabled'}</Pill>
+          <Button size="sm" variant="ghost" onClick={() => setDeleting(true)} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700">
+            <Trash2 className="h-3.5 w-3.5" /> Delete
+          </Button>
         </div>
       </div>
+      <DeleteUserDialog open={deleting} user={user} onClose={() => setDeleting(false)} afterDelete="/admin/users" />
 
       <Card>
         <CardHeader>
@@ -155,7 +177,30 @@ export function UserDetail() {
           )}
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
-          <Input label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+            <Input
+              label="Email (login)"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              error={!emailValid ? 'Enter a valid email address' : undefined}
+              hint={emailChanged && emailValid ? 'They will sign in with this address from now on.' : undefined}
+            />
+          </div>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={emailEnabled}
+              onChange={(e) => setEmailEnabled(e.target.checked)}
+              className="focus-ring mt-0.5 h-4 w-4 rounded border-line text-brand-600"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-slate-900">Send bug mail</span>
+              <p className="mt-0.5 text-slate-600">Email this person when bugs they are involved in change. Password reset mail is always sent.</p>
+            </span>
+          </label>
           <PasswordInput
             label="Reset password"
             value={newPassword}
@@ -174,7 +219,7 @@ export function UserDetail() {
               />
               <span className="text-sm">
                 <span className="font-medium text-slate-900">Disable this account</span>
-                <p className="mt-0.5 text-slate-600">Blocks login. The account and its history are preserved — Bugzilla has no delete.</p>
+                <p className="mt-0.5 text-slate-600">Blocks login. The account and its history are preserved - the right choice for anyone who has worked on bugs.</p>
               </span>
             </label>
 
@@ -251,6 +296,90 @@ export function UserDetail() {
             Groups outside the role model — <span className="font-mono">{user.groups.join(', ') || 'none'}</span> — are
             managed in <span className="font-medium text-slate-700">Bugzilla's native admin</span> (see Advanced
             Administration in the sidebar).
+          </div>
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * The same account, for someone who may look but not change anything (testers).
+ * Shows what the edit form would - name, login, status, role, product access -
+ * as plain facts, with no inputs that would only be refused on save.
+ */
+function ReadOnlyUser({
+  user,
+  productNames,
+}: {
+  user: { fullName: string; email: string; isEnabled: boolean; disabledReason: string; emailEnabled?: boolean; groups: string[] };
+  productNames: Set<string>;
+}) {
+  const role = roleFromGroups(user.groups);
+  const products = user.groups.filter((g) => productNames.has(g)).sort((a, b) => a.localeCompare(b));
+
+  return (
+    <div className="mx-auto max-w-2xl px-8 py-8">
+      <Link to="/admin/users" className="focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-700">
+        <ArrowLeft className="h-3.5 w-3.5" /> Back to users
+      </Link>
+
+      <div className="mt-4 mb-6 flex items-center gap-4">
+        <Avatar name={user.fullName || user.email} size="md" />
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">{user.fullName || user.email}</h1>
+          <p className="text-sm text-slate-600">{user.email}</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <Pill tone={user.isEnabled ? 'emerald' : 'rose'}>{user.isEnabled ? 'Enabled' : 'Disabled'}</Pill>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Account</CardTitle>
+          <span className="text-xs text-slate-500">View only</span>
+        </CardHeader>
+        <CardBody className="flex flex-col gap-5">
+          <dl className="grid gap-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Full name</dt>
+              <dd className="mt-0.5 text-slate-900">{user.fullName || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Email (login)</dt>
+              <dd className="mt-0.5 break-all text-slate-900">{user.email}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Role</dt>
+              <dd className="mt-0.5 text-slate-900">{ROLE_LABELS[role]}</dd>
+              <dd className="text-xs text-slate-500">{ROLE_DESCRIPTIONS[role]}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Bug mail</dt>
+              <dd className="mt-0.5 text-slate-900">{(user.emailEnabled ?? true) ? 'On' : 'Off'}</dd>
+            </div>
+            {!user.isEnabled && (
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-medium text-slate-500">Disabled reason</dt>
+                <dd className="mt-0.5 text-slate-900">{user.disabledReason || '—'}</dd>
+              </div>
+            )}
+          </dl>
+
+          <div className="border-t border-white/30 pt-5">
+            <p className="mb-2 text-sm font-medium text-slate-700">Product access ({products.length})</p>
+            {products.length === 0 ? (
+              <p className="text-sm text-slate-600">No product access.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {products.map((p) => (
+                  <Pill key={p} tone="slate">
+                    {p}
+                  </Pill>
+                ))}
+              </div>
+            )}
           </div>
         </CardBody>
       </Card>

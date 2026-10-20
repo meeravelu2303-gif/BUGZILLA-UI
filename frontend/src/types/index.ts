@@ -16,6 +16,8 @@ export interface Bug {
   grouping?: Grouping;
   facts?: DescriptionFacts;
   alias: string[];
+  /** Original Mantis issue number for imported bugs, '' otherwise. A reference only - the bug is still KPA-<id>. */
+  mantisRef?: string;
   summary: string;
   status: string;
   resolution: string;
@@ -210,6 +212,12 @@ export interface Permissions {
    * restrictive behaviour rather than assuming the permission.
    */
   canTriage?: boolean;
+  /** Testers and admins: the Users / Products screens read-only, plus adding components. Optional, as above. */
+  canViewUsers?: boolean;
+  canViewProducts?: boolean;
+  canCreateComponents?: boolean;
+  /** Office staff who file bugs (the `reporter` group): sees their own reports, never a developer backlog. */
+  isReporter?: boolean;
 }
 
 export interface AuthUser {
@@ -225,6 +233,8 @@ export interface AdminUser {
   fullName: string;
   isEnabled: boolean;
   disabledReason: string;
+  /** Bug mail on/off. Optional for an older backend. */
+  emailEnabled?: boolean;
   groups: string[];
 }
 
@@ -240,6 +250,9 @@ export interface CreateUserInput {
 
 export interface UpdateUserInput {
   fullName?: string;
+  /** The login. */
+  email?: string;
+  emailEnabled?: boolean;
   password?: string;
   disabled?: boolean;
   disabledReason?: string;
@@ -491,7 +504,16 @@ export interface Classification {
    * absent; never guess a browser onto a bug.
    */
   browsers: string[];
+  /** Filed by a bench ("Automation") or by a person ("Manual"). Optional: an older backend does not send it. */
+  source?: Source;
+  /** API or UI, decided by the product. Optional, as above. */
+  testType?: TestType;
 }
+
+/** How a bug was filed - the `[source:…]` whiteboard tag. */
+export const SOURCES = ['Automation', 'Manual'] as const;
+export type Source = (typeof SOURCES)[number];
+export type TestType = 'UI' | 'API';
 
 export interface AffectedEndpoint {
   method: string;
@@ -547,6 +569,12 @@ export interface BugStats {
   openByComponent?: Record<string, number>;
   openByBrowser?: Record<string, number>;
   openMatrix?: Record<Severity, Record<Category, number>>;
+  /** Automation vs Manual, every bug / open bugs. Optional: an older backend does not send them. */
+  bySource?: Record<Source, number>;
+  openBySource?: Record<Source, number>;
+  /** Bugs per assignee, keyed by lower-cased login. Optional: an older backend does not send them. */
+  byAssignee?: Record<string, number>;
+  openByAssignee?: Record<string, number>;
   cachedAt: string;
 }
 
@@ -562,6 +590,8 @@ export interface BugFilters {
    * offering options that all return zero.
    */
   browser: string[];
+  /** Automation / Manual - who filed it. */
+  source: string[];
   product: string[];
   component: string[];
   status: string[];
@@ -584,16 +614,18 @@ export interface BugFilters {
  * whatever arrives, so a drift here is caught as a 400 rather than silently
  * granting the wrong groups.
  */
-export const ROLES = ['developer', 'tester', 'admin'] as const;
+export const ROLES = ['reporter', 'developer', 'tester', 'admin'] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABELS: Record<Role, string> = {
+  reporter: 'Reporter',
   developer: 'Developer',
   tester: 'Tester',
   admin: 'Administrator',
 };
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  reporter: 'Office staff who file and follow bugs. Never assigned work; cannot confirm or triage.',
   developer: 'Files and works bugs in the products they are given. Cannot confirm or triage.',
   tester: 'Files, confirms and triages bugs, and marks duplicates.',
   admin: 'Everything a tester can do, plus managing users and products.',
@@ -609,5 +641,6 @@ export function roleFromGroups(groups: string[]): Role {
   // report every admin as a tester.
   if (held.has('editusers') || held.has('editcomponents')) return 'admin';
   if (held.has('canconfirm')) return 'tester';
+  if (held.has('reporter')) return 'reporter';
   return 'developer';
 }

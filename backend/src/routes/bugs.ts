@@ -13,8 +13,10 @@ import { accessSnapshot, scopeToAccessibleProducts } from '../lib/access';
 import {
   CATEGORIES,
   SEVERITIES,
+  SOURCES,
   browsersOf,
   classify,
+  withSourceTag,
   toBugzillaQuery,
   type BugFilters,
   type Category,
@@ -77,6 +79,7 @@ interface StatsRow {
   product: string;
   whiteboard?: string;
   is_open: boolean;
+  assigned_to?: string;
 }
 
 /** A counter object with every key present at zero, so absent bands still render. */
@@ -788,6 +791,7 @@ export function bugsRouter(env: Env): Router {
             severity: bug.severity,
             priority: bug.priority,
             whiteboard: bug.whiteboard,
+            product: bug.product,
           }),
           category: index?.categoryOf(bug.id) ?? 'Unclassified',
         },
@@ -961,6 +965,7 @@ export function bugsRouter(env: Env): Router {
         severity: bug.severity,
         priority: bug.priority,
         whiteboard: bug.whiteboard,
+        product: bug.product,
       });
       const info = commentInfo.get(bug.id);
       return {
@@ -970,6 +975,8 @@ export function bugsRouter(env: Env): Router {
           priority: triage.priority,
           category: index?.categoryOf(bug.id) ?? 'Unclassified',
           browsers: triage.browsers,
+          source: triage.source,
+          testType: triage.testType,
         },
         report: info?.description ? parseDefectReport(info.description) : EMPTY_REPORT,
         description: info?.description,
@@ -1329,7 +1336,7 @@ export function bugsRouter(env: Env): Router {
 
       const params: Record<string, unknown> = {
         limit: 0,
-        include_fields: 'id,severity,priority,status,component,product,whiteboard,is_open',
+        include_fields: 'id,severity,priority,status,component,product,whiteboard,is_open,assigned_to',
       };
       applyBugFilters(params, query);
       // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
@@ -1384,14 +1391,29 @@ export function bugsRouter(env: Env): Router {
        */
       const byBrowser: Record<string, number> = {};
       const openByBrowser: Record<string, number> = {};
+      // Automation vs Manual, sizing the Source filter's two options.
+      const bySource = zeroed(SOURCES);
+      const openBySource = zeroed(SOURCES);
+      // Bugs per assignee (lower-cased login), so the developer picker can show
+      // each person's load without one count request per developer.
+      const byAssignee: Record<string, number> = {};
+      const openByAssignee: Record<string, number> = {};
 
       let open = 0;
       for (const row of raw.bugs) {
-        const { severity } = classify({
+        const assignee = (row.assigned_to ?? '').toLowerCase();
+        if (assignee) {
+          byAssignee[assignee] = (byAssignee[assignee] ?? 0) + 1;
+          if (row.is_open) openByAssignee[assignee] = (openByAssignee[assignee] ?? 0) + 1;
+        }
+        const { severity, source } = classify({
           severity: row.severity,
           priority: row.priority,
           whiteboard: row.whiteboard,
+          product: row.product,
         });
+        bySource[source] += 1;
+        if (row.is_open) openBySource[source] += 1;
         const category = index.categoryOf(row.id);
         bySeverity[severity] += 1;
         byCategory[category] += 1;
@@ -1417,11 +1439,15 @@ export function bugsRouter(env: Env): Router {
         byCategory,
         byComponent,
         byBrowser,
+        bySource,
+        byAssignee,
+        openByAssignee,
         matrix,
         openBySeverity,
         openByCategory,
         openByComponent,
         openByBrowser,
+        openBySource,
         openMatrix,
         cachedAt: new Date(index.builtAt).toISOString(),
       });
@@ -1505,6 +1531,7 @@ export function bugsRouter(env: Env): Router {
         priority: bug.priority,
         whiteboard: bug.whiteboard,
         description,
+        product: bug.product,
       });
 
       /*
@@ -1765,7 +1792,9 @@ export function bugsRouter(env: Env): Router {
         platform: input.platform ?? 'All',
         ...(input.severity ? { severity: input.severity } : {}),
         ...(input.priority ? { priority: input.priority } : {}),
-        ...(input.whiteboard ? { status_whiteboard: input.whiteboard } : {}),
+        // Every bug filed through this form is a person's work: tag it so the
+        // Source filter and the "Manual … test" badge do not have to guess.
+        status_whiteboard: withSourceTag(input.whiteboard ?? '', 'Manual'),
         /*
          * Omitted unless the filer chose someone. Bugzilla then falls back to
          * the component's `initialowner` - which is exactly what the automated

@@ -2,7 +2,7 @@ import { ArrowRight, CornerDownLeft, Search as SearchIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMe } from '../../api/hooks';
-import { NAV_SECTIONS, type NavItem } from '../../lib/nav';
+import { NAV_SECTIONS, visibleNavItems, type NavItem } from '../../lib/nav';
 import { cn } from '../../lib/utils';
 
 interface Command {
@@ -24,9 +24,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navCommands = useMemo<Command[]>(() => {
     const out: Command[] = [];
     for (const section of NAV_SECTIONS) {
-      if (section.adminOnly && !(permissions?.canManageUsers || permissions?.canManageProducts)) continue;
-      for (const item of section.items) {
-        if (item.permission && !permissions?.[item.permission]) continue;
+      for (const item of visibleNavItems(section, permissions)) {
         if (!item.to) continue;
         const to = item.to;
         out.push({

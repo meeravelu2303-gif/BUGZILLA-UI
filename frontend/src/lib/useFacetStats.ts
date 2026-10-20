@@ -32,7 +32,7 @@ import type { BugQueryParams } from './useBugFilters';
  */
 
 /** The facets whose dropdowns render a per-value count. */
-export const COUNTED_FACETS = ['severity', 'category', 'component', 'browser'] as const;
+export const COUNTED_FACETS = ['severity', 'category', 'component', 'browser', 'source'] as const;
 export type CountedFacet = (typeof COUNTED_FACETS)[number];
 
 export interface FacetStats {

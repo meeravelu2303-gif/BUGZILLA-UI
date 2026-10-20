@@ -73,6 +73,7 @@ export function MyBugs() {
   return (
     <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
+        back={{ to: '/', label: 'Back to dashboard' }}
         icon={UserCircle2}
         title="My Bugs"
         description="Everything that lands on your desk — assigned, reported, or watched."

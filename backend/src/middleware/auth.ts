@@ -35,6 +35,10 @@ export function requireAuth(env: Env) {
         canManageUsers: false,
         canManageProducts: false,
         canTriage: false,
+        canViewUsers: false,
+        canViewProducts: false,
+        canCreateComponents: false,
+        isReporter: false,
         ...(session.permissions ?? {}),
       },
     };

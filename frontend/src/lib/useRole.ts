@@ -32,6 +32,10 @@ export function roleFromPermissions(permissions?: Permissions): DashboardView {
   if (!permissions) return 'developer';
   if (permissions.canManageUsers || permissions.canManageProducts) return 'admin';
   if (permissions.canTriage) return 'qa';
+  // A reporter (office staff who files bugs) is never assigned work, so the
+  // developer backlog would always be empty for them; the QA board, scoped to
+  // "reported by you", is the one that answers their question.
+  if (permissions.isReporter) return 'qa';
   return 'developer';
 }
 
@@ -50,7 +54,8 @@ export function roleFromPermissions(permissions?: Permissions): DashboardView {
 export function availableViews(permissions?: Permissions): DashboardView[] {
   const role = roleFromPermissions(permissions);
   if (role === 'admin') return ['admin', 'qa', 'developer'];
-  if (role === 'qa') return ['qa', 'developer'];
+  // A reporter gets only their own reports; a tester may also look at developer boards.
+  if (role === 'qa') return permissions?.canTriage ? ['qa', 'developer'] : ['qa'];
   return ['developer'];
 }
 

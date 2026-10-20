@@ -109,7 +109,7 @@ export function metaRouter(env: Env): Router {
         }>('/group', { names: poolNames, membership: 1 }),
         directory.get<{
           groups: Array<{ name: string; membership?: Array<{ email?: string }> }>;
-        }>('/group', { names: ['canconfirm', 'editusers', 'editcomponents'], membership: 1 }),
+        }>('/group', { names: ['canconfirm', 'editusers', 'editcomponents', 'reporter'], membership: 1 }),
       ]);
 
       const membersOf = (group: string) =>
@@ -131,6 +131,9 @@ export function metaRouter(env: Env): Router {
       const canConfirm = membersOf('canconfirm');
       const admins = new Set([...membersOf('editusers'), ...membersOf('editcomponents')]);
       const strictTesters = new Set([...canConfirm].filter((email) => !admins.has(email)));
+      // Reporters (office staff who file bugs) are never assignees - the one
+      // exception, as for testers, is owning a component.
+      const reporters = membersOf('reporter');
 
       /*
        * Component owners are always assignable, whatever role they hold.
@@ -184,7 +187,7 @@ export function metaRouter(env: Env): Router {
           if (email === me) return false;
           // Engineering only - unless they own a component, in which case
           // Bugzilla already assigns defects to them.
-          return !strictTesters.has(email) || owners.has(email);
+          return (!strictTesters.has(email) && !reporters.has(email)) || owners.has(email);
         })
         /*
          * Owners of the selected product first, then everyone else, each run
@@ -214,7 +217,19 @@ export function metaRouter(env: Env): Router {
          */
         users: users.map((u) => ({
           ...u,
-          role: admins.has(u.email.toLowerCase()) ? ('admin' as const) : ('developer' as const),
+          /*
+           * 'tester' appears only for a strict tester kept because they OWN a
+           * component (Bugzilla assigns them that component's bugs). Pickers that
+           * mean "developers" - the dashboard's - filter on this; assignee pickers
+           * keep them, labelled.
+           */
+          role: admins.has(u.email.toLowerCase())
+            ? ('admin' as const)
+            : strictTesters.has(u.email.toLowerCase())
+              ? ('tester' as const)
+              : reporters.has(u.email.toLowerCase())
+                ? ('reporter' as const)
+                : ('developer' as const),
         })),
         /*
          * The owner emails for the products asked about, so the picker can
@@ -241,18 +256,33 @@ export function metaRouter(env: Env): Router {
       const directory = new BugzillaClient(env.BUGZILLA_URL, { kind: 'api_key', apiKey: env.BUGZILLA_API_KEY });
       const resp = await directory.get<{
         groups: Array<{ name: string; membership?: Array<{ email?: string; real_name?: string; name?: string; can_login?: boolean }> }>;
-      }>('/group', { names: ['canconfirm', 'editusers', 'editcomponents'], membership: 1 });
+      }>('/group', { names: ['canconfirm', 'editusers', 'editcomponents', 'reporter'], membership: 1 });
 
-      const people = new Map<string, { email: string; name: string; role: 'admin' | 'tester' }>();
+      // Widest role wins when a person is in several groups: admin > tester > reporter.
+      const RANK = { admin: 3, tester: 2, reporter: 1, developer: 0 } as const;
+      const people = new Map<string, { email: string; name: string; role: 'admin' | 'tester' | 'reporter' | 'developer' }>();
       for (const group of resp.groups ?? []) {
-        const isAdminGroup = group.name.toLowerCase() !== 'canconfirm';
+        const g = group.name.toLowerCase();
+        const groupRole = g === 'canconfirm' ? 'tester' : g === 'reporter' ? 'reporter' : 'admin';
         for (const m of group.membership ?? []) {
           if (!m.email || m.can_login === false || isServiceAccount(m.email)) continue;
           const key = m.email.toLowerCase();
           const existing = people.get(key);
-          const role = isAdminGroup || existing?.role === 'admin' ? 'admin' : 'tester';
+          const role = existing && RANK[existing.role] > RANK[groupRole] ? existing.role : groupRole;
           people.set(key, { email: m.email, name: m.real_name || m.name || m.email, role });
         }
+      }
+      /*
+       * Developers file bugs too - for each other, or against the API - so
+       * anyone who has actually REPORTED a bug is offered as well, under the
+       * role 'developer'. Read from the bugs themselves rather than from a
+       * group: listing every developer would offer dozens of names that return
+       * nothing. Cached briefly; it is one `creator`-only search over every bug.
+       */
+      const filers = await bugFilers(directory);
+      for (const [key, who] of filers) {
+        if (people.has(key) || isServiceAccount(who.email)) continue;
+        people.set(key, { ...who, role: 'developer' });
       }
       res.json({ users: [...people.values()].sort((a, b) => a.name.localeCompare(b.name)) });
     } catch (err) {
@@ -261,4 +291,23 @@ export function metaRouter(env: Env): Router {
   });
 
   return router;
+}
+
+/** Everyone who has reported at least one bug, keyed by lower-cased email. Refreshed every five minutes. */
+let filersCache: { at: number; value: Map<string, { email: string; name: string }> } | null = null;
+async function bugFilers(client: BugzillaClient): Promise<Map<string, { email: string; name: string }>> {
+  if (filersCache && Date.now() - filersCache.at < 5 * 60 * 1000) return filersCache.value;
+  const resp = await client.get<{ bugs: Array<{ creator?: string; creator_detail?: { email?: string; real_name?: string; name?: string } }> }>(
+    '/bug',
+    { include_fields: 'creator,creator_detail', limit: 0 }
+  );
+  const value = new Map<string, { email: string; name: string }>();
+  for (const b of resp.bugs ?? []) {
+    const email = b.creator_detail?.email ?? b.creator;
+    if (!email) continue;
+    const key = email.toLowerCase();
+    if (!value.has(key)) value.set(key, { email, name: b.creator_detail?.real_name || b.creator_detail?.name || email });
+  }
+  filersCache = { at: Date.now(), value };
+  return value;
 }

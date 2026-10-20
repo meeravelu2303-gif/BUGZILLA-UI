@@ -2,7 +2,8 @@ import { Bug, ChevronDown, LogOut, Menu, Plus, Search, Settings, X } from 'lucid
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useLogout, useMe } from '../../api/hooks';
-import { NAV_SECTIONS, type NavSection } from '../../lib/nav';
+import { NAV_SECTIONS, visibleNavItems, type NavSection } from '../../lib/nav';
+import type { Permissions } from '../../types';
 import { cn, initials } from '../../lib/utils';
 import { UEducateLogo } from '../brand/UEducateLogo';
 import { CommandPalette } from './CommandPalette';
@@ -22,19 +23,11 @@ function navLinkClasses({ isActive }: { isActive: boolean }): string {
   );
 }
 
-function SidebarSection({
-  section,
-  canSeeAdmin,
-  hasPermission,
-}: {
-  section: NavSection;
-  canSeeAdmin: boolean;
-  hasPermission: (p?: string) => boolean;
-}) {
+function SidebarSection({ section, permissions }: { section: NavSection; permissions?: Permissions }) {
   const [collapsed, setCollapsed] = useState(false);
-  if (section.adminOnly && !canSeeAdmin) return null;
 
-  const items = section.items.filter((item) => hasPermission(item.permission));
+  // A section with nothing visible (e.g. Administration for a developer) is not drawn at all.
+  const items = visibleNavItems(section, permissions);
   if (items.length === 0) return null;
 
   return (
@@ -84,8 +77,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const user = data?.user;
   const permissions = user?.permissions;
-  const canSeeAdmin = Boolean(permissions?.canManageUsers || permissions?.canManageProducts);
-  const hasPermission = (p?: string) => !p || Boolean(permissions?.[p as 'canManageUsers' | 'canManageProducts']);
 
   // ⌘K / Ctrl-K opens the command palette anywhere in the app.
   useEffect(() => {
@@ -155,7 +146,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </NavLink>
         </div>
         {NAV_SECTIONS.map((section) => (
-          <SidebarSection key={section.id} section={section} canSeeAdmin={canSeeAdmin} hasPermission={hasPermission} />
+          <SidebarSection key={section.id} section={section} permissions={permissions} />
         ))}
       </nav>
 

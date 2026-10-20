@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import type { NormalizedBug } from '../schemas/bug';
-import type { Category, Priority, Severity } from './classification';
+import { testTypeLabel, type Category, type Priority, type Severity, type Source, type TestType } from './classification';
 import type { DefectReport } from './defectReport';
 
 /**
@@ -30,6 +30,8 @@ export interface ExportBug extends NormalizedBug {
     priority: Priority;
     category: Category;
     browsers: string[];
+    source: Source;
+    testType: TestType;
   };
   /** Endpoints and Expected/Actual, parsed from the bug's description. */
   report: DefectReport;
@@ -153,15 +155,8 @@ export function currentComments(newestFirst: Comment[]): Comment[] {
 }
 
 /** Mirrors frontend `bugDisplayId`, so the sheet and the screen label bugs identically. */
-export function bugDisplayId(bug: { id: number; alias: string[] }): string {
-  return bug.alias[0] || `KPA-${String(bug.id).padStart(3, '0')}`;
-}
-
-/** Mirrors frontend `TestTypePill`: the product name decides which bench a bug came from. */
-function testTypeOf(product: string): string {
-  if (/\bUI\b/i.test(product)) return 'UI Automation';
-  if (/\bAPI\b/i.test(product) || /\bAdmin\b/i.test(product)) return 'API Automation';
-  return '';
+export function bugDisplayId(bug: { id: number }): string {
+  return `KPA-${String(bug.id).padStart(3, '0')}`;
 }
 
 /** Pale fills matching the app's badge palette - readable when printed, too. */
@@ -282,7 +277,8 @@ export async function buildBugWorkbook(bugs: ExportBug[], ctx: ExportContext): P
       component: bug.component,
       // One endpoint per line: a comma-joined list of URL paths is unreadable.
       endpoints: fitCell(report.endpoints.join('\n')),
-      testType: testTypeOf(bug.product),
+      // Same four labels the list badge shows (UI/API Automation, Manual UI/API test).
+      testType: testTypeLabel(bug.triage.source, bug.triage.testType),
       classification: report.classification,
       severity: bug.triage.severity,
       priority: bug.triage.priority,

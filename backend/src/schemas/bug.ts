@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CATEGORIES, PRIORITIES, SEVERITIES } from '../lib/classification';
+import { CATEGORIES, PRIORITIES, SEVERITIES, SOURCES } from '../lib/classification';
 import { normalizeUser, userDetailSchema } from './common';
 
 /**
@@ -115,6 +115,8 @@ export interface NormalizedBug {
   } | null;
   isCcAccessible: boolean;
   isCreatorAccessible: boolean;
+  /** Original Mantis issue number for bugs imported from Mantis (custom field cf_mantis_ref), else ''. */
+  mantisRef: string;
   flags: { id: number; typeId: number; name: string; status: string; setter: string; requestee: string }[];
 }
 
@@ -165,6 +167,8 @@ export function normalizeBug(raw: RawBug): NormalizedBug {
           },
     isCcAccessible: raw.is_cc_accessible ?? true,
     isCreatorAccessible: raw.is_creator_accessible ?? true,
+    // A custom field, so it only arrives through .passthrough().
+    mantisRef: typeof raw.cf_mantis_ref === 'string' ? raw.cf_mantis_ref : '',
     flags: (raw.flags ?? []).map((f) => ({
       id: f.id,
       typeId: f.type_id,
@@ -298,6 +302,8 @@ export const listBugsQuerySchema = z.object({
    * updated should still be filterable rather than 400.
    */
   browser: repeatable(facetValue),
+  /** Automation (filed by a bench) or Manual (filed by a person) - the `[source:…]` tag. */
+  source: repeatable(z.enum(SOURCES)),
 
   // --- multi-select facets over Bugzilla's own values ---
   product: repeatable(facetValue),
@@ -358,6 +364,7 @@ export const countBugsQuerySchema = listBugsQuerySchema.pick({
   priority: true,
   category: true,
   browser: true,
+  source: true,
   assignedTo: true,
   assignment: true,
   creator: true,

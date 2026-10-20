@@ -1,4 +1,7 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
+import { AppError } from '../lib/errors';
+import { checkUserDeletion, deleteUserViaBugzilla } from '../lib/userDelete';
+import { directoryClient, isServiceAccount } from '../lib/productTransfer';
 import { z } from 'zod';
 import type { Env } from '../config/env';
 import { clearAccessScope } from '../lib/access';
@@ -12,6 +15,13 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 export function adminUsersRouter(env: Env): Router {
   const router = Router();
   const gate = [requireAuth(env), requirePermission('canManageUsers')];
+  /*
+   * Testers may LIST and OPEN accounts, read-only. Bugzilla shows group
+   * membership only to editusers, so their reads go through the service key;
+   * every write below stays on `gate` and the caller's own session.
+   */
+  const viewGate = [requireAuth(env), requirePermission('canViewUsers')];
+  const reader = (req: Request) => (req.sessionUser!.permissions.canManageUsers ? req.bugzilla! : directoryClient(env));
 
   // GET /api/admin/users?search=
   // Bugzilla's User.get requires a match term — it has no "list everyone" call, and — verified
@@ -20,10 +30,10 @@ export function adminUsersRouter(env: Env): Router {
   // narrows it. include_disabled lets the admin see (and re-enable) disabled accounts;
   // groups_membership returns each user's groups so the UI can filter by product access (a
   // product's access is granted through group membership).
-  router.get('/', ...gate, async (req, res, next) => {
+  router.get('/', ...viewGate, async (req, res, next) => {
     try {
       const { search } = parseInput(listUsersQuerySchema, req.query);
-      const client = req.bugzilla!;
+      const client = reader(req);
       const term = search?.trim();
 
       /*
@@ -80,10 +90,10 @@ export function adminUsersRouter(env: Env): Router {
   });
 
   // GET /api/admin/users/:id
-  router.get('/:id', ...gate, async (req, res, next) => {
+  router.get('/:id', ...viewGate, async (req, res, next) => {
     try {
       const { id } = parseInput(idParamSchema, req.params);
-      const resp = await req.bugzilla!.get<{ users: unknown[] }>(`/user/${id}`);
+      const resp = await reader(req).get<{ users: unknown[] }>(`/user/${id}`);
       const user = normalizeAdminUser(rawAdminUserSchema.parse(resp.users[0]));
       res.json({ user });
     } catch (err) {
@@ -162,8 +172,12 @@ export function adminUsersRouter(env: Env): Router {
       const input = parseInput(updateUserSchema, req.body);
       const client = req.bugzilla!;
 
-      const payload: Record<string, string> = {};
+      const payload: Record<string, string | boolean> = {};
       if (input.fullName !== undefined) payload.full_name = input.fullName;
+      // The login. Bugzilla validates the address and refuses one already in use.
+      if (input.email !== undefined) payload.email = input.email;
+      // Bug mail: Bugzilla stores the opposite (disable_mail) and its setter takes that name.
+      if (input.emailEnabled !== undefined) payload.disable_mail = !input.emailEnabled;
       if (input.password !== undefined) payload.password = input.password;
       if (input.disabled === true) payload.login_denied_text = input.disabledReason!.trim();
       if (input.disabled === false) payload.login_denied_text = '';
@@ -225,6 +239,57 @@ export function adminUsersRouter(env: Env): Router {
         ...(skippedGroups.length > 0 ? { skippedGroups } : {}),
         ...(groupError ? { groupError } : {}),
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /*
+   * Safe delete (lib/userDelete.ts): only an account with NO history - nothing
+   * reported, assigned, commented, attached, changed or owned. Everyone else is
+   * disabled instead, so their name stays on their work. The check is read-only
+   * and lets the UI explain why before anyone presses Delete.
+   */
+  const guardDeletable = (req: { sessionUser?: { bzUserId: number } }, id: number, email: string) => {
+    if (req.sessionUser?.bzUserId === id) {
+      throw new AppError(409, 'CONFLICT', 'You cannot delete your own account.');
+    }
+    if (isServiceAccount(email)) {
+      throw new AppError(409, 'CONFLICT', 'This is a service account the Bug Tracker needs. It cannot be deleted.');
+    }
+  };
+
+  router.get('/:id/delete-check', ...gate, async (req, res, next) => {
+    try {
+      const { id } = parseInput(idParamSchema, req.params);
+      const resp = await reader(req).get<{ users: unknown[] }>(`/user/${id}`);
+      const user = normalizeAdminUser(rawAdminUserSchema.parse(resp.users[0]));
+      try {
+        guardDeletable(req, id, user.email);
+      } catch (err) {
+        res.json({ deletable: false, blockers: [err instanceof Error ? err.message : 'Cannot be deleted.'] });
+        return;
+      }
+      res.set('Cache-Control', 'no-store').json(await checkUserDeletion(env.BUGZILLA_URL, req.sessionUser!.bzToken, id));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/:id', ...gate, async (req, res, next) => {
+    try {
+      const { id } = parseInput(idParamSchema, req.params);
+      const { confirmEmail } = parseInput(z.object({ confirmEmail: z.string().trim().min(1) }), req.body);
+      const resp = await reader(req).get<{ users: unknown[] }>(`/user/${id}`);
+      const user = normalizeAdminUser(rawAdminUserSchema.parse(resp.users[0]));
+      if (confirmEmail.toLowerCase() !== user.email.toLowerCase()) {
+        throw new AppError(400, 'VALIDATION', `Type the account's email exactly - "${user.email}" - to confirm.`);
+      }
+      guardDeletable(req, id, user.email);
+      await deleteUserViaBugzilla(env.BUGZILLA_URL, req.sessionUser!.bzToken, id);
+      clearAccessScope();
+      console.info(`[admin] user ${user.email} (id ${id}) deleted by ${req.sessionUser!.email}`);
+      res.status(204).end();
     } catch (err) {
       next(err);
     }

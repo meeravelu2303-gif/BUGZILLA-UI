@@ -92,7 +92,7 @@ export function useResetPassword() {
 export function useReporters(enabled = true) {
   return useQuery({
     queryKey: ['meta', 'reporters'],
-    queryFn: () => api.get<{ users: { email: string; name: string; role: 'admin' | 'tester' }[] }>('/meta/reporters'),
+    queryFn: () => api.get<{ users: { email: string; name: string; role: 'admin' | 'tester' | 'reporter' | 'developer' }[] }>('/meta/reporters'),
     enabled,
     staleTime: 5 * 60 * 1000,
   });
@@ -120,7 +120,7 @@ export interface AssignableUser {
    * Derived by the BFF from Bugzilla groups, not stored anywhere. Optional so
    * a client running against an older backend still renders the name.
    */
-  role?: 'admin' | 'developer';
+  role?: 'admin' | 'developer' | 'tester' | 'reporter';
 }
 
 /**
@@ -382,6 +382,25 @@ export function useCreateUser() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
+  });
+}
+
+/** Read-only: can this account be deleted, and if not, why. Loaded when the dialog opens. */
+export function useUserDeleteCheck(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['admin', 'users', 'delete-check', id],
+    queryFn: () => api.get<{ deletable: boolean; blockers: string[] }>(`/admin/users/${id}/delete-check`),
+    enabled: enabled && id > 0,
+    retry: false,
+    staleTime: 0,
+  });
+}
+
+export function useDeleteUser(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (confirmEmail: string) => api.deleteWithBody<undefined>(`/admin/users/${id}`, { confirmEmail }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
   });
 }
 

@@ -212,6 +212,60 @@ export function categoryOf(whiteboard: string | undefined, description: string |
   return 'Unclassified';
 }
 
+/* ------------------------------------------------------------ source axis */
+
+/**
+ * HOW a bug was filed: by a test bench, or by a person.
+ *
+ * Stored as `[source:automation]` / `[source:manual]` in the whiteboard - the
+ * benches write the first, the app's filing form and the Mantis import write
+ * the second. Bugs filed before the tag existed are classified by the report
+ * itself: every bench report signs off with "Filed by: kpost-testbench…", and
+ * a human filing never does. The backfill script tags those explicitly, so the
+ * fallback only matters until it has run.
+ */
+export const SOURCES = ['Automation', 'Manual'] as const;
+export type Source = (typeof SOURCES)[number];
+
+const SOURCE_TAG = /\[source:(automation|manual)\]/i;
+
+export function sourceOf(whiteboard: string | undefined, description: string | undefined): Source {
+  const tagged = SOURCE_TAG.exec(whiteboard ?? '');
+  if (tagged) return tagged[1].toLowerCase() === 'manual' ? 'Manual' : 'Automation';
+  return /^Filed by: (?!manual\b)/m.test(description ?? '') ? 'Automation' : 'Manual';
+}
+
+/**
+ * Sets the source tag, REPLACING any that is already there: the filing path
+ * decides the source, never the text a filer typed into the whiteboard box.
+ */
+export function withSourceTag(whiteboard: string, source: Source): string {
+  return `${whiteboard.replace(SOURCE_TAG, '').trim()}[source:${source.toLowerCase()}]`;
+}
+
+/**
+ * WHAT was tested: the API surface, or a user interface.
+ *
+ * Not a stored field - it IS the product. The API bench files into "KPost API"
+ * / "KPost Admin", the UI bench into "KPost UI", and the manual products are
+ * apps and web fronts except "API and SERVER Issue". UI is tested first so a
+ * product named "… Admin UI" still reads as UI.
+ */
+export const TEST_TYPES = ['UI', 'API'] as const;
+export type TestType = (typeof TEST_TYPES)[number];
+
+export function testTypeOf(product: string | undefined): TestType {
+  const name = product ?? '';
+  if (/\bUI\b/i.test(name)) return 'UI';
+  if (/\bAPI\b/i.test(name) || /\bAdmin\b/i.test(name)) return 'API';
+  return 'UI';
+}
+
+/** The badge text: "UI Automation", "API Automation", "Manual UI test", "Manual API test". */
+export function testTypeLabel(source: Source, testType: TestType): string {
+  return source === 'Automation' ? `${testType} Automation` : `Manual ${testType} test`;
+}
+
 export interface Classification {
   severity: Severity;
   priority: Priority;
@@ -220,6 +274,10 @@ export interface Classification {
   classification: string | null;
   /** Which browsers the bug was seen on. Empty when the bug carries no tag. */
   browsers: string[];
+  /** Filed by a bench or by a person - see `sourceOf`. */
+  source: Source;
+  /** API or UI, from the product - see `testTypeOf`. */
+  testType: TestType;
 }
 
 /**
@@ -232,9 +290,12 @@ export function classify(raw: {
   priority?: string;
   whiteboard?: string;
   description?: string;
+  product?: string;
 }): Classification {
   const severity = severityOf(raw.severity ?? '', raw.priority ?? '');
   return {
+    source: sourceOf(raw.whiteboard, raw.description),
+    testType: testTypeOf(raw.product),
     severity,
     // Read the priority Bugzilla actually holds; fall back to the band's paired
     // priority so a bug with a blank priority still reads consistently.
@@ -273,6 +334,8 @@ export interface BugFilters {
   category?: Category[];
   /** Playwright project names from the `[browser:…]` whiteboard tag. */
   browser?: string[];
+  /** Automation (bench-filed) or Manual - the `[source:…]` whiteboard tag. */
+  source?: Source[];
   product?: string[];
   component?: string[];
   status?: string[];
@@ -450,7 +513,17 @@ function whiteboardCharts(filters: BugFilters, chart: ReturnType<typeof chartWri
    */
   const wantsUnclassified = selected.includes('Unclassified');
   const browsers = filters.browser ?? [];
-  if (selected.length === 0 && browsers.length === 0) return;
+  // Both sources selected is no filter at all; one source is a plain tag match
+  // (every bug carries a tag once the backfill has run).
+  const sources = [...new Set(filters.source ?? [])];
+  const narrowBySource = sources.length > 0 && sources.length < SOURCES.length;
+  if (selected.length === 0 && browsers.length === 0 && !narrowBySource) return;
+
+  if (narrowBySource) {
+    chart.open();
+    for (const source of sources) chart.push('status_whiteboard', `[source:${source.toLowerCase()}]`);
+    chart.close();
+  }
 
   if (selected.length > 0) {
     /*

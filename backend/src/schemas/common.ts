@@ -31,6 +31,20 @@ export interface Permissions {
    * movable, but cannot reach across and reassign a colleague's.
    */
   canTriage: boolean;
+  /**
+   * Read-only access to the admin Users / Products screens, and adding a
+   * component to a product. Testers (`canconfirm`) get these without being
+   * admins: they may look, and grow a product's module list as they test it,
+   * but creating products and editing/deleting anything stays with
+   * `canManageUsers` / `canManageProducts`. The BFF performs these reads and
+   * the component create with its service key (Bugzilla itself would refuse a
+   * tester), so these flags ARE the enforcement for those calls.
+   */
+  canViewUsers: boolean;
+  canViewProducts: boolean;
+  canCreateComponents: boolean;
+  /** Member of the `reporter` marker group: files bugs, is never assigned any. Gets the "my reports" board. */
+  isReporter: boolean;
 }
 
 /**
@@ -48,5 +62,9 @@ export function derivePermissions(groups: { name: string }[]): Permissions {
     // `editusers` implies it: an admin who can create the accounts should not be
     // blocked from routing work between them.
     canTriage: names.has('canconfirm') || names.has('editusers'),
+    canViewUsers: names.has('editusers') || names.has('canconfirm'),
+    canViewProducts: names.has('editcomponents') || names.has('canconfirm'),
+    canCreateComponents: names.has('editcomponents') || names.has('canconfirm'),
+    isReporter: names.has('reporter'),
   };
 }

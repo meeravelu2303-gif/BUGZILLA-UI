@@ -18,7 +18,7 @@ import { groupIndex } from './productGroups';
  * would immediately need a role per product.
  */
 
-export const ROLES = ['developer', 'tester', 'admin'] as const;
+export const ROLES = ['reporter', 'developer', 'tester', 'admin'] as const;
 export type Role = (typeof ROLES)[number];
 
 /**
@@ -38,18 +38,28 @@ export type Role = (typeof ROLES)[number];
  * create-user form would be a much bigger grant than the label suggests.
  */
 export const ROLE_GROUPS: Record<Role, string[]> = {
+  /*
+   * `reporter` is a plain marker group (ops/bugzilla/add-reporter-role.pl):
+   * office staff who file and follow bugs but neither develop nor test. It
+   * carries no Bugzilla privilege of its own - its only effect is in this app,
+   * which keeps reporters out of every assignee list and shows them their own
+   * reported bugs rather than a developer backlog.
+   */
+  reporter: ['editbugs', 'reporter'],
   developer: ['editbugs'],
   tester: ['editbugs', 'canconfirm'],
   admin: ['editbugs', 'canconfirm', 'editusers', 'editcomponents'],
 };
 
 export const ROLE_LABELS: Record<Role, string> = {
+  reporter: 'Reporter',
   developer: 'Developer',
   tester: 'Tester',
   admin: 'Administrator',
 };
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  reporter: 'Office staff who file and follow bugs. Never assigned work; cannot confirm or triage.',
   developer: 'Files and works bugs in the products they are given. Cannot confirm or triage.',
   tester: 'Files, confirms and triages bugs, and marks duplicates.',
   admin: 'Everything a tester can do, plus managing users and products.',
@@ -96,6 +106,7 @@ export function roleFromGroups(groups: string[]): Role {
   // would report every admin as a tester.
   if (held.has('editusers') || held.has('editcomponents')) return 'admin';
   if (held.has('canconfirm')) return 'tester';
+  if (held.has('reporter')) return 'reporter';
   return 'developer';
 }
 
