@@ -8,7 +8,7 @@ import { cn } from '../../lib/utils';
  * Flat fills, 8px radius, no gradients.
  *
  * The previous button was a pill with a vertical gradient and a coloured halo,
- * because BRANDING.md pinned it to UEducate's own 30px-radius CTA. That brand
+ * because docs/BRANDING.md pinned it to UEducate's own 30px-radius CTA. That brand
  * constraint went with the teal, so the shape follows the new aesthetic: a
  * solid Royal Blue fill, a tight radius, and elevation implied by a ring rather
  * than a glow. Gradients on a control are the single loudest thing on a white

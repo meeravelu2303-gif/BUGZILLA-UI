@@ -22,9 +22,9 @@ export default {
         /**
          * Royal Blue / Electric Cyan - the product accent system.
          *
-         * Replaces the UEducate teal that BRANDING.md documents. That was a
+         * Replaces the UEducate teal that docs/BRANDING.md documents. That was a
          * deliberate product decision, not drift; see the "Accent system" note
-         * in BRANDING.md for what changed and why the teal tokens were kept.
+         * in docs/BRANDING.md for what changed and why the teal tokens were kept.
          *
          * Contrast was MEASURED against white, not eyeballed, because the whole
          * point of the previous system was that the authentic brand colour

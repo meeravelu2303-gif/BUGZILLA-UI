@@ -109,7 +109,7 @@ by review.
 | **[auto]** | Badges are pale fills, dark text, bordered micro-badges | `ui-badges.spec.ts` |
 | **[auto]** | Severity and status hues are visually distinguishable | ✔ |
 | **[auto]** | No badge conveys meaning by colour alone | ✔ glyph or word required |
-| **[manual]** | Full WCAG AA contrast audit across every token pair | partial — see `BRANDING.md` |
+| **[manual]** | Full WCAG AA contrast audit across every token pair | partial — see `docs/BRANDING.md` |
 | **[manual]** | Keyboard-only traversal of the filter bar and table | ⚠ **not covered** |
 | **[manual]** | Screen-reader pass over the bug list | ⚠ **not covered** |
 

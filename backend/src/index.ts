@@ -23,7 +23,7 @@ async function main(): Promise<void> {
 
   /*
    * `trust proxy` decides what `req.ip` and `req.secure` mean. Behind a reverse
-   * proxy (the production layout in DEPLOYMENT.md) the rate limiter keys on the
+   * proxy (the production layout in docs/DEPLOYMENT.md) the rate limiter keys on the
    * client's real address and `COOKIE_SECURE=auto` sees the original scheme.
    */
   app.set('trust proxy', trustProxySetting(env.TRUST_PROXY));

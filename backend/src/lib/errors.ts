@@ -122,7 +122,7 @@ export function scrubNetworkDetail(message: string): string {
 
 /**
  * Bugzilla mixes 400/401/404 inconsistently for what are all really
- * client-input problems (see API_CONTRACT.md #8). We classify by Bugzilla's
+ * client-input problems (see docs/API_CONTRACT.md #8). We classify by Bugzilla's
  * own numeric `code` field instead of trusting its HTTP status.
  */
 export function mapBugzillaError(httpStatus: number, body: { code?: number; message?: string } | undefined): AppError {

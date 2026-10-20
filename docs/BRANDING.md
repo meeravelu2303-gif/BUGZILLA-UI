@@ -1,4 +1,4 @@
-# BRANDING.md
+# Branding
 
 Real brand assets extracted live from `https://www.ueducate.in/` on 2026-08-13. Nothing
 below is guessed — every asset and color was pulled directly from the live site's own

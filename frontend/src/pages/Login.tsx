@@ -471,7 +471,7 @@ function Showcase() {
     <motion.section variants={pageVariants} className="hidden lg:block">
       {/*
         The real brand asset on white. `ueducate-logo.png` carries a charcoal
-        wordmark measured for white backgrounds (BRANDING.md), so this canvas
+        wordmark measured for white backgrounds (docs/BRANDING.md), so this canvas
         suits it exactly - no chip or re-tinting needed, unlike on a dark one.
       */}
       <div className={cn('inline-flex items-center gap-3 rounded-full px-4 py-2', THEME.badge)}>

@@ -44,7 +44,7 @@ database and never modifies its Perl/Template-Toolkit code.
   rejected with Bugzilla error code `304`, mapped to a `403 FORBIDDEN` the UI shows as
   a clean "you don't have permission" state rather than a crash.
 
-See [`API_CONTRACT.md`](./API_CONTRACT.md) for the full live-probed REST contract this
+See [`docs/API_CONTRACT.md`](./docs/API_CONTRACT.md) for the full live-probed REST contract this
 was built against, including exact request/response shapes and Bugzilla's error
 behavior.
 
@@ -60,25 +60,46 @@ and `backend/src/lib/bugzillaAuth.ts`).
 
 ```
 BUGZILLA-UI/
-├── API_CONTRACT.md          # Phase 0 live discovery notes
-├── backend/                 # BFF — Node + Express + TypeScript
-│   ├── .env.example
+├── README.md                    # this file - start here
+├── package.json                 # root scripts: npm run dev / build / typecheck (both apps)
+├── backend/                     # BFF - Node + Express + TypeScript (port 4000)
+│   ├── .env.example             # every setting, documented; copy to .env
 │   └── src/
 │       ├── config/env.ts        # Zod-validated environment config
-│       ├── lib/                 # Bugzilla REST client, auth, typed errors, input validation
-│       ├── middleware/          # requireAuth (per-user token), requirePermission (admin gate), error handler
-│       ├── routes/              # auth, bugs, products, meta, adminUsers, adminProducts
-│       ├── schemas/             # Zod schemas + upstream→normalized mappers
+│       ├── lib/                 # Bugzilla client (JSON-RPC), auth, sessions, password reset,
+│       │                        #   transfer, soft delete, export, rate limits, typed errors
+│       ├── middleware/          # requireAuth (per-user token), requirePermission, error handler
+│       ├── routes/              # auth, bugs, products, meta, proof, admin*
+│       ├── schemas/             # Zod schemas + upstream -> normalized mappers
+│       ├── types/               # Express request augmentation
 │       └── index.ts
-└── frontend/                # React + TypeScript + Vite + Tailwind
-    └── src/
-        ├── api/              # fetch client + React Query hooks
-        ├── components/       # ui/ (glassmorphism design system), layout/, bugs/, dashboard/, admin/
-        ├── context/          # ToastContext
-        ├── pages/            # Login, Dashboard, BugList, BugDetail, CreateBug
-        │   └── admin/        # Users, CreateUser, UserDetail, Products
-        └── types/
+├── frontend/                    # React + TypeScript + Vite + Tailwind (port 5175)
+│   └── src/
+│       ├── api/                 # fetch client + React Query hooks
+│       ├── assets/brand/        # UEducate logo
+│       ├── components/          # ui/ (design system + primitives/), layout/, auth/, account/,
+│       │                        #   bugs/, dashboard/, admin/, brand/
+│       ├── context/             # ToastContext
+│       ├── lib/                 # roles, filters, report model, upload, utilities
+│       ├── pages/               # Login, ForgotPassword, ResetPassword, Dashboard, BugList,
+│       │   └── admin/           #   BugDetail, CreateBug, ... / Users, Products, Groups, ...
+│       └── types/
+├── e2e/                         # Playwright suite (own package.json) + SECURITY-CHECKLIST.md
+├── ops/                         # one-time setup + operations scripts
+│   ├── bugzilla/                # setup-*.pl: REOPENED, soft delete, SMTP, password reset, transfer account
+│   ├── apache/                  # harden-access-log.ps1
+│   ├── windows/                 # register-backup-task.ps1
+│   ├── health-check.ps1         # stack health check
+│   └── verify-transfer.ps1      # end-to-end check of cross-product transfer
+└── docs/
+    ├── DEPLOYMENT.md            # install, configure, run, operate
+    ├── API_CONTRACT.md          # Bugzilla API behaviour + this BFF's endpoints
+    ├── BRANDING.md              # palette, logo, contrast decisions
+    ├── guides/                  # bugzilla-user-guide (.md / .html / .docx / .pdf) for the team
+    └── reports/                 # production-audit (point-in-time, 17 Oct 2026)
 ```
+
+Setup, Bugzilla configuration and operations: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
 
 ## Setup
 
@@ -141,7 +162,7 @@ Both pass cleanly with zero errors.
 
 Every error response has the same shape: `{ error: true, status, code, message }`,
 classified by Bugzilla's own numeric error code rather than its (inconsistently mixed)
-HTTP status — see `API_CONTRACT.md` §8 (and §12 for the admin-specific error catalog)
+HTTP status — see `docs/API_CONTRACT.md` §8 (and §12 for the admin-specific error catalog)
 for why that mattered.
 
 ## Why some admin stays native
@@ -160,7 +181,7 @@ Two different reasons drive this boundary, and it matters which one applies wher
 
 1. **It's not exposed at all.** `PUT /component/{id}` returns a REST `404` on this
    Bugzilla version — component editing after creation has no REST path, full stop
-   (confirmed live, see `API_CONTRACT.md` §12.3). There's nothing to build here even if
+   (confirmed live, see `docs/API_CONTRACT.md` §12.3). There's nothing to build here even if
    we wanted to.
 2. **It's deliberately not used, even though it might exist.** Group/permission
    membership editing is the kind of security-critical, mature, upgrade-sensitive

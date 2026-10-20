@@ -5,7 +5,7 @@ import { normalizeUser, userDetailSchema } from './common';
 /**
  * Loose schema for a raw Bugzilla bug object (list item or detail). Uses
  * .passthrough() because Bugzilla exposes custom/per-product fields we don't
- * want to reject - see API_CONTRACT.md #10.
+ * want to reject - see docs/API_CONTRACT.md #10.
  */
 export const rawBugSchema = z
   .object({

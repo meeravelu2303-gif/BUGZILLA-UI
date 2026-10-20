@@ -36,7 +36,7 @@ export interface Permissions {
 /**
  * Admin capability is derived from the Bugzilla groups on the user's own
  * record (self-lookup always returns full group detail regardless of
- * privilege - see API_CONTRACT.md §12). Bugzilla itself remains the real
+ * privilege - see docs/API_CONTRACT.md §12). Bugzilla itself remains the real
  * enforcement point: every admin write is re-checked live and rejected with
  * error code 304 if these have gone stale mid-session.
  */

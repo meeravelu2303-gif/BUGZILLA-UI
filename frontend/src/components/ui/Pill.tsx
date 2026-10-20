@@ -33,7 +33,7 @@ export type Tone = 'slate' | 'teal' | 'amber' | 'emerald' | 'purple' | 'violet' 
 
 /*
  * Every tone is AA against its own background at this text size, per the
- * contrast work recorded in BRANDING.md. Severity colours stay semantic - the
+ * contrast work recorded in docs/BRANDING.md. Severity colours stay semantic - the
  * brand palette themes the chrome, never the signals.
  *
  * The `teal` tone is now ROYAL BLUE: it resolves through the `brand-*` scale,

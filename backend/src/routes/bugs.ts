@@ -1759,7 +1759,7 @@ export function bugsRouter(env: Env): Router {
         component: input.component,
         summary: input.summary,
         description: input.description ?? '',
-        // Brief-mandated defaults - this Bugzilla instance requires both fields explicitly (API_CONTRACT.md #7).
+        // Brief-mandated defaults - this Bugzilla instance requires both fields explicitly (docs/API_CONTRACT.md #7).
         version: input.version ?? 'unspecified',
         op_sys: input.opSys ?? 'All',
         platform: input.platform ?? 'All',

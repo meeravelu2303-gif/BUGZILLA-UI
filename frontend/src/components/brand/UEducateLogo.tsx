@@ -1,14 +1,14 @@
 import logoUrl from '../../assets/brand/ueducate-logo.png';
 import { cn } from '../../lib/utils';
 
-/** Intrinsic size of the real asset (see BRANDING.md). */
+/** Intrinsic size of the real asset (see docs/BRANDING.md). */
 const NATURAL_WIDTH = 159;
 const NATURAL_HEIGHT = 49;
 const ASPECT = NATURAL_WIDTH / NATURAL_HEIGHT;
 
 /**
  * The real UEducate wordmark (shield + "UEDUCATE"), extracted from the live site's
- * own header - see BRANDING.md.
+ * own header - see docs/BRANDING.md.
  *
  * Width is computed explicitly from the intrinsic aspect ratio rather than left to
  * `width: auto`: inside a flex *column*, the default `align-items: stretch` will
