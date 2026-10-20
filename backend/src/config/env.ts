@@ -67,6 +67,13 @@ const envSchema = z
      * ever exported. Falls back to SESSION_SECRET when unset, for compatibility.
      */
     PROOF_LINK_SECRET: z.string().min(16).optional(),
+    /**
+     * The address browsers use to reach native Bugzilla, for the app's "Edit in
+     * Bugzilla" links (e.g. http://192.168.0.50 or https://bugs.example.com).
+     * Optional: when unset, Bugzilla's own `urlbase` parameter is used. Never
+     * "localhost" - that is each viewer's own machine.
+     */
+    BUGZILLA_PUBLIC_URL: z.string().url().optional(),
     /** Enables the HSTS header. Set only once the site is served over HTTPS end to end. */
     HSTS: bool('false'),
     /**

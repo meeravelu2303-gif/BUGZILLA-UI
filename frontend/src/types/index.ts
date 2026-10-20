@@ -114,6 +114,9 @@ export interface Attachment {
 export interface Product {
   id: number;
   name: string;
+  description?: string;
+  /** Admin product list only: every bug in the product. Delete is possible only at 0. */
+  bugCount?: number;
   isActive: boolean;
   components: { name: string; defaultAssignee: string }[];
   versions: string[];
@@ -252,6 +255,7 @@ export interface CreateProductInput {
 }
 
 export interface UpdateProductInput {
+  name?: string;
   description?: string;
   isActive?: boolean;
 }

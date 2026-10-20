@@ -62,8 +62,18 @@ export const RESOLUTION_VALUES = [
 /** Params the list/count/stats endpoints understand, built from the URL. */
 export type BugQueryParams = Record<string, string | number | string[] | undefined>;
 
+/**
+ * People filters arriving from links (the dashboards' "Open full list" and
+ * stat cards). Single-valued and passed straight to the API's assignee /
+ * reporter filters; shown as chips so a filtered list never looks like the
+ * whole one.
+ */
+const PERSON_KEYS = ['assignedTo', 'creator'] as const;
+type PersonKey = (typeof PERSON_KEYS)[number];
+const PERSON_LABELS: Record<PersonKey, string> = { assignedTo: 'Assigned to', creator: 'Reported by' };
+
 export interface ActiveChip {
-  key: FacetKey | 'search' | 'date';
+  key: FacetKey | PersonKey | 'search' | 'date';
   value: string;
   label: string;
 }
@@ -198,6 +208,10 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
         label: `${FACET_LABELS[key]}: ${value}`,
       }))
     );
+    for (const key of PERSON_KEYS) {
+      const who = params.get(key);
+      if (who) chips.push({ key, value: who, label: `${PERSON_LABELS[key]}: ${who}` });
+    }
     const search = params.get('search');
     if (search) chips.push({ key: 'search', value: search, label: `Search: ${search}` });
     if (filters.from || filters.to) {
@@ -229,7 +243,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     () =>
       commit((next) => {
         for (const key of FACET_KEYS) next.delete(key);
-        for (const k of ['search', 'dateField', 'from', 'to']) next.delete(k);
+        for (const k of ['search', 'dateField', 'from', 'to', ...PERSON_KEYS]) next.delete(k);
       }),
     [commit]
   );
@@ -294,8 +308,12 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     }
     if (showDeleted) out.deleted = 'only';
     if (assignment) out.assignment = assignment;
+    for (const key of PERSON_KEYS) {
+      const who = params.get(key)?.trim();
+      if (who) out[key] = who;
+    }
     return out;
-  }, [filters, showDeleted, assignment]);
+  }, [filters, showDeleted, assignment, params]);
 
   return {
     filters,

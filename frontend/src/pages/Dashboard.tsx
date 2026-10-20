@@ -1,10 +1,12 @@
 import { AlertCircle, AlertOctagon, Bug as BugIcon, CheckCircle2, CircleDot, LayoutDashboard, Loader2, Lock, RotateCcw } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { useBugCounts, useBugStats, useBugs, useMe, useMeta } from '../api/hooks';
+import { useAssignableUsers, useBugCounts, useBugStats, useBugs, useMe, useMeta } from '../api/hooks';
 import { AdminDashboard } from '../components/dashboard/AdminDashboard';
 import { DeveloperDashboard } from '../components/dashboard/DeveloperDashboard';
+import { DeveloperPicker } from '../components/dashboard/DeveloperPicker';
 import { QaDashboard } from '../components/dashboard/QaDashboard';
+import { ReporterPicker } from '../components/dashboard/ReporterPicker';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/primitives/tabs';
 import { VIEW_LABELS, useDashboardView, type DashboardView } from '../lib/useRole';
 import { BarListChart, type BarListItem } from '../components/dashboard/BarListChart';
@@ -331,6 +333,47 @@ export function Dashboard() {
   const { data } = useMe();
   const email = data?.user.email ?? '';
 
+  /*
+   * Admins and testers can look at any developer's board, not just their own -
+   * theirs is usually empty, because bugs are assigned to developers. Kept in
+   * the URL (?dev=email) so a refresh or a shared link shows the same person.
+   * Developers only ever see their own board, and the server scopes their data
+   * the same way regardless.
+   */
+  const canPickDeveloper = allowed.includes('qa') || allowed.includes('admin');
+  const [params, setParams] = useSearchParams();
+  const devEmail = canPickDeveloper ? (params.get('dev') ?? '') : '';
+  // Same cached request the picker makes, so a name survives a refresh of ?dev=.
+  const { data: people } = useAssignableUsers();
+  const devName = people?.users.find((u) => u.email.toLowerCase() === devEmail.toLowerCase())?.name ?? '';
+  /*
+   * Admins can narrow the QA board to one reporter (?reporter=email), on the
+   * same terms as the developer picker above.
+   */
+  const canPickReporter = allowed.includes('admin');
+  const reporterEmail = canPickReporter ? (params.get('reporter') ?? '') : '';
+  const pickReporter = (next: string) => {
+    setParams(
+      (p) => {
+        if (next) p.set('reporter', next);
+        else p.delete('reporter');
+        return p;
+      },
+      { replace: true }
+    );
+  };
+
+  const pickDeveloper = (next: string) => {
+    setParams(
+      (p) => {
+        if (next) p.set('dev', next);
+        else p.delete('dev');
+        return p;
+      },
+      { replace: true }
+    );
+  };
+
   const tabs: Array<{ id: DashboardView | 'overview'; label: string }> = [
     ...allowed.map((v) => ({ id: v, label: VIEW_LABELS[v] })),
     { id: 'overview' as const, label: 'Overview' },
@@ -355,7 +398,9 @@ export function Dashboard() {
       <PageHeader
         icon={LayoutDashboard}
         title="Dashboard"
-        description={DESCRIPTIONS[tab]}
+        description={
+          tab === 'developer' && devEmail ? `What is assigned to ${devName || devEmail}, worst first.` : DESCRIPTIONS[tab]
+        }
       />
 
       {/* A single available view needs no rail - it would be a tab group of one. */}
@@ -371,12 +416,22 @@ export function Dashboard() {
 
           {allowed.includes('qa') && (
             <TabsContent value="qa">
-              <QaDashboard />
+              {canPickReporter && <ReporterPicker value={reporterEmail} onChange={pickReporter} />}
+              {/* Keyed by reporter so lists and dialogs reset on a switch. */}
+              <QaDashboard key={reporterEmail || 'everyone'} reporter={reporterEmail || undefined} />
             </TabsContent>
           )}
           {allowed.includes('developer') && (
             <TabsContent value="developer">
-              <DeveloperDashboard email={email} />
+              {canPickDeveloper && (
+                <DeveloperPicker value={devEmail} onChange={pickDeveloper} meName={data?.user.realName || email} />
+              )}
+              {/* Keyed by person so the selected bug and list state reset on a switch. */}
+              <DeveloperDashboard
+                key={devEmail || email}
+                email={devEmail || email}
+                name={devEmail ? devName || devEmail : undefined}
+              />
             </TabsContent>
           )}
           {allowed.includes('admin') && (

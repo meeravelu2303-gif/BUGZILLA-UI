@@ -88,6 +88,16 @@ export function useResetPassword() {
   });
 }
 
+/** Testers and admins - the people who report bugs (QA dashboard reporter filter). */
+export function useReporters(enabled = true) {
+  return useQuery({
+    queryKey: ['meta', 'reporters'],
+    queryFn: () => api.get<{ users: { email: string; name: string; role: 'admin' | 'tester' }[] }>('/meta/reporters'),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useChangePassword() {
   return useMutation({
     mutationFn: (input: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
@@ -152,11 +162,12 @@ export function useProducts(options?: { forFiling?: boolean }) {
   });
 }
 
-export function useBugs(params: BugQueryParams) {
+export function useBugs(params: BugQueryParams, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['bugs', params],
     queryFn: () => api.get<BugListResponse>(`/bugs${buildQuery(params)}`),
     placeholderData: (prev) => prev,
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -411,8 +422,21 @@ export function useCreateProduct() {
 export function useUpdateProduct(id: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: UpdateProductInput) => api.patch<{ product: Product }>(`/admin/products/${id}`, input),
+    mutationFn: (input: UpdateProductInput) =>
+      api.patch<{ product: Product; warnings?: string[] }>(`/admin/products/${id}`, input),
     onSuccess: () => invalidateProductLists(qc),
+  });
+}
+
+/** Deletes an EMPTY product through Bugzilla's own admin page; refused while it has bugs. */
+export function useDeleteProduct(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (confirmName: string) => api.deleteWithBody<undefined>(`/admin/products/${id}`, { confirmName }),
+    onSuccess: () => {
+      invalidateProductLists(qc);
+      qc.invalidateQueries({ queryKey: ['meta'] });
+    },
   });
 }
 

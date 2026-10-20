@@ -135,6 +135,7 @@ COOKIE_SECURE=auto                             # auto = Secure when served over 
 HSTS=false                                     # true once the site is HTTPS end to end
 TRUST_PROXY=false                              # 1 behind one reverse proxy (production), false when direct
 SESSION_STORE=file                             # file (survives restarts) | redis (multi-instance) | memory (dev)
+# BUGZILLA_PUBLIC_URL=http://192.168.0.50     # browser-facing Bugzilla address; default: Bugzilla's urlbase
 # SESSION_DIR=D:\bugtracker\sessions           # file store location (default: backend\.sessions)
 # REDIS_URL=redis://127.0.0.1:6379/0           # required for SESSION_STORE=redis
 CORS_ORIGIN=http://localhost:5175

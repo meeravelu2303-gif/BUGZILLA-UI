@@ -1,4 +1,4 @@
-import { AlertOctagon, ArrowUpRight, CheckCircle2, Inbox, Loader2, RotateCcw } from 'lucide-react';
+import { AlertOctagon, ArrowUpRight, Boxes, CheckCircle2, Clock, FileText, Inbox, ListTodo, Loader2, Package, RotateCcw, UserRound } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -8,7 +8,8 @@ import { drawerVariants, listVariants, pageVariants } from '../../lib/motion';
 import { bugDisplayId, cn, timeAgo } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
-import { SeverityPill, StatusPill } from '../ui/Pill';
+import { CategoryPill, PriorityPill, SeverityPill, StatusPill } from '../ui/Pill';
+import { DescriptionReport } from '../bugs/DescriptionReport';
 import { Skeleton } from '../ui/Skeleton';
 import { StatCard } from '../ui/StatCard';
 import {
@@ -49,23 +50,50 @@ function bandRank(severity: Severity): number {
 
 const severityOf = (bug: Bug): Severity => bug.triage?.severity ?? 'Unclassified';
 
-export function DeveloperDashboard({ email }: { email: string }) {
+/**
+ * One developer's board. `name` is set when someone else's board is being
+ * viewed (an admin or tester picking a developer on the Dashboard); unset, it
+ * is the signed-in user's own, and the wording stays first-person.
+ */
+export function DeveloperDashboard({ email, name }: { email: string; name?: string }) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
-
-  /*
-   * `assignedTo` is the server-side filter, so this is the real backlog rather
-   * than a page of all bugs filtered in the browser - which would miss anything
-   * past the list endpoint's cap.
-   */
-  const { data, isLoading, isError } = useBugs({
-    assignedTo: email,
-    limit: BACKLOG_LIMIT,
-    offset: 0,
-    sortBy: 'importance',
-    sortDir: 'asc',
-  });
+  const isSelf = !name;
+  const first = name?.trim().split(/\s+/)[0] ?? '';
+  // Wording that follows whose board this is.
+  const t = {
+    openBacklog: isSelf ? 'My open backlog' : 'Open backlog',
+    highSeverity: isSelf ? 'My blockers / critical' : 'Blockers / critical',
+    resolved: isSelf ? 'Resolved by me' : `Resolved by ${first}`,
+    backlog: isSelf ? 'My backlog' : `${first}'s backlog`,
+    empty: isSelf ? 'No open bugs are assigned to you right now.' : `No open bugs are assigned to ${name} right now.`,
+  };
+  // "My Bugs" is the SIGNED-IN user's page; someone else's full list is a search.
+  const fullListHref = isSelf ? '/my-bugs' : `/bugs?assignedTo=${encodeURIComponent(email)}`;
 
   const { data: meta } = useMeta();
+  const openStatusList = (meta?.workflow ?? []).filter((w) => w.isOpen).map((w) => w.status);
+
+  /*
+   * `assignedTo` AND the open statuses are server-side filters, so this is the
+   * real backlog rather than a page filtered in the browser. Filtering only by
+   * assignee used to fill the page with the developer's RESOLVED bugs first -
+   * someone with more closed than BACKLOG_LIMIT bugs saw an empty backlog while
+   * the "My open bugs" card counted dozens.
+   *
+   * Waits for the status list: without `status` the API returns every status.
+   */
+  const { data, isLoading: backlogQueryLoading, isError } = useBugs(
+    {
+      assignedTo: email,
+      status: openStatusList,
+      limit: BACKLOG_LIMIT,
+      offset: 0,
+      sortBy: 'importance',
+      sortDir: 'asc',
+    },
+    { enabled: email !== '' && openStatusList.length > 0 }
+  );
+  const isLoading = backlogQueryLoading || openStatusList.length === 0;
 
   /*
    * EVERY card on this board is scoped to the signed-in developer - each query
@@ -112,7 +140,7 @@ export function DeveloperDashboard({ email }: { email: string }) {
   );
 
   /*
-   * Blocker + critical + major, counted from the raw Bugzilla severities of my
+   * Blocker + critical, counted from the raw Bugzilla severities of my
    * OPEN bugs.
    *
    * Read from `bySeverity` rather than by applying a severity filter, because
@@ -120,7 +148,9 @@ export function DeveloperDashboard({ email }: { email: string }) {
    * filtering would quietly drop a `critical` bug sitting at P2. Tallying the
    * raw values asks the question the card actually poses.
    */
-  const HIGH = ['blocker', 'critical', 'major'];
+  // Blocker + critical only - the same rule as the QA board's "Blocker / critical" tile. Major
+  // was counted too, and since most open bugs are major the card read close to the whole backlog.
+  const HIGH = ['blocker', 'critical'];
   const myHighSeverity = HIGH.reduce((n, key) => n + (myOpen?.counts.bySeverity?.[key] ?? 0), 0);
 
   const bugs = useMemo(() => (data?.bugs ?? []).filter((b) => b.isOpen), [data]);
@@ -157,7 +187,7 @@ export function DeveloperDashboard({ email }: { email: string }) {
       >
         <motion.div variants={pageVariants}>
           <StatCard
-            label="My open backlog"
+            label={t.openBacklog}
             value={myOpen?.counts.total ?? 0}
             icon={Inbox}
             tone="brand"
@@ -167,11 +197,11 @@ export function DeveloperDashboard({ email }: { email: string }) {
         </motion.div>
         <motion.div variants={pageVariants}>
           <StatCard
-            label="My high severity"
+            label={t.highSeverity}
             value={myHighSeverity}
             icon={AlertOctagon}
             tone="rose"
-            hint="Blocker, critical or major"
+            hint="Open bugs, blocker or critical"
           />
         </motion.div>
         <motion.div variants={pageVariants}>
@@ -196,7 +226,7 @@ export function DeveloperDashboard({ email }: { email: string }) {
         </motion.div>
         <motion.div variants={pageVariants}>
           <StatCard
-            label="Resolved by me"
+            label={t.resolved}
             value={myResolved?.counts.total ?? 0}
             icon={CheckCircle2}
             tone="emerald"
@@ -211,15 +241,29 @@ export function DeveloperDashboard({ email }: { email: string }) {
         single column below lg, where there is no room for two.
       */}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <section className="surface overflow-hidden">
-          <header className="flex items-center justify-between border-b border-hairline px-5 py-4">
-            <h2 className="font-display text-sm font-semibold text-slate-900">My backlog</h2>
-            <Link to="/my-bugs" className="focus-ring rounded text-xs font-medium text-brand-700 hover:text-brand-800">
-              Open full list
+        <section className={PANEL_SHELL}>
+          <span aria-hidden className="h-1 shrink-0 bg-gradient-to-r from-brand-500 via-brand-400 to-ueducate-accent" />
+          <header className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-600/15">
+                <ListTodo className="h-4 w-4" aria-hidden />
+              </span>
+              <h2 className="font-display text-sm font-semibold text-slate-900">{t.backlog}</h2>
+              {!isLoading && bugs.length > 0 && (
+                <span className="rounded-full bg-slate-900/[0.05] px-2 py-0.5 text-2xs font-semibold tabular-nums text-slate-600 ring-1 ring-inset ring-slate-900/10">
+                  {bugs.length}
+                </span>
+              )}
+            </div>
+            <Link
+              to={fullListHref}
+              className="focus-ring inline-flex items-center gap-1 rounded text-xs font-medium text-brand-700 hover:text-brand-800"
+            >
+              Open full list <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
             </Link>
           </header>
 
-          <div className="max-h-[34rem] overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
             {isLoading && (
               <div className="space-y-2 p-4">
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -236,15 +280,22 @@ export function DeveloperDashboard({ email }: { email: string }) {
               <EmptyState
                 icon={CheckCircle2}
                 title="Nothing assigned"
-                description="No open bugs are assigned to you right now."
+                description={t.empty}
               />
             )}
 
             {grouped.map(([severity, list]) => (
               <div key={severity}>
-                <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-hairline bg-slate-50/95 px-5 py-2.5 backdrop-blur">
+                <div
+                  className={cn(
+                    'sticky top-0 z-10 flex items-center gap-2 border-b border-l-4 border-hairline px-5 py-2 backdrop-blur',
+                    SEVERITY_GROUP[severity]
+                  )}
+                >
                   <SeverityPill severity={severity} />
-                  <span className="text-2xs font-medium text-slate-500">{list.length}</span>
+                  <span className="text-2xs font-semibold tabular-nums text-slate-500">
+                    {list.length} {list.length === 1 ? 'bug' : 'bugs'}
+                  </span>
                 </div>
                 <ul>
                   {list.map((bug) => (
@@ -284,19 +335,36 @@ function BacklogRow({ bug, selected, onSelect }: { bug: Bug; selected: boolean; 
            * tint alone, "selected" and "hovered" look alike, and on a list you
            * arrow through that ambiguity is constant.
            */
-          'focus-ring flex w-full items-start gap-3 border-b border-hairline px-5 py-3.5 text-left transition-colors duration-200',
-          selected
-            ? 'border-l-2 border-l-brand-600 bg-brand-50/70 pl-[18px]'
-            : 'border-l-2 border-l-transparent hover:bg-slate-50/80'
+          'focus-ring relative flex w-full flex-col gap-2 border-b border-hairline py-3.5 pl-6 pr-5 text-left transition-all duration-200',
+          selected ? 'bg-white shadow-[inset_0_0_0_1px_rgb(37_99_235_/_0.18)]' : 'hover:bg-slate-50/80'
         )}
       >
-        <span className="mt-0.5 font-mono text-2xs text-slate-400">{bugDisplayId(bug)}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-slate-900">{bug.summary}</span>
-          <span className="mt-1.5 flex flex-wrap items-center gap-2 text-2xs text-slate-500">
-            <StatusPill status={bug.status} />
+        {/* Severity accent, the same colour as the reading pane's top band; full strength when selected. */}
+        <span
+          aria-hidden
+          className={cn(
+            'absolute inset-y-0 left-0 w-1 bg-gradient-to-b',
+            SEVERITY_BAND[severityOf(bug)],
+            selected ? 'opacity-100' : 'opacity-40'
+          )}
+        />
+        <span className="flex items-center gap-2">
+          <span className="rounded-md bg-slate-900/[0.05] px-1.5 py-0.5 font-mono text-2xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-900/10">
+            {bugDisplayId(bug)}
+          </span>
+          <StatusPill status={bug.status} />
+        </span>
+        <span className={cn('line-clamp-2 text-sm font-medium leading-snug', selected ? 'text-brand-900' : 'text-slate-900')}>
+          {bug.summary}
+        </span>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-slate-500">
+          <span className="inline-flex min-w-0 items-center gap-1">
+            <Boxes className="h-3 w-3 shrink-0 text-violet-600" aria-hidden />
             <span className="truncate">{bug.component}</span>
-            <span>· {timeAgo(bug.lastChangeTime)}</span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3 w-3 text-amber-600" aria-hidden />
+            {timeAgo(bug.lastChangeTime)}
           </span>
         </span>
       </button>
@@ -324,7 +392,7 @@ function DetailPane({ bugId }: { bugId: number | null }) {
    * long queue now leaves the bug you are reading in place, and a one-line
    * summary no longer forces a half-empty column the height of fifty rows.
    */
-  const shell = 'surface-raised sticky top-6 flex max-h-[calc(100vh-7rem)] min-h-[26rem] flex-col overflow-hidden';
+  const shell = PANEL_SHELL;
 
   if (bugId === null) {
     return (
@@ -393,29 +461,63 @@ function DetailPane({ bugId }: { bugId: number | null }) {
       animate="visible"
       className={shell}
     >
-      <header className="flex items-start justify-between gap-4 border-b border-hairline px-7 py-6">
-        <div className="min-w-0">
-          <p className="font-mono text-2xs tracking-wide text-slate-400">{bugDisplayId(bug)}</p>
-          {/* Display face and a generous measure: this is the one block on the
-              dashboard someone actually reads rather than scans. */}
-          <h2 className="mt-1.5 font-display text-lg font-semibold leading-snug tracking-tight text-slate-900">
-            {bug.summary}
-          </h2>
-          <p className="mt-2 text-xs text-slate-500">
-            {bug.product} · {bug.component}
-          </p>
+      {/* Severity reads before a word does: a thin band in the bug's own colour. */}
+      <span aria-hidden className={cn('h-1 shrink-0 bg-gradient-to-r', SEVERITY_BAND[severityOf(bug)])} />
+
+      <header className="border-b border-hairline px-7 pb-5 pt-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="rounded-md bg-slate-900/[0.05] px-2 py-0.5 font-mono text-2xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-900/10">
+              {bugDisplayId(bug)}
+            </span>
+            <StatusPill status={bug.status} />
+            {bug.triage && <SeverityPill severity={bug.triage.severity} />}
+            {bug.triage && bug.triage.priority !== 'Unclassified' && <PriorityPill priority={bug.triage.priority} />}
+            {bug.triage && bug.triage.category !== 'Unclassified' && <CategoryPill category={bug.triage.category} />}
+          </div>
+          <Button asChild variant="secondary" size="sm">
+            <Link to={`/bugs/${bug.id}`}>
+              Open <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
         </div>
-        <Button asChild variant="secondary" size="sm">
-          <Link to={`/bugs/${bug.id}`}>
-            Open <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
-        </Button>
+
+        {/* Display face and a generous measure: this is the one block on the
+            dashboard someone actually reads rather than scans. */}
+        <h2 className="mt-3 font-display text-lg font-semibold leading-snug tracking-tight text-slate-900">{bug.summary}</h2>
+
+        <dl className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
+          <div className="flex items-center gap-1.5">
+            <Package className="h-3.5 w-3.5 text-brand-600" aria-hidden />
+            <dt className="sr-only">Product</dt>
+            <dd className="font-medium text-slate-700">{bug.product}</dd>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Boxes className="h-3.5 w-3.5 text-violet-600" aria-hidden />
+            <dt className="sr-only">Component</dt>
+            <dd className="font-medium text-slate-700">{bug.component}</dd>
+          </div>
+          {bug.assignedTo && (
+            <div className="flex items-center gap-1.5">
+              <UserRound className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+              <dt className="sr-only">Assignee</dt>
+              <dd className="font-medium text-slate-700">{bug.assignedTo.name || bug.assignedTo.email}</dd>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-amber-600" aria-hidden />
+            <dt className="sr-only">Last updated</dt>
+            <dd>Updated {timeAgo(bug.lastChangeTime)}</dd>
+          </div>
+        </dl>
       </header>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-slate-50/50 px-7 py-4">
+      <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-gradient-to-r from-brand-50/70 via-white to-white px-7 py-3">
+        <span className="mr-1 text-2xs font-semibold uppercase tracking-wider text-slate-400">Quick change</span>
         <QuickMenu
           label="Status"
           current={bug.status}
+          dot={STATUS_DOT[bug.status] ?? 'bg-slate-400'}
           options={transitions}
           onPick={applyStatus}
           busy={update.isPending}
@@ -424,6 +526,7 @@ function DetailPane({ bugId }: { bugId: number | null }) {
         <QuickMenu
           label="Severity"
           current={bug.severity}
+          dot={RAW_SEVERITY_DOT[bug.severity.toLowerCase()] ?? 'bg-slate-400'}
           options={meta?.severities ?? []}
           onPick={applySeverity}
           busy={update.isPending}
@@ -432,21 +535,71 @@ function DetailPane({ bugId }: { bugId: number | null }) {
         {update.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
       </div>
 
-      {/* `max-w-[72ch]` caps the measure: past roughly 75 characters the eye
-          loses the start of the next line, and a wide pane would otherwise run
-          a description to the full column width. */}
+      {/* The report in the same sectioned layout as the bug page - Summary,
+          Steps, Expected / Actual, curl - rather than one grey wall of text. */}
       <div className="flex-1 overflow-y-auto px-7 py-6">
-        <p className="max-w-[72ch] whitespace-pre-wrap break-words text-sm leading-[1.7] text-slate-600">
-          {bug.description?.trim() || 'This bug has no description.'}
+        <p className="mb-3 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider text-slate-400">
+          <FileText className="h-3.5 w-3.5" aria-hidden /> Report
         </p>
+        {bug.description?.trim() ? (
+          <DescriptionReport description={bug.description} />
+        ) : (
+          <p className="text-sm text-slate-500">This bug has no description.</p>
+        )}
       </div>
     </motion.section>
   );
 }
 
+/**
+ * Both columns of the split pane share one shell - same surface, same height on
+ * desktop - so the list and the bug being read line up as one board instead of
+ * two unrelated cards.
+ */
+const PANEL_SHELL =
+  'surface-raised flex flex-col overflow-hidden min-h-[26rem] max-h-[44rem] lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)] lg:max-h-none';
+
+/** Severity group header tints in the backlog list - same hues as the bands. */
+const SEVERITY_GROUP: Record<Severity, string> = {
+  Critical: 'border-l-rose-500 bg-rose-50/90',
+  Major: 'border-l-orange-500 bg-orange-50/90',
+  Minor: 'border-l-sky-500 bg-sky-50/90',
+  Trivial: 'border-l-slate-400 bg-slate-50/95',
+  Unclassified: 'border-l-brand-500 bg-brand-50/80',
+};
+
+/** The top band of the reading pane, by severity - matched to SeverityPill's tones. */
+const SEVERITY_BAND: Record<Severity, string> = {
+  Critical: 'from-rose-500 via-rose-400 to-orange-400',
+  Major: 'from-orange-500 via-amber-400 to-amber-300',
+  Minor: 'from-sky-500 via-sky-400 to-cyan-300',
+  Trivial: 'from-slate-400 via-slate-300 to-slate-200',
+  Unclassified: 'from-brand-500 via-brand-400 to-ueducate-accent',
+};
+
+/** Colour dots for the quick-change buttons, so the current value reads at a glance. */
+const STATUS_DOT: Record<string, string> = {
+  UNCONFIRMED: 'bg-slate-400',
+  CONFIRMED: 'bg-amber-500',
+  IN_PROGRESS: 'bg-sky-500',
+  REOPENED: 'bg-orange-500',
+  RESOLVED: 'bg-emerald-500',
+  VERIFIED: 'bg-emerald-600',
+};
+const RAW_SEVERITY_DOT: Record<string, string> = {
+  blocker: 'bg-rose-600',
+  critical: 'bg-rose-500',
+  major: 'bg-orange-500',
+  normal: 'bg-sky-500',
+  minor: 'bg-sky-400',
+  trivial: 'bg-slate-400',
+  enhancement: 'bg-violet-500',
+};
+
 function QuickMenu({
   label,
   current,
+  dot,
   options,
   onPick,
   busy,
@@ -454,6 +607,8 @@ function QuickMenu({
 }: {
   label: string;
   current: string;
+  /** Tailwind bg-* class for the dot beside the current value. */
+  dot: string;
   options: string[];
   onPick: (value: string) => void;
   busy: boolean;
@@ -464,7 +619,8 @@ function QuickMenu({
       <DropdownMenuTrigger asChild>
         <Button variant="secondary" size="sm" disabled={busy}>
           <span className="text-slate-400">{label}</span>
-          <span className="font-medium text-slate-900">{current}</span>
+          <span className={cn('h-2 w-2 rounded-full', dot)} aria-hidden />
+          <span className="font-semibold text-slate-900">{current.replace('_', ' ')}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">

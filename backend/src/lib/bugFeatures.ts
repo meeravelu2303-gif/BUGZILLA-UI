@@ -26,6 +26,8 @@ export interface BugFeatures {
 const TTL_MS = 5 * 60 * 1000;
 let cached: { at: number; value: BugFeatures } | null = null;
 let inflight: Promise<BugFeatures> | null = null;
+/** Bugzilla's `urlbase` parameter, read alongside the features above. */
+let urlbase: string | null = null;
 
 const FALLBACK: BugFeatures = {
   qaContact: false,
@@ -37,6 +39,11 @@ const FALLBACK: BugFeatures = {
 };
 
 let groupCache: { at: number; names: string[] } | null = null;
+
+/** After a group is renamed or created, so product -> group lookups see it at once. */
+export function clearGroupNameCache(): void {
+  groupCache = null;
+}
 
 /**
  * Every group name on the instance, for mapping a product to its same-named
@@ -73,6 +80,7 @@ export async function bugFeatures(env: Env): Promise<BugFeatures> {
         maxAttachmentKb: Number(p.maxattachmentsize) || FALLBACK.maxAttachmentKb,
       };
       cached = { at: Date.now(), value };
+      urlbase = typeof p.urlbase === 'string' ? p.urlbase : urlbase;
       return value;
     } catch {
       // A failed lookup must not break the bug page; the conservative defaults
@@ -83,4 +91,28 @@ export async function bugFeatures(env: Env): Promise<BugFeatures> {
     }
   })();
   return inflight;
+}
+
+/**
+ * The address a BROWSER uses to reach native Bugzilla (editparams.cgi,
+ * userprefs.cgi, ...), as opposed to BUGZILLA_URL, which is how this server
+ * reaches it.
+ *
+ * The two differ whenever Bugzilla runs on the same machine as the BFF:
+ * BUGZILLA_URL is then `http://localhost/rest`, and "localhost" in a colleague's
+ * browser is their own computer - so every "Edit in Bugzilla" link opened
+ * nothing for anyone but the person at this desk.
+ *
+ * In order of preference:
+ *   1. BUGZILLA_PUBLIC_URL, when set (a domain name, a reverse proxy path);
+ *   2. Bugzilla's own `urlbase` parameter - the address Bugzilla already puts in
+ *      every email it sends, so app links and mail links can never disagree;
+ *   3. BUGZILLA_URL without /rest, so a fresh install still links somewhere.
+ */
+export async function bugzillaPublicUrl(env: Env): Promise<string> {
+  const strip = (u: string) => u.replace(/\/+$/, '');
+  if (env.BUGZILLA_PUBLIC_URL) return strip(env.BUGZILLA_PUBLIC_URL);
+  await bugFeatures(env);
+  if (urlbase && /^https?:\/\/[^/]/i.test(urlbase)) return strip(urlbase);
+  return strip(env.BUGZILLA_URL.replace(/\/rest\/?$/, ''));
 }

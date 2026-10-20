@@ -24,8 +24,17 @@ import type { Bug } from '../../types';
 const FEED_LIMIT = 8;
 const TRIAGE_LIMIT = 8;
 
-export function QaDashboard() {
+/**
+ * `reporter` (an email) narrows every card, list and link to the bugs that
+ * person reported - Bugzilla's own reporter field, the API's `creator` filter.
+ * Unset, the board covers everyone.
+ */
+export function QaDashboard({ reporter }: { reporter?: string } = {}) {
   const [filing, setFiling] = useState(false);
+  // Spread into every query below, so a card and the list behind it always agree.
+  const who = useMemo(() => (reporter ? { creator: reporter } : {}), [reporter]);
+  const withWho = (path: string) =>
+    reporter ? `${path}${path.includes('?') ? '&' : '?'}creator=${encodeURIComponent(reporter)}` : path;
   const [transferId, setTransferId] = useState<number | null>(null);
 
   const { data: meta } = useMeta();
@@ -45,28 +54,8 @@ export function QaDashboard() {
    * What testers actually triage is further down: open bugs nobody has taken.
    */
 
-  /*
-   * The triage queue: OPEN bugs still sitting with their component's default
-   * assignee - nobody has taken them.
-   *
-   * Over-fetched and narrowed here rather than filtered server-side, because
-   * "unassigned" is not a Bugzilla search term: every bug has an assignee, and
-   * what makes one unassigned is that the assignee still equals the component's
-   * `initialowner`. The count endpoint computes this properly; for a panel
-   * showing eight rows, narrowing a page of the oldest open bugs is accurate
-   * and costs no extra round trip.
-   *
-   * Sorted OLDEST first - the point of this queue is what has been waiting
-   * longest, not what arrived last.
-   */
-  const { data: triageData, isLoading: triageLoading } = useBugs({
-    limit: 60,
-    offset: 0,
-    sortBy: 'creation_time',
-    sortDir: 'asc',
-  });
-
   const { data: feedData, isLoading: feedLoading } = useBugs({
+    ...who,
     limit: FEED_LIMIT,
     offset: 0,
     sortBy: 'creation_time',
@@ -82,9 +71,34 @@ export function QaDashboard() {
    */
   const openStatuses = (meta?.workflow ?? []).filter((w) => w.isOpen).map((w) => w.status);
 
+  /*
+   * "Longest open": the oldest OPEN bugs, oldest first.
+   *
+   * Filtered by status in the query itself. This used to fetch the 60 oldest
+   * bugs of ANY status and keep the open ones client-side - but the oldest bugs
+   * on a mature instance are almost all RESOLVED (1,173 of 1,330 here), so the
+   * page held no open bug at all and the panel said "Nothing is ageing" while
+   * the tile beside it counted 156 open defects.
+   *
+   * Waits for the status list: with no `status` the API returns every bug, which
+   * would reintroduce exactly that mistake for the first render.
+   */
+  const { data: triageData, isLoading: triageQueryLoading } = useBugs(
+    {
+      ...who,
+      status: openStatuses,
+      limit: TRIAGE_LIMIT,
+      offset: 0,
+      sortBy: 'creation_time',
+      sortDir: 'asc',
+    },
+    { enabled: openStatuses.length > 0 }
+  );
+  const triageLoading = triageQueryLoading || openStatuses.length === 0;
+
   const hasUnconfirmed = (meta?.statuses ?? []).includes('UNCONFIRMED');
 
-  const { data: allCounts } = useBugCounts();
+  const { data: allCounts } = useBugCounts(who);
 
   /*
    * Card 2 - incoming failures QA has not judged yet.
@@ -93,7 +107,7 @@ export function QaDashboard() {
    * the whole scope (Bugzilla DROPS an unknown bug_status instead of matching
    * nothing - the bug that once made a tile read 971).
    */
-  const { data: unconfirmedCounts } = useBugCounts({ status: ['UNCONFIRMED'] }, { enabled: hasUnconfirmed });
+  const { data: unconfirmedCounts } = useBugCounts({ ...who, status: ['UNCONFIRMED'] }, { enabled: hasUnconfirmed });
 
   /*
    * Card 4 - fixed, but nobody has checked the fix. RESOLVED only.
@@ -109,7 +123,7 @@ export function QaDashboard() {
    *
    * Soft-deleted bugs are excluded by the API's default `deleted=exclude`.
    */
-  const { data: retestCounts } = useBugCounts({ status: ['RESOLVED'] });
+  const { data: retestCounts } = useBugCounts({ ...who, status: ['RESOLVED'] });
   /*
    * Scoped to the open statuses so `blockerCritical` counts CURRENT load.
    *
@@ -119,7 +133,7 @@ export function QaDashboard() {
    * total sitting beside it.
    */
   const { data: openCounts } = useBugCounts(
-    { status: openStatuses },
+    { ...who, status: openStatuses },
     { enabled: openStatuses.length > 0 }
   );
 
@@ -167,7 +181,7 @@ export function QaDashboard() {
           value={allCounts?.counts.open ?? 0}
           icon={Inbox}
           tone="brand"
-          to="/bugs"
+          to={withWho('/bugs')}
           hint="Everything still broken"
         />
 
@@ -176,7 +190,7 @@ export function QaDashboard() {
           value={hasUnconfirmed ? (unconfirmedCounts?.counts.total ?? 0) : 0}
           icon={CircleDashed}
           tone="amber"
-          to={(unconfirmedCounts?.counts.total ?? 0) > 0 ? '/bugs?status=UNCONFIRMED' : undefined}
+          to={(unconfirmedCounts?.counts.total ?? 0) > 0 ? withWho('/bugs?status=UNCONFIRMED') : undefined}
           hint={
             (unconfirmedCounts?.counts.total ?? 0) > 0
               ? 'Unconfirmed - waiting on QA'
@@ -189,7 +203,7 @@ export function QaDashboard() {
           value={openCounts?.counts.blockerCritical ?? 0}
           icon={Siren}
           tone="rose"
-          to="/bugs?severity=Critical"
+          to={withWho('/bugs?severity=Critical')}
           hint="Open, high severity"
         />
 
@@ -198,7 +212,7 @@ export function QaDashboard() {
           value={retestCounts?.counts.total ?? 0}
           icon={RotateCcw}
           tone="emerald"
-          to="/bugs?status=RESOLVED&sortBy=last_change_time&sortDir=desc"
+          to={withWho('/bugs?status=RESOLVED&sortBy=last_change_time&sortDir=desc')}
           hint="Fixed - waiting on your verification"
         />
       </div>
@@ -219,7 +233,7 @@ export function QaDashboard() {
         <Queue
           title="Longest open"
           subtitle="Open the longest - still waiting on a fix"
-          to="/bugs?sortBy=creation_time&sortDir=asc"
+          to={withWho('/bugs?sortBy=creation_time&sortDir=asc')}
           loading={triageLoading}
           bugs={triage}
           emptyTitle="Nothing is ageing"
@@ -230,7 +244,7 @@ export function QaDashboard() {
         <Queue
           title="Latest incoming"
           subtitle="Newest first - what the bench has just filed"
-          to="/bugs?sortBy=creation_time&sortDir=desc"
+          to={withWho('/bugs?sortBy=creation_time&sortDir=desc')}
           loading={feedLoading}
           bugs={feed}
           emptyTitle="Nothing filed yet"

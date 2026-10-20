@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Env } from '../config/env';
 import { accessSnapshot } from '../lib/access';
-import { bugFeatures } from '../lib/bugFeatures';
+import { bugFeatures, bugzillaPublicUrl } from '../lib/bugFeatures';
 import { BugzillaClient } from '../lib/bugzillaClient';
 import { groupNameForProduct } from '../lib/productGroups';
 import { isServiceAccount, parseTransferRoutes } from '../lib/productTransfer';
@@ -14,10 +14,13 @@ export function metaRouter(env: Env): Router {
 
   router.get('/', requireAuth(env), async (req, res, next) => {
     try {
-      const [raw, features] = await Promise.all([req.bugzilla!.get('/field/bug'), bugFeatures(env)]);
+      const [raw, features, bugzillaWebUrl] = await Promise.all([
+        req.bugzilla!.get('/field/bug'),
+        bugFeatures(env),
+        // The browser-facing address, not BUGZILLA_URL (often localhost) - see bugzillaPublicUrl.
+        bugzillaPublicUrl(env),
+      ]);
       const fieldMeta = extractBugMeta(raw);
-      // The REST base is .../rest; Bugzilla's web (non-REST) admin pages live one level up.
-      const bugzillaWebUrl = env.BUGZILLA_URL.replace(/\/rest\/?$/, '');
       res.json({
         ...fieldMeta,
         features,
@@ -224,6 +227,38 @@ export function metaRouter(env: Env): Router {
     }
   });
 
+  /**
+   * GET /api/meta/reporters - the people who report bugs, for the QA
+   * dashboard's reporter filter: testers (`canconfirm`) and admins
+   * (`editusers` / `editcomponents`), each tagged with a role.
+   *
+   * The assignable-users list above deliberately removes testers, so it cannot
+   * serve here. Service key for the same reason as there: Group.get returns
+   * member lists only to editusers / creategroups.
+   */
+  router.get('/reporters', requireAuth(env), async (_req, res, next) => {
+    try {
+      const directory = new BugzillaClient(env.BUGZILLA_URL, { kind: 'api_key', apiKey: env.BUGZILLA_API_KEY });
+      const resp = await directory.get<{
+        groups: Array<{ name: string; membership?: Array<{ email?: string; real_name?: string; name?: string; can_login?: boolean }> }>;
+      }>('/group', { names: ['canconfirm', 'editusers', 'editcomponents'], membership: 1 });
+
+      const people = new Map<string, { email: string; name: string; role: 'admin' | 'tester' }>();
+      for (const group of resp.groups ?? []) {
+        const isAdminGroup = group.name.toLowerCase() !== 'canconfirm';
+        for (const m of group.membership ?? []) {
+          if (!m.email || m.can_login === false || isServiceAccount(m.email)) continue;
+          const key = m.email.toLowerCase();
+          const existing = people.get(key);
+          const role = isAdminGroup || existing?.role === 'admin' ? 'admin' : 'tester';
+          people.set(key, { email: m.email, name: m.real_name || m.name || m.email, role });
+        }
+      }
+      res.json({ users: [...people.values()].sort((a, b) => a.name.localeCompare(b.name)) });
+    } catch (err) {
+      next(err);
+    }
+  });
 
   return router;
 }

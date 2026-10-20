@@ -48,7 +48,7 @@ export function Products() {
         icon={Boxes}
         eyebrow="Administration"
         title="Products"
-        description="Create products and components, and activate or deactivate products."
+        description="Create, edit, activate, deactivate and delete products, and add their components."
         actions={
           <Button onClick={() => setShowForm((v) => !v)}>
             <Plus className="h-4 w-4" aria-hidden />

@@ -29,6 +29,7 @@ export type RawProduct = z.infer<typeof rawProductSchema>;
 export interface NormalizedProduct {
   id: number;
   name: string;
+  description: string;
   isActive: boolean;
   components: { name: string; defaultAssignee: string }[];
   versions: string[];
@@ -39,6 +40,7 @@ export function normalizeProduct(raw: RawProduct): NormalizedProduct {
   return {
     id: raw.id,
     name: raw.name,
+    description: raw.description ?? '',
     isActive: raw.is_active ?? true,
     components: raw.components.map((c) => ({ name: c.name, defaultAssignee: c.default_assigned_to ?? '' })),
     versions: raw.versions.map((v) => v.name),
