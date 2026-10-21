@@ -88,7 +88,7 @@ export function SeverityCategoryMatrix({ stats }: { stats: BugStats }) {
                   {s}
                   <span
                     className={cn(
-                      'rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold tracking-tight ring-1 ring-inset',
+                      'rounded-md px-1.5 py-0.5 font-mono text-[0.7333rem] font-bold tracking-tight ring-1 ring-inset',
                       PRIORITY_BADGE[s] ?? PRIORITY_BADGE.Unclassified
                     )}
                   >

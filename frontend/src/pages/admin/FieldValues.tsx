@@ -28,7 +28,7 @@ export function FieldValues() {
   const webUrl = meta?.bugzillaWebUrl;
 
   return (
-    <div className="mx-auto max-w-[1200px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[80rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader
         title="Field Values"
         description="The allowed values for each core bug field on this instance. Adding or removing values is done in Bugzilla."

@@ -144,7 +144,7 @@ export function DeleteUserDialog({
         {check.data && deletable && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor={`delete-user-email-${user.id}`} className="text-sm font-medium text-slate-700">
-              Type <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px]">{user.email}</span> to confirm
+              Type <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.8667rem]">{user.email}</span> to confirm
             </label>
             <input
               id={`delete-user-email-${user.id}`}

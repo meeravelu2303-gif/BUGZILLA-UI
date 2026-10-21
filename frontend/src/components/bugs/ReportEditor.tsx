@@ -55,7 +55,7 @@ function FieldEditor({
       <div className="flex items-center justify-between gap-2">
         <label htmlFor={id} className="text-sm font-medium text-slate-700">
           {field.label}
-          {changed && <span className="ml-2 text-[11px] font-medium text-brand-700">edited</span>}
+          {changed && <span className="ml-2 text-[0.7333rem] font-medium text-brand-700">edited</span>}
         </label>
         {onRemove && value && (
           <button type="button" onClick={onRemove} className="focus-ring rounded text-xs text-slate-400 hover:text-rose-600">
@@ -81,7 +81,7 @@ function FieldEditor({
           minRows={field.kind === 'code' ? 3 : 2}
           className={
             field.kind === 'code'
-              ? 'border-slate-800 bg-slate-900 font-mono text-[12.5px] leading-relaxed text-slate-100 placeholder:text-slate-500'
+              ? 'border-slate-800 bg-slate-900 font-mono text-[0.8333rem] leading-relaxed text-slate-100 placeholder:text-slate-500'
               : 'border-hairline bg-white leading-6 text-slate-900 placeholder:text-slate-400'
           }
         />
@@ -251,7 +251,7 @@ export function ReportEditor({ bug, onClose }: { bug: Bug; onClose: () => void }
                 {group.id === 'overview' && (
                   <div className={cn('flex flex-col gap-1.5', categoryChanged && 'relative pl-3 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-full before:bg-brand-500')}>
                     <label htmlFor="report-category" className="text-sm font-medium text-slate-700">
-                      Category {categoryChanged && <span className="ml-2 text-[11px] font-medium text-brand-700">edited</span>}
+                      Category {categoryChanged && <span className="ml-2 text-[0.7333rem] font-medium text-brand-700">edited</span>}
                     </label>
                     <select
                       id="report-category"
@@ -348,7 +348,7 @@ export function ReportEditor({ bug, onClose }: { bug: Bug; onClose: () => void }
             minRows={16}
             maxRows={40}
             spellCheck={false}
-            className="border-hairline bg-white font-mono text-[12.5px] leading-relaxed text-slate-900"
+            className="border-hairline bg-white font-mono text-[0.8333rem] leading-relaxed text-slate-900"
           />
           <p className="text-xs text-slate-500">
             Keep the <code className="rounded bg-slate-100 px-1">Heading:</code> lines (Expected:, Actual:, curl:, How to fix: …) - the bug page and the Excel export
@@ -359,7 +359,7 @@ export function ReportEditor({ bug, onClose }: { bug: Bug; onClose: () => void }
 
       {mode === 'preview' && (
         <div className="rounded-xl border border-dashed border-line p-5">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Preview - as it will appear after saving</p>
+          <p className="mb-4 text-[0.7333rem] font-semibold uppercase tracking-wide text-slate-400">Preview - as it will appear after saving</p>
           <DescriptionReport description={text} />
         </div>
       )}

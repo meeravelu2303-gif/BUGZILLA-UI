@@ -16,7 +16,7 @@ import { ErrorBoundary } from './ErrorBoundary';
  */
 function navLinkClasses({ isActive }: { isActive: boolean }): string {
   return cn(
-    'focus-ring group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13.5px] font-medium transition-all duration-200',
+    'focus-ring group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[0.9rem] font-medium transition-all duration-200',
     isActive
       ? 'bg-white/85 text-brand-800 shadow-card ring-1 ring-inset ring-brand-500/25'
       : 'text-slate-600 hover:bg-white/55 hover:text-slate-900'
@@ -34,7 +34,7 @@ function SidebarSection({ section, permissions }: { section: NavSection; permiss
     <div className="px-3 pt-5 first:pt-2">
       <button
         onClick={() => setCollapsed((c) => !c)}
-        className="focus-ring flex w-full items-center justify-between rounded-md px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-slate-500 hover:text-slate-700"
+        className="focus-ring flex w-full items-center justify-between rounded-md px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-500 hover:text-slate-700"
         aria-expanded={!collapsed}
       >
         {section.title}
@@ -161,8 +161,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {initials(user?.realName || user?.email || '?')}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold text-slate-900">{user?.realName || '—'}</p>
-              <p className="truncate text-[11px] text-slate-500">{user?.email || ''}</p>
+              <p className="truncate text-[0.8667rem] font-semibold text-slate-900">{user?.realName || '—'}</p>
+              <p className="truncate text-[0.7333rem] text-slate-500">{user?.email || ''}</p>
             </div>
           </NavLink>
           <button
@@ -192,7 +192,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* Desktop sidebar */}
-      <aside className="glass-panel fixed inset-y-0 left-0 z-30 hidden w-[17rem] flex-col rounded-none border-y-0 border-l-0 lg:flex">
+      <aside className="glass-panel fixed inset-y-0 left-0 z-30 hidden w-[15rem] flex-col xl:w-[17rem] rounded-none border-y-0 border-l-0 lg:flex">
         {sidebar}
       </aside>
 
@@ -204,7 +204,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className="lg:pl-[17rem]">
+      <div className="lg:pl-[15rem] xl:pl-[17rem]">
         {/*
          * Floating top bar: inset from the edges and rounded, so it reads as a
          * glass element over the page rather than a wall across it. Sticky with
@@ -226,7 +226,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             >
               <Search className="h-4 w-4 text-slate-400 transition-colors group-hover:text-brand-700" aria-hidden />
               <span className="flex-1 truncate text-left">Search bugs, jump to a page…</span>
-              <kbd className="hidden items-center gap-0.5 rounded-md border border-line bg-white px-1.5 py-0.5 font-sans text-[10px] font-semibold text-slate-500 sm:inline-flex">
+              <kbd className="hidden items-center gap-0.5 rounded-md border border-line bg-white px-1.5 py-0.5 font-sans text-[0.6667rem] font-semibold text-slate-500 sm:inline-flex">
                 ⌘K
               </kbd>
             </button>
@@ -234,7 +234,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div className="ml-auto flex items-center gap-1">
               <NavLink
                 to="/bugs/new"
-                className="focus-ring hidden h-9 items-center gap-1.5 rounded-full bg-gradient-to-b from-brand-600 to-brand-800 px-3.5 text-[13px] font-semibold text-white shadow-glow ring-1 ring-inset ring-white/20 hover:from-brand-700 hover:to-brand-900 sm:inline-flex lg:hidden"
+                className="focus-ring hidden h-9 items-center gap-1.5 rounded-full bg-gradient-to-b from-brand-600 to-brand-800 px-3.5 text-[0.8667rem] font-semibold text-white shadow-glow ring-1 ring-inset ring-white/20 hover:from-brand-700 hover:to-brand-900 sm:inline-flex lg:hidden"
               >
                 <Plus className="h-4 w-4" aria-hidden /> New bug
               </NavLink>

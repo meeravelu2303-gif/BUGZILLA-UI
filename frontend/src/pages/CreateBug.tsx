@@ -97,7 +97,7 @@ function Section({ step, title, subtitle, children }: { step: number; title: str
           {step}
         </span>
         <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold leading-5 text-slate-900">{title}</h2>
+          <h2 className="text-[1rem] font-semibold leading-5 text-slate-900">{title}</h2>
           <p className="text-xs leading-5 text-slate-600">{subtitle}</p>
         </div>
       </div>
@@ -118,7 +118,7 @@ const LEVEL_DOT: Record<SeverityLevel, string> = {
   LOW: 'bg-slate-400',
 };
 
-const MONO = 'font-mono text-[13px] leading-relaxed';
+const MONO = 'font-mono text-[0.8667rem] leading-relaxed';
 
 /**
  * What each validated field is called on screen - used in the error toast and
@@ -356,7 +356,7 @@ export function CreateBug() {
   const invalid = (k: keyof BugReportInput) => (errors[k] ? 'true' : undefined);
 
   return (
-    <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[96rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader
         back={{ to: '/', label: 'Back to dashboard' }}
         icon={FilePlus2}
@@ -876,7 +876,7 @@ export function CreateBug() {
             <div className="flex items-center justify-between gap-3 border-b border-hairline px-6 py-4">
               <div className="flex items-center gap-2">
                 <Eye className="h-4 w-4 text-brand-700" aria-hidden />
-                <h2 className="text-[15px] font-semibold text-slate-900">Preview</h2>
+                <h2 className="text-[1rem] font-semibold text-slate-900">Preview</h2>
               </div>
               <div role="tablist" aria-label="Preview format" className="grid grid-cols-2 gap-0.5 rounded-lg bg-slate-900/[0.06] p-0.5 text-xs">
                 {(['Report', 'Raw text'] as const).map((m) => {
@@ -898,7 +898,7 @@ export function CreateBug() {
             </div>
             <div className="flex max-h-[calc(100vh-12rem)] flex-col gap-4 overflow-y-auto px-6 py-5">
               <div className="flex flex-col gap-2.5">
-                <p className="break-words text-[15px] font-semibold leading-snug text-slate-900">
+                <p className="break-words text-[1rem] font-semibold leading-snug text-slate-900">
                   {title.trim() ? (
                     composedSummary
                   ) : (
@@ -915,7 +915,7 @@ export function CreateBug() {
                   <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-800 ring-1 ring-inset ring-slate-900/10">{category}</span>
                   {product && <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-800 ring-1 ring-inset ring-slate-900/10">{product}{component ? ` / ${component}` : ''}</span>}
                 </div>
-                <p className="font-mono text-[11px] text-slate-500">whiteboard {whiteboard}</p>
+                <p className="font-mono text-[0.7333rem] text-slate-500">whiteboard {whiteboard}</p>
               </div>
               <div className="border-t border-hairline" />
               {!product || !title.trim() ? (
@@ -925,7 +925,7 @@ export function CreateBug() {
                   <p className="max-w-xs text-xs leading-5 text-slate-500">Choose a product and give it a title - the report builds itself as you fill in the form.</p>
                 </div>
               ) : rawPreview ? (
-                <pre className="whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 font-mono text-[12px] leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200">
+                <pre className="whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 font-mono text-[0.8rem] leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200">
                   {description}
                 </pre>
               ) : (

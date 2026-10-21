@@ -62,7 +62,7 @@ export function MetadataSidebar({
   const progress = actual + remaining > 0 ? Math.round((actual / (actual + remaining)) * 100) : 0;
 
   return (
-    <Card className="self-start lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
+    <Card className="self-start lg:sticky lg:top-[5rem] lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto">
       <div className="flex items-center justify-between border-b border-white/40 px-5 py-4">
         <h2 className="text-sm font-semibold text-slate-900">Details</h2>
         <span className="text-xs text-slate-500" title={formatDateTime(bug.lastChangeTime)}>

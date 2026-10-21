@@ -105,7 +105,7 @@ export function Pill({
          * row, and matching a control's height would make the row read as a
          * toolbar.
          */
-        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1 text-[11px] font-semibold leading-[14px] tracking-[0.01em]',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1 text-[0.7333rem] font-semibold leading-[14px] tracking-[0.01em]',
         TONE_STYLES[tone],
         className
       )}

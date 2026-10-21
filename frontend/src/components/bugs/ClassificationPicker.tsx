@@ -215,15 +215,15 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
       >
         {value ? (
           <>
-            <span className="shrink-0 rounded-md bg-slate-900/[0.06] px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-600">
+            <span className="shrink-0 rounded-md bg-slate-900/[0.06] px-1.5 py-0.5 text-[0.7333rem] font-medium uppercase tracking-wide text-slate-600">
               {familyOf(value)}
             </span>
-            <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-slate-900">
+            <span className="min-w-0 flex-1 truncate font-mono text-[0.8667rem] text-slate-900">
               {value.includes('.') ? value.slice(familyOf(value).length + 1) : value}
             </span>
           </>
         ) : (
-          <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-slate-500">{placeholder ?? 'Select…'}</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[0.8667rem] text-slate-500">{placeholder ?? 'Select…'}</span>
         )}
         {value && (
           <span
@@ -278,7 +278,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
             <div ref={listRef} id={listId} role="listbox" aria-label={label} className="max-h-72 overflow-y-auto overscroll-contain py-1">
               {groups.map(([family, items]) => (
                 <div key={family} role="group" aria-label={family}>
-                  <div className="sticky top-0 z-10 flex items-center justify-between bg-white/95 px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 backdrop-blur">
+                  <div className="sticky top-0 z-10 flex items-center justify-between bg-white/95 px-3 pb-1 pt-2 text-[0.7333rem] font-semibold uppercase tracking-wider text-slate-500 backdrop-blur">
                     <span>{family}</span>
                     <span className="font-medium normal-case tracking-normal text-slate-400">{items.length}</span>
                   </div>
@@ -297,7 +297,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => choose(v)}
                         className={cn(
-                          'mx-1 flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 font-mono text-[13px]',
+                          'mx-1 flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 font-mono text-[0.8667rem]',
                           i === active ? 'bg-brand-600/10 text-brand-900' : 'text-slate-700',
                         )}
                       >
@@ -344,7 +344,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
               )}
             </div>
 
-            <div className="flex items-center justify-between border-t border-hairline bg-slate-50/80 px-3 py-1.5 text-[11px] text-slate-500">
+            <div className="flex items-center justify-between border-t border-hairline bg-slate-50/80 px-3 py-1.5 text-[0.7333rem] text-slate-500">
               <span>
                 {matchCount} of {options.length}
               </span>

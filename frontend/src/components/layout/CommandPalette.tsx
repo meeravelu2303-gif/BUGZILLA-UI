@@ -124,7 +124,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             aria-label="Search commands"
             className="w-full bg-transparent py-3.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none"
           />
-          <kbd className="hidden shrink-0 rounded border border-line bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500 sm:block">esc</kbd>
+          <kbd className="hidden shrink-0 rounded border border-line bg-white px-1.5 py-0.5 text-[0.6667rem] font-medium text-slate-500 sm:block">esc</kbd>
         </div>
 
         <ul className="max-h-80 overflow-y-auto p-2" role="listbox">

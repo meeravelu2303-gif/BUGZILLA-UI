@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!error) return this.props.children;
 
     return (
-      <div className="mx-auto max-w-[900px] px-8 py-12">
+      <div className="mx-auto max-w-[60rem] px-8 py-12">
         <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-6">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />

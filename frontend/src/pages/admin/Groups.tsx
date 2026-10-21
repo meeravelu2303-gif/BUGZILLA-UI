@@ -12,7 +12,7 @@ export function Groups() {
   const groups = data?.groups ?? [];
 
   return (
-    <div className="mx-auto max-w-[900px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[60rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader
         title="Groups & Permissions"
         description="The groups your account belongs to. Creating groups and editing membership is security-critical and stays in Bugzilla’s native admin by design."

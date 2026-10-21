@@ -46,7 +46,7 @@ export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElemen
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn('text-[15px] font-semibold tracking-tight text-slate-900', className)} {...props} />;
+  return <h2 className={cn('text-[1rem] font-semibold tracking-tight text-slate-900', className)} {...props} />;
 }
 
 export function CardBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

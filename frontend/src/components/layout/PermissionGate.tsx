@@ -17,7 +17,7 @@ export function PermissionGate({ permission, children }: { permission: keyof Per
 
   if (!allowed) {
     return (
-      <div className="mx-auto max-w-[1200px] px-8 py-8">
+      <div className="mx-auto max-w-[80rem] px-8 py-8">
         <EmptyState
           icon={ShieldOff}
           title="You don't have permission to view this page"

@@ -57,7 +57,7 @@ export function StatCard({
         <Icon className="h-[22px] w-[22px]" aria-hidden />
       </span>
       <div className="min-w-0">
-        <p className="text-[30px] font-semibold leading-none tracking-tight tabular-nums text-slate-900">
+        <p className="text-[2rem] font-semibold leading-none tracking-tight tabular-nums text-slate-900">
           {typeof value === 'number' ? value.toLocaleString() : value}
         </p>
         {/* Labels wrap rather than truncate: a tile reading "Critical (P0) o…" says nothing. */}

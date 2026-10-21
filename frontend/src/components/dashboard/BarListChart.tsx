@@ -34,7 +34,7 @@ export function BarListChart({ items, title }: { items: BarListItem[]; title: st
             const share = total ? Math.round((item.value / total) * 100) : 0;
             return (
               <div key={item.label} className="group flex items-center gap-3 text-sm">
-                <span className="w-28 shrink-0 truncate text-[13px] text-slate-700" title={item.label}>
+                <span className="w-28 shrink-0 truncate text-[0.8667rem] text-slate-700" title={item.label}>
                   {item.label}
                 </span>
                 <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-900/[0.06]">
@@ -43,8 +43,8 @@ export function BarListChart({ items, title }: { items: BarListItem[]; title: st
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                <span className="w-10 shrink-0 text-right text-[13px] font-semibold tabular-nums text-slate-800">{item.value.toLocaleString()}</span>
-                <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{share}%</span>
+                <span className="w-10 shrink-0 text-right text-[0.8667rem] font-semibold tabular-nums text-slate-800">{item.value.toLocaleString()}</span>
+                <span className="w-9 shrink-0 text-right text-[0.7333rem] tabular-nums text-slate-400">{share}%</span>
               </div>
             );
           })}

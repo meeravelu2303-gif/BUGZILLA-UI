@@ -18,7 +18,7 @@ export function Parameters() {
   const entries = Object.entries(data?.parameters ?? {}).sort((a, b) => a[0].localeCompare(b[0]));
 
   return (
-    <div className="mx-auto max-w-[900px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[60rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader
         title="Parameters"
         description="Instance-wide configuration Bugzilla exposes to the API. Bugzilla intentionally surfaces only a safe subset here; the rest is edited in its admin."

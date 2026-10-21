@@ -207,7 +207,7 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="transfer-reason" className="text-[13px] font-medium text-slate-700">
+              <label htmlFor="transfer-reason" className="text-[0.8667rem] font-medium text-slate-700">
                 Why it belongs to that team
                 <RequiredMark />
               </label>

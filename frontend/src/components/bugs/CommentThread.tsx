@@ -48,7 +48,7 @@ function CommentTags({ bugId, comment, editable }: { bugId: number; comment: Com
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
       {comment.tags.map((t) => (
-        <span key={t} className="inline-flex items-center gap-1 rounded-md bg-sky-50 py-0.5 pl-1.5 pr-1 text-[11px] font-medium text-sky-800 ring-1 ring-inset ring-sky-600/20">
+        <span key={t} className="inline-flex items-center gap-1 rounded-md bg-sky-50 py-0.5 pl-1.5 pr-1 text-[0.7333rem] font-medium text-sky-800 ring-1 ring-inset ring-sky-600/20">
           <Tag className="h-3 w-3" aria-hidden />
           {t}
           {editable && (
@@ -83,7 +83,7 @@ function CommentTags({ bugId, comment, editable }: { bugId: number; comment: Com
               list={listId}
               placeholder="tag"
               aria-label="New tag"
-              className="focus-ring w-24 rounded-md border border-sky-200 bg-white px-1.5 py-0.5 text-[11px]"
+              className="focus-ring w-24 rounded-md border border-sky-200 bg-white px-1.5 py-0.5 text-[0.7333rem]"
             />
             <datalist id={listId}>
               {(suggestions?.tags ?? []).filter((s) => !comment.tags.includes(s)).map((s) => (
@@ -96,7 +96,7 @@ function CommentTags({ bugId, comment, editable }: { bugId: number; comment: Com
             type="button"
             onClick={() => setAdding(true)}
             disabled={update.isPending}
-            className="focus-ring inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-white/80 hover:text-slate-800"
+            className="focus-ring inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[0.7333rem] font-medium text-slate-500 hover:bg-white/80 hover:text-slate-800"
           >
             <Plus className="h-3 w-3" aria-hidden /> Tag
           </button>
@@ -124,7 +124,7 @@ export function CommentThread({ bugId, comments, tagsEnabled = false }: { bugId:
             <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-white/40 bg-white/40 px-4 py-2">
               <span className="text-sm font-medium text-slate-900">
                 {comment.author}
-                {comment.isPrivate && <span className="ml-2 rounded bg-amber-100 px-1.5 py-px text-[10px] font-semibold uppercase text-amber-800">Private</span>}
+                {comment.isPrivate && <span className="ml-2 rounded bg-amber-100 px-1.5 py-px text-[0.6667rem] font-semibold uppercase text-amber-800">Private</span>}
               </span>
               <time dateTime={comment.creationTime} className="text-xs text-slate-600">
                 {formatDateTime(comment.creationTime)}

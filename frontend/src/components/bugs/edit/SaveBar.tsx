@@ -156,7 +156,7 @@ export function SaveBar({
             </Button>
             <Button size="sm" onClick={onSave} loading={saving} disabled={blocked || conflict} title={`Save (${isMac ? '⌘' : 'Ctrl'}+S)`}>
               {!saving && <Save className="h-3.5 w-3.5" />} Save
-              <kbd className="ml-1 hidden rounded bg-white/20 px-1 text-[10px] font-medium sm:inline">{isMac ? '⌘S' : 'Ctrl S'}</kbd>
+              <kbd className="ml-1 hidden rounded bg-white/20 px-1 text-[0.6667rem] font-medium sm:inline">{isMac ? '⌘S' : 'Ctrl S'}</kbd>
             </Button>
           </div>
         </div>

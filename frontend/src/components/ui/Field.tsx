@@ -44,7 +44,7 @@ function FieldShell({
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label htmlFor={htmlFor} className="text-[13px] font-medium text-slate-700">
+        <label htmlFor={htmlFor} className="text-[0.8667rem] font-medium text-slate-700">
           {label}
           {required && <RequiredMark />}
         </label>

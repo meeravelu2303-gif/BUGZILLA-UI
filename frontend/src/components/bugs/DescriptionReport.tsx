@@ -182,7 +182,7 @@ function CodeBlock({ title, code }: { title: string; code: string }) {
         <CopyButton text={code} />
       </div>
       {/* Fixed viewport: long commands scroll inside the block instead of stretching the page. */}
-      <pre className="max-h-80 max-w-full overflow-auto whitespace-pre bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100">
+      <pre className="max-h-80 max-w-full overflow-auto whitespace-pre bg-slate-900 p-4 font-mono text-[0.8333rem] leading-relaxed text-slate-100">
         {code}
       </pre>
     </div>
@@ -196,7 +196,7 @@ export function DescriptionReport({ description }: { description: string }) {
     // `[overflow-wrap:anywhere]` not `break-all`: long tokens still break, but
     // ordinary sentences keep wrapping at spaces instead of mid-word.
     return (
-      <pre className="max-w-full whitespace-pre-wrap rounded-xl bg-slate-50 p-4 font-mono text-[12.5px] leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200 [overflow-wrap:anywhere]">
+      <pre className="max-w-full whitespace-pre-wrap rounded-xl bg-slate-50 p-4 font-mono text-[0.8333rem] leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200 [overflow-wrap:anywhere]">
         {description}
       </pre>
     );
@@ -208,19 +208,19 @@ export function DescriptionReport({ description }: { description: string }) {
         <dl className="grid grid-cols-1 gap-x-10 gap-y-5 rounded-xl bg-slate-50 p-5 ring-1 ring-inset ring-slate-200 sm:grid-cols-2">
           {parsed.meta.map((m) => (
             <div key={m.label} className="flex flex-col gap-1">
-              <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{m.label}</dt>
-              <dd className="break-words font-mono text-[13.5px] text-slate-800">{m.value}</dd>
+              <dt className="text-[0.7333rem] font-semibold uppercase tracking-wider text-slate-500">{m.label}</dt>
+              <dd className="break-words font-mono text-[0.9rem] text-slate-800">{m.value}</dd>
             </div>
           ))}
         </dl>
       )}
 
       {parsed.summary && (
-        <p className="text-[14.5px] leading-7 text-slate-700">{parsed.summary}</p>
+        <p className="text-[0.9667rem] leading-7 text-slate-700">{parsed.summary}</p>
       )}
 
       {parsed.preconditions && (
-        <p className="text-[13.5px] leading-6 text-slate-600">
+        <p className="text-[0.9rem] leading-6 text-slate-600">
           <span className="font-semibold text-slate-800">Preconditions. </span>
           {parsed.preconditions}
         </p>
@@ -228,23 +228,23 @@ export function DescriptionReport({ description }: { description: string }) {
 
       {(parsed.whatThisMeans || parsed.whyItMatters || parsed.howToFix) && (
         <div className="flex flex-col gap-3 rounded-xl bg-sky-50/70 p-5 ring-1 ring-inset ring-sky-600/20">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
+          <p className="text-[0.7333rem] font-semibold uppercase tracking-wide text-sky-700">
             For the developer
           </p>
           {parsed.whatThisMeans && (
-            <p className="text-[14px] leading-7 text-slate-700">
+            <p className="text-[0.9333rem] leading-7 text-slate-700">
               <span className="font-semibold text-slate-900">What this means. </span>
               {parsed.whatThisMeans}
             </p>
           )}
           {parsed.whyItMatters && (
-            <p className="text-[14px] leading-7 text-slate-700">
+            <p className="text-[0.9333rem] leading-7 text-slate-700">
               <span className="font-semibold text-slate-900">Why it matters. </span>
               {parsed.whyItMatters}
             </p>
           )}
           {parsed.howToFix && (
-            <p className="rounded-lg bg-white/80 p-3 text-[14px] leading-7 text-slate-800 ring-1 ring-inset ring-sky-600/20">
+            <p className="rounded-lg bg-white/80 p-3 text-[0.9333rem] leading-7 text-slate-800 ring-1 ring-inset ring-sky-600/20">
               <span className="font-semibold text-sky-800">How to fix. </span>
               {parsed.howToFix}
             </p>
@@ -256,22 +256,22 @@ export function DescriptionReport({ description }: { description: string }) {
         <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
           {parsed.expected && (
             <div className="flex flex-col rounded-xl bg-emerald-50/70 p-5 ring-1 ring-inset ring-emerald-600/20">
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+              <p className="mb-2 flex items-center gap-1.5 text-[0.7333rem] font-semibold uppercase tracking-wide text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Expected
               </p>
               {/* Monospace + preserved whitespace so the bench's aligned `case → code` diff lines up;
                   fixed height so long values scroll inside instead of swallowing the page. */}
-              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-emerald-900">
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[0.8667rem] leading-relaxed text-emerald-900">
                 {parsed.expected}
               </pre>
             </div>
           )}
           {parsed.actual && (
             <div className="flex flex-col rounded-xl bg-rose-50/70 p-5 ring-1 ring-inset ring-rose-600/20">
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700">
+              <p className="mb-2 flex items-center gap-1.5 text-[0.7333rem] font-semibold uppercase tracking-wide text-rose-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Actual
               </p>
-              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-rose-900">
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[0.8667rem] leading-relaxed text-rose-900">
                 {parsed.actual}
               </pre>
             </div>
@@ -281,8 +281,8 @@ export function DescriptionReport({ description }: { description: string }) {
 
       {parsed.steps && (
         <div className="flex flex-col gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Steps to reproduce</p>
-          <pre className="whitespace-pre-wrap break-words rounded-xl bg-white/70 p-4 font-sans text-[14px] leading-7 text-slate-800 ring-1 ring-inset ring-slate-200">
+          <p className="text-[0.7333rem] font-semibold uppercase tracking-wide text-slate-500">Steps to reproduce</p>
+          <pre className="whitespace-pre-wrap break-words rounded-xl bg-white/70 p-4 font-sans text-[0.9333rem] leading-7 text-slate-800 ring-1 ring-inset ring-slate-200">
             {parsed.steps}
           </pre>
         </div>
@@ -290,7 +290,7 @@ export function DescriptionReport({ description }: { description: string }) {
 
       {(parsed.curl || parsed.repro || parsed.responseBody) && (
         <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reproduce</p>
+          <p className="text-[0.7333rem] font-semibold uppercase tracking-wide text-slate-500">Reproduce</p>
           {parsed.curl && <CodeBlock title="curl" code={parsed.curl} />}
           {parsed.responseBody && (
             <CodeBlock title={parsed.responseLabel ? `Response body (${parsed.responseLabel})` : 'Response body'} code={parsed.responseBody} />
@@ -314,7 +314,7 @@ export function DescriptionReport({ description }: { description: string }) {
           <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" aria-hidden />
           Full original description
         </summary>
-        <pre className="max-w-full whitespace-pre-wrap border-t border-hairline px-4 py-3.5 font-mono text-[12.5px] leading-relaxed text-slate-700 [overflow-wrap:anywhere]">
+        <pre className="max-w-full whitespace-pre-wrap border-t border-hairline px-4 py-3.5 font-mono text-[0.8333rem] leading-relaxed text-slate-700 [overflow-wrap:anywhere]">
           {description}
         </pre>
       </details>

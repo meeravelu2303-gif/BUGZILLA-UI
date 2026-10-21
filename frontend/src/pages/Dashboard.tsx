@@ -118,7 +118,7 @@ function OverviewPanel() {
 
   if (isError) {
     return (
-      <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[128rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
         <EmptyState
           icon={AlertCircle}
           title="Couldn't load the dashboard"
@@ -398,7 +398,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="mx-auto max-w-[1400px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[128rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader
         icon={LayoutDashboard}
         title="Dashboard"

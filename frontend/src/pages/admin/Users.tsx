@@ -60,7 +60,7 @@ export function Users() {
   }, [allUsers]);
 
   return (
-    <div className="mx-auto max-w-[1000px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[66.6667rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader
         icon={UsersIcon}
         eyebrow="Administration"
@@ -202,7 +202,7 @@ export function Users() {
                 <div className="flex shrink-0 items-center gap-1">
                   <Link
                     to={`/admin/users/${u.id}`}
-                    className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-slate-600 hover:bg-white hover:text-slate-900"
+                    className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[0.8667rem] font-medium text-slate-600 hover:bg-white hover:text-slate-900"
                     aria-label={`${canManage ? 'Edit' : 'View'} ${u.fullName || u.email}`}
                   >
                     {canManage ? <Pencil className="h-3.5 w-3.5" aria-hidden /> : <Eye className="h-3.5 w-3.5" aria-hidden />}
@@ -212,7 +212,7 @@ export function Users() {
                   <button
                     type="button"
                     onClick={() => setDeletingId(u.id)}
-                    className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                    className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[0.8667rem] font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                     aria-label={`Delete ${u.fullName || u.email}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete

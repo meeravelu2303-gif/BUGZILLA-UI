@@ -126,7 +126,7 @@ export function BugList() {
   const { hasBrowsers } = useBrowserScope(filters, stats.for('browser'));
 
   return (
-    <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[128rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader
         icon={showDeleted ? Trash2 : ListChecks}
         title={showDeleted ? 'Deleted bugs' : 'Bugs'}

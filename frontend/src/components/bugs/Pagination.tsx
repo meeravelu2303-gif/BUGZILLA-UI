@@ -40,7 +40,7 @@ export function Pagination({
 
   return (
     <div className="flex items-center justify-between border-t border-hairline bg-slate-50/60 px-5 py-3">
-      <p className="text-[13px] text-slate-600">
+      <p className="text-[0.8667rem] text-slate-600">
         Showing <span className="font-semibold tabular-nums text-slate-800">{start}</span>–
         <span className="font-semibold tabular-nums text-slate-800">{end}</span>
         {total !== undefined && (

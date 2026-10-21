@@ -145,9 +145,9 @@ export function AttachmentList({
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 truncate text-sm font-medium text-slate-900">
                     <span className={cn('truncate', a.isObsolete && 'line-through decoration-slate-400')}>{a.fileName}</span>
-                    {a.isObsolete && <span className="shrink-0 rounded bg-slate-200 px-1.5 py-px text-[10px] font-semibold uppercase text-slate-600">Obsolete</span>}
-                    {a.isPatch && <span className="shrink-0 rounded bg-violet-100 px-1.5 py-px text-[10px] font-semibold uppercase text-violet-700">Patch</span>}
-                    {a.isPrivate && <span className="shrink-0 rounded bg-amber-100 px-1.5 py-px text-[10px] font-semibold uppercase text-amber-800">Private</span>}
+                    {a.isObsolete && <span className="shrink-0 rounded bg-slate-200 px-1.5 py-px text-[0.6667rem] font-semibold uppercase text-slate-600">Obsolete</span>}
+                    {a.isPatch && <span className="shrink-0 rounded bg-violet-100 px-1.5 py-px text-[0.6667rem] font-semibold uppercase text-violet-700">Patch</span>}
+                    {a.isPrivate && <span className="shrink-0 rounded bg-amber-100 px-1.5 py-px text-[0.6667rem] font-semibold uppercase text-amber-800">Private</span>}
                   </p>
                   <p className="truncate text-xs text-slate-600">
                     {a.summary} · {formatBytes(a.size)} · {a.creator} · {formatDateTime(a.creationTime)}

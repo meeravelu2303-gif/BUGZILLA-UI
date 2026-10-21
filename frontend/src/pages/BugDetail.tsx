@@ -35,7 +35,7 @@ export function BugDetail() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[128rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
         <Skeleton className="h-6 w-24" />
         <Skeleton className="mt-4 h-8 w-2/3" />
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -49,7 +49,7 @@ export function BugDetail() {
   if (isError || !data) {
     const message = error instanceof ApiError ? error.message : 'Something went wrong loading this bug.';
     return (
-      <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[128rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
         <EmptyState icon={AlertCircle} title="Couldn't load this bug" description={message} />
       </div>
     );
@@ -207,7 +207,7 @@ function BugDetailView({
   const facts = bug.facts;
 
   return (
-    <div className="mx-auto max-w-[1600px] animate-page-in overflow-x-clip px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[128rem] animate-page-in overflow-x-clip px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       {/* Returns to the list the reader came from, filters, sort and page intact. Resolved at
           render rather than held in state: this page is reached from BugList, MyBugs, Advanced
           Search and the dashboard matrix, and a plain `/bugs` discarded the filtering that found
@@ -450,7 +450,7 @@ function BugDetailView({
           {canVerify && (
             <div className="surface p-4">
               <p className="text-sm font-semibold text-slate-900">Ready for re-test</p>
-              <p className="mt-1 text-[13px] leading-snug text-slate-500">
+              <p className="mt-1 text-[0.8667rem] leading-snug text-slate-500">
                 The fix is in. Verify it and this bug leaves the QA queue.
               </p>
               {/*

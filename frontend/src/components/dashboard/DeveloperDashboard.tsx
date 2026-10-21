@@ -200,7 +200,7 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
         variants={listVariants}
         initial="hidden"
         animate="visible"
-        className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:gap-5"
       >
         <motion.div variants={pageVariants}>
           <StatCard
@@ -260,7 +260,7 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
         queue does not mean a navigate-and-back for every row. Collapses to a
         single column below lg, where there is no room for two.
       */}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <section className={PANEL_SHELL}>
           <span aria-hidden className="h-1 shrink-0 bg-gradient-to-r from-brand-500 via-brand-400 to-ueducate-accent" />
           <header className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
@@ -577,7 +577,7 @@ function DetailPane({ bugId }: { bugId: number | null }) {
  * two unrelated cards.
  */
 const PANEL_SHELL =
-  'surface-raised flex flex-col overflow-hidden min-h-[26rem] max-h-[44rem] lg:sticky lg:top-6 lg:h-[calc(100vh-7rem)] lg:max-h-none';
+  'surface-raised flex flex-col overflow-hidden min-h-[26rem] max-h-[44rem] xl:sticky xl:top-[5rem] xl:h-[calc(100dvh-6rem)] xl:max-h-none';
 
 /** Severity group header tints in the backlog list - same hues as the bands. */
 const SEVERITY_GROUP: Record<Severity, string> = {

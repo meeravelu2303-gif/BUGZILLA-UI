@@ -62,7 +62,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             {VARIANT_ICON[t.variant]}
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{t.title}</p>
-              {t.description && <p className="mt-0.5 text-[13px] leading-snug text-slate-600">{t.description}</p>}
+              {t.description && <p className="mt-0.5 text-[0.8667rem] leading-snug text-slate-600">{t.description}</p>}
             </div>
             <button
               onClick={() => dismiss(t.id)}

@@ -175,7 +175,7 @@ export function QaDashboard({ reporter, mine = false }: { reporter?: string; min
         verification. Nothing here describes how a bug was filed or who owns it
         - that is the product owner's concern, not the tester's.
       */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:gap-5">
         <StatCard
           label="Open defects"
           value={allCounts?.counts.open ?? 0}

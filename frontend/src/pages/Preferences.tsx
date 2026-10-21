@@ -32,7 +32,7 @@ export function Preferences() {
   }, [location.hash]);
 
   return (
-    <div className="mx-auto max-w-[1100px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[73.3333rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader title="Preferences" description="Your account, notifications, saved searches and API keys." />
 
       <Card className="mb-6">
@@ -61,7 +61,7 @@ export function Preferences() {
           </div>
           <a
             href="#password"
-            className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-full bg-white/80 px-3.5 text-[13px] font-semibold text-slate-700 shadow-card ring-1 ring-inset ring-slate-900/10 hover:bg-white hover:text-slate-900"
+            className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-full bg-white/80 px-3.5 text-[0.8667rem] font-semibold text-slate-700 shadow-card ring-1 ring-inset ring-slate-900/10 hover:bg-white hover:text-slate-900"
           >
             <KeyRound className="h-4 w-4" aria-hidden />
             Change password

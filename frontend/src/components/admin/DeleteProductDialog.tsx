@@ -110,7 +110,7 @@ export function DeleteProductDialog({ open, product, onClose }: { open: boolean;
         {deletable && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor={`delete-product-name-${product.id}`} className="text-sm font-medium text-slate-700">
-              Type <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px]">{product.name}</span> to confirm
+              Type <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.8667rem]">{product.name}</span> to confirm
             </label>
             <input
               id={`delete-product-name-${product.id}`}

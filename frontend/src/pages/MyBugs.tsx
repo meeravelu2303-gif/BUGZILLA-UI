@@ -71,7 +71,7 @@ export function MyBugs() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[128rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader
         back={{ to: '/', label: 'Back to dashboard' }}
         icon={UserCircle2}
@@ -89,7 +89,7 @@ export function MyBugs() {
             onClick={() => setTab(id)}
             aria-pressed={tab === id}
             className={cn(
-              'focus-ring inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-semibold transition-all',
+              'focus-ring inline-flex h-9 items-center gap-2 rounded-full px-4 text-[0.8667rem] font-semibold transition-all',
               tab === id
                 ? 'bg-gradient-to-b from-brand-600 to-brand-800 text-white shadow-glow ring-1 ring-inset ring-white/20'
                 : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
@@ -98,7 +98,7 @@ export function MyBugs() {
             <Icon className="h-4 w-4" aria-hidden />
             {label}
             {tab === id && tabTotal && (
-              <span className="rounded-full bg-white/20 px-1.5 text-[11px] font-semibold tabular-nums">{tabTotal.counts.total}</span>
+              <span className="rounded-full bg-white/20 px-1.5 text-[0.7333rem] font-semibold tabular-nums">{tabTotal.counts.total}</span>
             )}
           </button>
         ))}

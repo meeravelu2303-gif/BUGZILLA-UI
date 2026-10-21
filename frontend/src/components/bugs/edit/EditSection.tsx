@@ -70,7 +70,7 @@ export function EditSection({
           <Icon className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</span>
           {changes > 0 && (
-            <span className="rounded-full bg-brand-600 px-1.5 py-px text-[10px] font-semibold tabular-nums text-white">
+            <span className="rounded-full bg-brand-600 px-1.5 py-px text-[0.6667rem] font-semibold tabular-nums text-white">
               {changes} <span className="sr-only">unsaved</span>
             </span>
           )}

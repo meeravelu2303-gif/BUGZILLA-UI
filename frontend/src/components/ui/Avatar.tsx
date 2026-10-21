@@ -2,7 +2,7 @@ import { cn } from '../../lib/utils';
 import { initials } from '../../lib/utils';
 
 export function Avatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
-  const sizeClasses = size === 'sm' ? 'h-6 w-6 text-[10px]' : size === 'md' ? 'h-9 w-9 text-xs' : 'h-11 w-11 text-sm';
+  const sizeClasses = size === 'sm' ? 'h-6 w-6 text-[0.6667rem]' : size === 'md' ? 'h-9 w-9 text-xs' : 'h-11 w-11 text-sm';
   return (
     <div
       className={cn(

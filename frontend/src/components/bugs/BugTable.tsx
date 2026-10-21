@@ -113,7 +113,7 @@ export function BugTable({
             column labels. Over the white card the flat tint lands in the same
             place visually, without that cost.
           */}
-          <tr className="border-b border-hairline bg-slate-50 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+          <tr className="border-b border-hairline bg-slate-50 text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-slate-500">
             {selection && (
               <th scope="col" className="w-9 px-2.5 py-3">
                 <input
@@ -216,7 +216,7 @@ export function BugTable({
                     <td className="whitespace-nowrap px-3 py-3 align-middle">
                       <Link
                         to={`/bugs/${bug.id}`}
-                        className="focus-ring inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-600 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-brand-50 hover:text-brand-800 hover:ring-brand-500/30"
+                        className="focus-ring inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.7333rem] font-semibold text-slate-600 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-brand-50 hover:text-brand-800 hover:ring-brand-500/30"
                         title={`Bug #${bug.id}`}
                       >
                         {bugDisplayId(bug)}
@@ -225,7 +225,7 @@ export function BugTable({
                     <td className="max-w-0 min-w-[18rem] px-3 py-2.5 align-middle">
                       <Link
                         to={`/bugs/${bug.id}`}
-                        className="focus-ring block truncate rounded text-[13.5px] font-medium text-slate-900 transition-colors group-hover/row:text-brand-800"
+                        className="focus-ring block truncate rounded text-[0.9rem] font-medium text-slate-900 transition-colors group-hover/row:text-brand-800"
                         title={bug.summary}
                       >
                         {bug.summary}
@@ -264,7 +264,7 @@ export function BugTable({
                     <td className="max-w-0 px-3 py-3 align-middle">
                       <div className="flex items-center gap-2">
                         <Avatar name={bug.assignedTo?.name ?? '?'} />
-                        <span className="truncate text-[13px] font-medium text-slate-700" title={bug.assignedTo?.name ?? 'Unassigned'}>
+                        <span className="truncate text-[0.8667rem] font-medium text-slate-700" title={bug.assignedTo?.name ?? 'Unassigned'}>
                           {bug.assignedTo?.name ?? 'Unassigned'}
                         </span>
                       </div>

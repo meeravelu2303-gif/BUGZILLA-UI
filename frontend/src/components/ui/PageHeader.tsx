@@ -87,7 +87,7 @@ export function PageHeader({
             </span>
           )}
           <div className="min-w-0">
-            {eyebrow && <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700">{eyebrow}</p>}
+            {eyebrow && <p className="mb-1 text-[0.7333rem] font-semibold uppercase tracking-[0.14em] text-brand-700">{eyebrow}</p>}
             <h1 className="text-[1.65rem] font-semibold leading-tight tracking-tight text-slate-900">{title}</h1>
             {description && <p className="mt-1 text-sm text-slate-600">{description}</p>}
           </div>
@@ -109,5 +109,5 @@ export function PageContainer({
   className?: string;
 }) {
   const widths = { narrow: 'max-w-[900px]', medium: 'max-w-[1200px]', wide: 'max-w-[1400px]', full: 'max-w-[1600px]' };
-  return <div className={cn('mx-auto animate-page-in px-4 py-6 sm:px-6 lg:px-8 lg:py-8', widths[width], className)}>{children}</div>;
+  return <div className={cn('mx-auto animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10 lg:py-8', widths[width], className)}>{children}</div>;
 }

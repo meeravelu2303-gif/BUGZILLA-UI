@@ -183,7 +183,7 @@ export function DateRangeFilter({
               />
             </div>
             {customInvalid && <p className="mt-1 text-xs text-rose-600">The start is after the end.</p>}
-            <p className="mt-1 text-[11px] text-slate-500">Leave one end empty for an open range. Both days are included.</p>
+            <p className="mt-1 text-[0.7333rem] text-slate-500">Leave one end empty for an open range. Both days are included.</p>
           </fieldset>
 
           <div className="mt-4 flex items-center justify-between gap-2">
@@ -204,7 +204,7 @@ export function DateRangeFilter({
               Apply range
             </button>
           </div>
-          <p className="mt-3 border-t border-hairline pt-2 text-[11px] text-slate-500">
+          <p className="mt-3 border-t border-hairline pt-2 text-[0.7333rem] text-slate-500">
             Shows bugs {fieldWord} in the chosen days. <span className="font-medium text-slate-600">Export to Excel</span> then downloads exactly
             these - a daily or monthly report.
           </p>

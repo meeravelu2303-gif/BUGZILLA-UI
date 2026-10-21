@@ -14,7 +14,7 @@ export function Workflow() {
   const canGo = (from: string, to: string) => workflow.find((w) => w.status === from)?.canChangeTo.includes(to) ?? false;
 
   return (
-    <div className="mx-auto max-w-[1200px] animate-page-in px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[80rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
       <PageHeader
         title="Status Workflow"
         description="Which status a bug may move to from each current status. This mirrors Bugzilla’s workflow — edit transitions in Bugzilla."
@@ -56,7 +56,7 @@ export function Workflow() {
                       From \ To
                     </th>
                     {statuses.map((s) => (
-                      <th key={s} className="px-3 py-3 text-center text-[11px] font-medium text-slate-600">
+                      <th key={s} className="px-3 py-3 text-center text-[0.7333rem] font-medium text-slate-600">
                         {s.replace('_', ' ')}
                       </th>
                     ))}
