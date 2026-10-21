@@ -1,5 +1,3 @@
-import { useReducedMotion } from 'framer-motion';
-
 /**
  * The sign-in page's background: the life of a bug, drawn as weather.
  *
@@ -8,19 +6,17 @@ import { useReducedMotion } from 'framer-motion';
  *   1. Light - a pale sky with three slow-drifting pools of blue, cyan and
  *      indigo, so the page is lit rather than flat.
  *   2. The flow - one long path curving across the page through five faint
- *      stations (Filed, Confirmed, In progress, Fixed, Verified) with small
- *      glowing points travelling along it: the lifecycle every bug follows,
- *      animated so the page is visibly alive without anything to read.
+ *      stations (Filed, Confirmed, In progress, Fixed, Verified): the lifecycle
+ *      every bug follows, drawn still so nothing competes with the form.
  *   3. Tickets - a handful of translucent bug-card silhouettes floating near
  *      the edges, each with a coloured status bar, the way cards sit on the
  *      boards inside.
  *
  * Everything is CSS and inline SVG: no image to load, nothing to license, and
- * it repaints cheaply. Travelling points and drift are skipped for anyone who
- * prefers reduced motion; the picture still renders, just still.
+ * it repaints cheaply. The only movement is the slow drift of the light pools
+ * and the tickets, and that is skipped for anyone who prefers reduced motion.
  */
 export function LoginBackdrop() {
-  const reduce = useReducedMotion();
   // The lifecycle path, in a 1600x900 frame. One gentle S-curve, left to right.
   // Routed through the free margins: up the left edge, along the top, down the gap
   // between the showcase and the form, under the form, then up the right edge.
@@ -51,11 +47,8 @@ export function LoginBackdrop() {
             <stop offset="0.5" stopColor="#2563eb" />
             <stop offset="1" stopColor="#10b981" />
           </linearGradient>
-          <filter id="lb-glow" x="-100%" y="-100%" width="300%" height="300%">
-            <feGaussianBlur stdDeviation="4" />
-          </filter>
         </defs>
-        {/* the path: a soft wide band, then a crisp dashed line that flows */}
+        {/* the path: a soft wide band, then a crisp dashed line */}
         <path d={PATH} fill="none" stroke="url(#lb-path)" strokeWidth="26" strokeOpacity="0.07" strokeLinecap="round" />
         <path
           d={PATH}
@@ -65,20 +58,7 @@ export function LoginBackdrop() {
           strokeOpacity="0.45"
           strokeLinecap="round"
           strokeDasharray="10 14"
-          className={reduce ? undefined : 'animate-[login-flow_14s_linear_infinite]'}
         />
-        {/* travelling points */}
-        {!reduce &&
-          [0, 7, 14, 21].map((delay) => (
-            <g key={delay}>
-              <circle r="9" fill="#2563eb" fillOpacity="0.35" filter="url(#lb-glow)">
-                <animateMotion dur="28s" begin={`${delay}s`} repeatCount="indefinite" path={PATH} />
-              </circle>
-              <circle r="3.5" fill="#1d4ed8" fillOpacity="0.9">
-                <animateMotion dur="28s" begin={`${delay}s`} repeatCount="indefinite" path={PATH} />
-              </circle>
-            </g>
-          ))}
         {/* stations */}
         {STATIONS.map((s) => (
           <g key={s.label} transform={`translate(${s.x} ${s.y})`}>

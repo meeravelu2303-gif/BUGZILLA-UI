@@ -177,5 +177,3 @@
 }
 
 
-/* The sign-in backdrop's flowing lifecycle line (components/auth/LoginBackdrop.tsx). */
-@keyframes login-flow { to { stroke-dashoffset: -240; } }
