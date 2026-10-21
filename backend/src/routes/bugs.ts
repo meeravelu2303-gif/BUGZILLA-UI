@@ -8,7 +8,6 @@ import express, { Router, type Request } from 'express';
 import { z } from 'zod';
 import type { Env } from '../config/env';
 import { requireAuth, requirePermission } from '../middleware/auth';
-import { getCategoryIndex } from '../lib/categoryIndex';
 import { accessSnapshot, scopeToAccessibleProducts } from '../lib/access';
 import {
   CATEGORIES,
@@ -24,6 +23,9 @@ import {
 } from '../lib/classification';
 import type { BugzillaClient } from '../lib/bugzillaClient';
 import { reassignedBugIds } from '../lib/bugHistory';
+import { canServeFromSnapshot, getBugSnapshot, inScope, invalidateBugSnapshot, matchesFilters, type SnapshotBug } from '../lib/bugSnapshot';
+import { accessibleProductNames } from '../lib/access';
+import { categoryOf } from '../lib/classification';
 import { closedStatuses, narrowStatusFilter } from '../lib/bugStatus';
 import { allGroupNames, bugFeatures } from '../lib/bugFeatures';
 import { CURRENT_BUG_FIELDS, toBugzillaUpdate, validateBugUpdate, type CurrentBug } from '../lib/bugUpdate';
@@ -83,6 +85,11 @@ interface StatsRow {
 }
 
 /** A counter object with every key present at zero, so absent bands still render. */
+/** A snapshot row in the shape `tallyBugCounts` reads. */
+function toCountRow(r: SnapshotBug) {
+  return { id: r.id, is_open: r.isOpen, status: r.status, severity: r.severity, assigned_to: r.assignedTo, product: r.product, component: r.component };
+}
+
 function zeroed<T extends readonly string[]>(keys: T): Record<T[number], number> {
   return Object.fromEntries(keys.map((k) => [k, 0])) as Record<T[number], number>;
 }
@@ -780,9 +787,6 @@ export function bugsRouter(env: Env): Router {
        * built the list still renders - rows degrade to Unclassified rather than
        * the whole page failing over a breakdown that is decoration here.
        */
-      const index = await getCategoryIndex(req.bugzilla!, req.sessionUser!.bzUserId, env.STATS_CACHE_TTL_MS).catch(
-        () => null
-      );
 
       const bugs = page.map((bug) => ({
         ...bug,
@@ -793,7 +797,7 @@ export function bugsRouter(env: Env): Router {
             whiteboard: bug.whiteboard,
             product: bug.product,
           }),
-          category: index?.categoryOf(bug.id) ?? 'Unclassified',
+          category: categoryOf(bug.whiteboard, undefined),
         },
       }));
 
@@ -842,12 +846,27 @@ export function bugsRouter(env: Env): Router {
         params.bug_status = narrowed as unknown as string;
       }
 
-      // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
-      // never count another product's bugs. No-op when an explicit product filter is set.
-      await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
-
-      const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
-      const rows = raw.bugs.map((b) => bugCountRowSchema.parse(b));
+      /*
+       * Served from the in-memory snapshot whenever the filters allow it (see
+       * lib/bugSnapshot.ts): a count then costs a millisecond instead of a
+       * full pass through Bugzilla's CGI layer. Free-text and CC filters
+       * still go to Bugzilla. Either way the caller's accessible products
+       * scope the result, so instance-wide totals never count another
+       * product's bugs; an explicit product filter wins.
+       */
+      let rows: ReturnType<typeof bugCountRowSchema.parse>[];
+      if (canServeFromSnapshot(query)) {
+        const narrowedQuery = { ...query, status: params.bug_status as unknown as string[] | undefined };
+        const [snap, names] = await Promise.all([
+          getBugSnapshot(env),
+          accessibleProductNames(req.bugzilla!, req.sessionUser!.bzUserId),
+        ]);
+        rows = snap.rows.filter((r) => inScope(r, names, query) && matchesFilters(r, narrowedQuery)).map(toCountRow);
+      } else {
+        await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
+        const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
+        rows = raw.bugs.map((b) => bugCountRowSchema.parse(b));
+      }
 
       /*
        * The component default-owner map, for the unassigned tally.
@@ -873,8 +892,12 @@ export function bugsRouter(env: Env): Router {
        * Best effort: a history failure leaves the figure at 0 rather than
        * failing the whole count, because every other tile on the page depends
        * on this response.
+       *
+       * Computed only when the assignment filter asks for it: it is the one
+       * reader, and the history call is a Bugzilla CGI round trip that would
+       * otherwise be paid by every count on every dashboard card.
        */
-      if (owners) {
+      if (owners && query.assignment) {
         const candidates = reassignmentCandidates(rows, owners);
         if (candidates.length > 0) {
           try {
@@ -926,11 +949,7 @@ export function bugsRouter(env: Env): Router {
     applyBugFilters(params, query);
     await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
 
-    const [raw, index] = await Promise.all([
-      req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params),
-      // Same degradation as the list: no index means Unclassified, not a failed export.
-      getCategoryIndex(req.bugzilla!, req.sessionUser!.bzUserId, env.STATS_CACHE_TTL_MS).catch(() => null),
-    ]);
+    const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
 
     if (raw.bugs.length >= EXPORT_MAX_ROWS) {
       throw new AppError(
@@ -973,7 +992,7 @@ export function bugsRouter(env: Env): Router {
         triage: {
           severity: triage.severity,
           priority: triage.priority,
-          category: index?.categoryOf(bug.id) ?? 'Unclassified',
+          category: categoryOf(bug.whiteboard, undefined),
           browsers: triage.browsers,
           source: triage.source,
           testType: triage.testType,
@@ -1339,14 +1358,44 @@ export function bugsRouter(env: Env): Router {
         include_fields: 'id,severity,priority,status,component,product,whiteboard,is_open,assigned_to',
       };
       applyBugFilters(params, query);
-      // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
-      // never count another product's bugs. No-op when an explicit product filter is set.
-      await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
 
-      const [raw, index] = await Promise.all([
-        req.bugzilla!.get<{ bugs: StatsRow[] }>('/bug', params as Record<string, string | number>),
-        getCategoryIndex(req.bugzilla!, req.sessionUser!.bzUserId, env.STATS_CACHE_TTL_MS),
-      ]);
+      /*
+       * From the in-memory snapshot when the filters allow (lib/bugSnapshot.ts);
+       * otherwise the Bugzilla search as before. Both are scoped to the
+       * caller's accessible products (an explicit product filter wins).
+       *
+       * Category is read straight from each bug's whiteboard tag: every bug on
+       * this instance carries one (verified 2026-10-20: 0 untagged of 13,171),
+       * so the ten-query category index that used to be rebuilt per user per
+       * minute is no longer consulted here.
+       */
+      let raw: { bugs: StatsRow[] };
+      let builtAt = Date.now();
+      if (canServeFromSnapshot(query)) {
+        const [snap, names] = await Promise.all([
+          getBugSnapshot(env),
+          accessibleProductNames(req.bugzilla!, req.sessionUser!.bzUserId),
+        ]);
+        builtAt = snap.builtAt;
+        raw = {
+          bugs: snap.rows
+            .filter((r) => inScope(r, names, query) && matchesFilters(r, query))
+            .map((r) => ({
+              id: r.id,
+              severity: r.severity,
+              priority: r.priority,
+              status: r.status,
+              component: r.component,
+              product: r.product,
+              whiteboard: r.whiteboard,
+              is_open: r.isOpen,
+              assigned_to: r.assignedTo,
+            })),
+        };
+      } else {
+        await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
+        raw = await req.bugzilla!.get<{ bugs: StatsRow[] }>('/bug', params as Record<string, string | number>);
+      }
 
       const bySeverity = zeroed(SEVERITIES);
       const byCategory = zeroed(CATEGORIES);
@@ -1414,7 +1463,7 @@ export function bugsRouter(env: Env): Router {
         });
         bySource[source] += 1;
         if (row.is_open) openBySource[source] += 1;
-        const category = index.categoryOf(row.id);
+        const category = categoryOf(row.whiteboard, undefined);
         bySeverity[severity] += 1;
         byCategory[category] += 1;
         matrix[severity][category] += 1;
@@ -1449,7 +1498,7 @@ export function bugsRouter(env: Env): Router {
         openByBrowser,
         openBySource,
         openMatrix,
-        cachedAt: new Date(index.builtAt).toISOString(),
+        cachedAt: new Date(builtAt).toISOString(),
       });
     } catch (err) {
       next(err);
@@ -1777,6 +1826,8 @@ export function bugsRouter(env: Env): Router {
 
   // POST /api/bugs
   router.post('/', auth, async (req, res, next) => {
+    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
+    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const input = parseInput(createBugSchema, req.body);
       const client = req.bugzilla!;
@@ -1821,6 +1872,8 @@ export function bugsRouter(env: Env): Router {
    * array). Registered before `/:id` so the collection route is not shadowed by the item route.
    */
   router.patch('/', auth, async (req, res, next) => {
+    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
+    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { ids, assignedTo } = parseInput(bulkReassignSchema, req.body);
       // All-or-nothing: Bugzilla applies the whole id array in one call, so a
@@ -1911,6 +1964,8 @@ export function bugsRouter(env: Env): Router {
   });
 
   router.post('/delete', auth, triage, async (req, res, next) => {
+    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
+    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { ids, reason } = parseInput(softDeleteSchema, req.body);
       const deleted = await softDeleteBugs(req.bugzilla!, [...new Set(ids)], reason, actorName(req));
@@ -1921,6 +1976,8 @@ export function bugsRouter(env: Env): Router {
   });
 
   router.post('/restore', auth, triage, async (req, res, next) => {
+    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
+    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { ids } = parseInput(restoreSchema, req.body);
       const client = req.bugzilla!;
@@ -1972,6 +2029,8 @@ export function bugsRouter(env: Env): Router {
   });
 
   router.post('/:id/transfer', auth, async (req, res, next) => {
+    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
+    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { id } = parseInput(idParamSchema, req.params);
       const request = parseInput(transferBugSchema, req.body);
@@ -1995,6 +2054,8 @@ export function bugsRouter(env: Env): Router {
   });
 
   router.patch('/:id', auth, async (req, res, next) => {
+    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
+    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { id } = parseInput(idParamSchema, req.params);
       const input = parseInput(updateBugSchema, req.body);

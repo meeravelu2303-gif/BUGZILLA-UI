@@ -2,10 +2,12 @@ import { Router } from 'express';
 import type { Env } from '../config/env';
 import { accessSnapshot } from '../lib/access';
 import { bugFeatures, bugzillaPublicUrl } from '../lib/bugFeatures';
-import { BugzillaClient } from '../lib/bugzillaClient';
+import { BugzillaClient, type QueryParams } from '../lib/bugzillaClient';
 import { groupNameForProduct } from '../lib/productGroups';
 import { isServiceAccount, parseTransferRoutes } from '../lib/productTransfer';
 import { requireAuth } from '../middleware/auth';
+import { getBugSnapshot } from '../lib/bugSnapshot';
+import { memo } from '../lib/memo';
 import { extractBugMeta } from '../schemas/meta';
 
 export function metaRouter(env: Env): Router {
@@ -15,7 +17,7 @@ export function metaRouter(env: Env): Router {
   router.get('/', requireAuth(env), async (req, res, next) => {
     try {
       const [raw, features, bugzillaWebUrl] = await Promise.all([
-        req.bugzilla!.get('/field/bug'),
+        fieldDefinitions(req.bugzilla!),
         bugFeatures(env),
         // The browser-facing address, not BUGZILLA_URL (often localhost) - see bugzillaPublicUrl.
         bugzillaPublicUrl(env),
@@ -62,10 +64,7 @@ export function metaRouter(env: Env): Router {
         .map((p) => String(p).trim())
         .filter(Boolean);
 
-      const directory = new BugzillaClient(env.BUGZILLA_URL, {
-        kind: 'api_key',
-        apiKey: env.BUGZILLA_API_KEY,
-      });
+      const directory = memoizedDirectory(env);
 
       const allGroups = await directory.get<{ groups: Array<{ name: string }> }>('/group', {
         membership: 0,
@@ -253,7 +252,7 @@ export function metaRouter(env: Env): Router {
    */
   router.get('/reporters', requireAuth(env), async (_req, res, next) => {
     try {
-      const directory = new BugzillaClient(env.BUGZILLA_URL, { kind: 'api_key', apiKey: env.BUGZILLA_API_KEY });
+      const directory = memoizedDirectory(env);
       const resp = await directory.get<{
         groups: Array<{ name: string; membership?: Array<{ email?: string; real_name?: string; name?: string; can_login?: boolean }> }>;
       }>('/group', { names: ['canconfirm', 'editusers', 'editcomponents', 'reporter'], membership: 1 });
@@ -279,7 +278,7 @@ export function metaRouter(env: Env): Router {
        * group: listing every developer would offer dozens of names that return
        * nothing. Cached briefly; it is one `creator`-only search over every bug.
        */
-      const filers = await bugFilers(directory);
+      const filers = await bugFilers(env);
       for (const [key, who] of filers) {
         if (people.has(key) || isServiceAccount(who.email)) continue;
         people.set(key, { ...who, role: 'developer' });
@@ -293,21 +292,44 @@ export function metaRouter(env: Env): Router {
   return router;
 }
 
-/** Everyone who has reported at least one bug, keyed by lower-cased email. Refreshed every five minutes. */
-let filersCache: { at: number; value: Map<string, { email: string; name: string }> } | null = null;
-async function bugFilers(client: BugzillaClient): Promise<Map<string, { email: string; name: string }>> {
-  if (filersCache && Date.now() - filersCache.at < 5 * 60 * 1000) return filersCache.value;
-  const resp = await client.get<{ bugs: Array<{ creator?: string; creator_detail?: { email?: string; real_name?: string; name?: string } }> }>(
-    '/bug',
-    { include_fields: 'creator,creator_detail', limit: 0 }
-  );
+/** Everyone who has reported at least one bug, keyed by lower-cased email - read from the in-memory bug snapshot. */
+async function bugFilers(env: Env): Promise<Map<string, { email: string; name: string }>> {
+  const snap = await getBugSnapshot(env);
   const value = new Map<string, { email: string; name: string }>();
-  for (const b of resp.bugs ?? []) {
-    const email = b.creator_detail?.email ?? b.creator;
-    if (!email) continue;
-    const key = email.toLowerCase();
-    if (!value.has(key)) value.set(key, { email, name: b.creator_detail?.real_name || b.creator_detail?.name || email });
+  for (const b of snap.rows) {
+    if (!b.creator || value.has(b.creator)) continue;
+    value.set(b.creator, { email: b.creator, name: b.creatorName || b.creator });
   }
-  filersCache = { at: Date.now(), value };
   return value;
+}
+
+/**
+ * Bugzilla's field definitions (statuses, resolutions, severities …) change
+ * only when an admin edits them, yet every page asked for them afresh at
+ * ~800 ms a time. Cached for five minutes; an admin edit shows up within that.
+ */
+let fieldCache: { at: number; value: unknown } | null = null;
+async function fieldDefinitions(client: BugzillaClient): Promise<unknown> {
+  if (fieldCache && Date.now() - fieldCache.at < 5 * 60 * 1000) return fieldCache.value;
+  const value = await client.get('/field/bug');
+  fieldCache = { at: Date.now(), value };
+  return value;
+}
+
+/**
+ * The service-key client with its reads memoized for five minutes.
+ *
+ * Group membership (who is a tester, a developer, a reporter, an admin; who
+ * can reach which product) changes only when an admin edits an account, yet
+ * every assignee picker and reporter list re-read it through Bugzilla's CGI
+ * layer at ~700 ms a call. `clearDirectoryCache()` is called by the admin
+ * Users routes after any change, so a role change shows up at once.
+ */
+export const DIRECTORY_CACHE = 'directory';
+function memoizedDirectory(env: Env): { get<T>(path: string, params?: QueryParams): Promise<T> } {
+  const client = new BugzillaClient(env.BUGZILLA_URL, { kind: 'api_key', apiKey: env.BUGZILLA_API_KEY });
+  return {
+    get: <T,>(path: string, params?: QueryParams) =>
+      memo<T>(DIRECTORY_CACHE, path + ' ' + JSON.stringify(params ?? {}), 5 * 60 * 1000, () => client.get<T>(path, params)),
+  };
 }

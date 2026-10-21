@@ -314,14 +314,14 @@ export function classify(raw: {
  * encodings; a band is additionally pinned by its priority (below) so the two
  * do not bleed into each other.
  */
-const BUGZILLA_SEVERITIES: Record<Exclude<Severity, 'Unclassified'>, string[]> = {
+export const BUGZILLA_SEVERITIES: Record<Exclude<Severity, 'Unclassified'>, string[]> = {
   Critical: ['blocker', 'critical'],
   Major: ['major'],
   Minor: ['normal', 'minor'],
   Trivial: ['trivial', 'minor'],
 };
 
-const BUGZILLA_PRIORITIES: Record<Exclude<Priority, 'Unclassified'>, string[]> = {
+export const BUGZILLA_PRIORITIES: Record<Exclude<Priority, 'Unclassified'>, string[]> = {
   P0: ['Highest'],
   P1: ['High'],
   P2: ['Normal'],
@@ -358,7 +358,7 @@ export interface BugFilters {
 }
 
 /** The day after `YYYY-MM-DD`, so an inclusive "to" becomes an exclusive upper bound. */
-function nextDay(day: string): string {
+export function nextDay(day: string): string {
   const d = new Date(`${day}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);

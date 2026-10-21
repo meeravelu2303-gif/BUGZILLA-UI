@@ -10,6 +10,8 @@ import { groupNameForProduct } from '../lib/productGroups';
 import { directoryClient, parseTransferRoutes } from '../lib/productTransfer';
 import { requireAuth, requirePermission } from '../middleware/auth';
 import { parseInput } from '../lib/validate';
+import { getBugSnapshot } from '../lib/bugSnapshot';
+import { clearMemo, memo } from '../lib/memo';
 import { AppError } from '../lib/errors';
 import { normalizeProduct, rawProductSchema } from '../schemas/product';
 import { createComponentSchema, createProductSchema, deleteProductSchema, updateProductSchema } from '../schemas/adminProduct';
@@ -21,10 +23,11 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
  * soft-deleted ones included - which Bugzilla's delete also counts). One search
  * returning only the product field, so the whole instance costs one request.
  */
-async function bugCountsByProduct(client: { get<T>(path: string, params?: Record<string, unknown>): Promise<T> }) {
-  const resp = await client.get<{ bugs: { product: string }[] }>('/bug', { include_fields: 'product', limit: 0 });
+async function bugCountsByProduct(env: Env) {
+  // From the in-memory snapshot (lib/bugSnapshot.ts) rather than a full pass through Bugzilla.
+  const snap = await getBugSnapshot(env);
   const counts = new Map<string, number>();
-  for (const b of resp.bugs ?? []) {
+  for (const b of snap.rows) {
     const key = b.product.toLowerCase();
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
@@ -53,14 +56,16 @@ export function adminProductsRouter(env: Env): Router {
   router.get('/', ...viewGate, async (req, res, next) => {
     try {
       const client = req.bugzilla!;
-      const accessible = await client.get<{ ids: number[] }>('/product_accessible');
+      // Memoized per user for a minute (lib/memo.ts): two CGI round trips otherwise paid on every visit.
+      const uid = req.sessionUser!.bzUserId;
+      const accessible = await memo('admin-products', `accessible:${uid}`, 60_000, () => client.get<{ ids: number[] }>('/product_accessible'));
       if (accessible.ids.length === 0) {
         res.json({ products: [] });
         return;
       }
       const [full, counts] = await Promise.all([
-        client.get<{ products: unknown[] }>('/product', { ids: accessible.ids }),
-        bugCountsByProduct(client),
+        memo('admin-products', `products:${uid}:${accessible.ids.join(',')}`, 60_000, () => client.get<{ products: unknown[] }>('/product', { ids: accessible.ids })),
+        bugCountsByProduct(env),
       ]);
       const products = full.products.map((p) => {
         const product = normalizeProduct(rawProductSchema.parse(p));
@@ -88,6 +93,8 @@ export function adminProductsRouter(env: Env): Router {
       // A new product changes what every user may enter, so the cached access
       // snapshots are stale for everyone, not just the caller.
       clearAccessScope();
+      clearMemo('admin-products');
+      clearMemo('directory');
 
       const product = await fetchProduct(client, created.id);
       res.status(201).json({ product });
@@ -143,6 +150,9 @@ export function adminProductsRouter(env: Env): Router {
         }
         clearGroupNameCache();
         clearAccessScope();
+        clearMemo('admin-products');
+      clearMemo('admin-products');
+      clearMemo('directory');
         clearCategoryIndex();
 
         // Transfer routes are configuration that names products; say so rather than let them break quietly.
@@ -157,6 +167,9 @@ export function adminProductsRouter(env: Env): Router {
         }
       } else if (input.isActive !== undefined) {
         clearAccessScope();
+        clearMemo('admin-products');
+      clearMemo('admin-products');
+      clearMemo('directory');
       }
 
       const product = await fetchProduct(client, id);
@@ -185,7 +198,7 @@ export function adminProductsRouter(env: Env): Router {
       if (confirmName !== product.name) {
         throw new AppError(400, 'VALIDATION', `Type the product name exactly - "${product.name}" - to confirm.`);
       }
-      const bugs = (await bugCountsByProduct(client)).get(product.name.toLowerCase()) ?? 0;
+      const bugs = (await bugCountsByProduct(env)).get(product.name.toLowerCase()) ?? 0;
       if (bugs > 0) {
         throw new AppError(
           409,
@@ -198,6 +211,8 @@ export function adminProductsRouter(env: Env): Router {
 
       await deleteProductViaBugzilla(env.BUGZILLA_URL, req.sessionUser!.bzToken, product.name);
       clearAccessScope();
+      clearMemo('admin-products');
+      clearMemo('directory');
       clearCategoryIndex();
       console.info(`[admin] product "${product.name}" (id ${id}) deleted by ${req.sessionUser!.email}`);
       res.status(204).end();

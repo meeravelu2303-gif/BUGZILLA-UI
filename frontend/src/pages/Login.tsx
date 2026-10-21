@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLogin } from '../api/hooks';
 import { BugzillaMark } from '../components/brand/BugzillaMark';
 import { UEducateLogo } from '../components/brand/UEducateLogo';
+import { LoginBackdrop } from '../components/auth/LoginBackdrop';
 import { getSignInErrorMessage } from '../lib/authErrorMessage';
 import { listVariants, pageVariants } from '../lib/motion';
 import { cn } from '../lib/utils';
@@ -67,8 +68,6 @@ import { cn } from '../lib/utils';
 const THEME = {
   /* ---------------------------------------------------------- canvas --- */
   canvas: 'bg-[#FAFAFB]',
-  glowTopLeft: 'bg-[radial-gradient(circle,rgba(37,99,235,0.08)_0%,transparent_70%)]',
-  glowBottomRight: 'bg-[radial-gradient(circle,rgba(14,165,233,0.07)_0%,transparent_70%)]',
 
   /* ------------------------------------------------------------ text --- */
   heading: 'text-slate-900',
@@ -250,7 +249,7 @@ export function Login() {
 
   return (
     <div className={cn('relative min-h-screen overflow-hidden', THEME.canvas)}>
-      <AmbientGlow />
+      <LoginBackdrop />
 
       <motion.main
         variants={listVariants}
@@ -732,27 +731,6 @@ function SpecsPanel() {
           </li>
         ))}
       </ul>
-    </>
-  );
-}
-
-function AmbientGlow() {
-  return (
-    <>
-      {/*
-        Written as explicit `radial-gradient(...)`: `bg-gradient-radial` is NOT
-        a stock Tailwind utility (only the linear directions ship) and this
-        config adds no plugin for it, so that shorthand compiles to nothing and
-        the glow silently never renders.
-      */}
-      <div
-        className={cn('pointer-events-none absolute -left-[22rem] -top-[22rem] h-[48rem] w-[48rem] rounded-full blur-3xl', THEME.glowTopLeft)}
-        aria-hidden
-      />
-      <div
-        className={cn('pointer-events-none absolute -bottom-[24rem] -right-[20rem] h-[46rem] w-[46rem] rounded-full blur-3xl', THEME.glowBottomRight)}
-        aria-hidden
-      />
     </>
   );
 }

@@ -5,6 +5,7 @@ import { directoryClient, isServiceAccount } from '../lib/productTransfer';
 import { z } from 'zod';
 import type { Env } from '../config/env';
 import { clearAccessScope } from '../lib/access';
+import { clearMemo } from '../lib/memo';
 import { groupsForRole, managedGroups } from '../lib/roles';
 import { requireAuth, requirePermission } from '../middleware/auth';
 import { parseInput } from '../lib/validate';
@@ -151,6 +152,7 @@ export function adminUsersRouter(env: Env): Router {
       // Group membership decides product access; clear the cached scope so a
       // brand-new account is not judged by a snapshot taken before it existed.
       clearAccessScope();
+      clearMemo('directory');
 
       const resp = await client.get<{ users: unknown[] }>(`/user/${created.id}`);
       const user = normalizeAdminUser(rawAdminUserSchema.parse(resp.users[0]));
@@ -229,6 +231,7 @@ export function adminUsersRouter(env: Env): Router {
       // A role or product change alters what this user may see, so drop the
       // cached access scope: it applies on their next request, not in 5 minutes.
       clearAccessScope();
+      clearMemo('directory');
 
       const resp = await client.get<{ users: unknown[] }>(`/user/${id}`);
       const user = normalizeAdminUser(rawAdminUserSchema.parse(resp.users[0]));
@@ -288,6 +291,7 @@ export function adminUsersRouter(env: Env): Router {
       guardDeletable(req, id, user.email);
       await deleteUserViaBugzilla(env.BUGZILLA_URL, req.sessionUser!.bzToken, id);
       clearAccessScope();
+      clearMemo('directory');
       console.info(`[admin] user ${user.email} (id ${id}) deleted by ${req.sessionUser!.email}`);
       res.status(204).end();
     } catch (err) {
