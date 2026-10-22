@@ -1,4 +1,5 @@
 import { Bug, ChevronDown, LogOut, Menu, Plus, Search, Settings, X } from 'lucide-react';
+import { useLiveUpdates } from '../../lib/useLiveUpdates';
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useLogout, useMe } from '../../api/hooks';
@@ -76,6 +77,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const user = data?.user;
+  // Refresh what is on screen when anyone changes a bug (lib/useLiveUpdates.ts).
+  useLiveUpdates(Boolean(user));
   const permissions = user?.permissions;
 
   // ⌘K / Ctrl-K opens the command palette anywhere in the app.

@@ -25,6 +25,10 @@ export interface Bug {
   isConfirmed: boolean;
   product: string;
   component: string;
+  /** Stored sub-component value (`<name> [<component id>]`), `---` for none. Optional: an older backend does not send it. */
+  subcomponent?: string;
+  /** Its display name; '' for none. */
+  subcomponentName?: string;
   version: string;
   priority: string;
   severity: string;
@@ -120,7 +124,7 @@ export interface Product {
   /** Admin product list only: every bug in the product. Delete is possible only at 0. */
   bugCount?: number;
   isActive: boolean;
-  components: { name: string; defaultAssignee: string }[];
+  components: ProductComponent[];
   versions: string[];
   milestones: string[];
 }
@@ -265,11 +269,56 @@ export interface CreateProductInput {
   name: string;
   description: string;
   version: string;
+  /** The first component, created with the product - a product cannot take bugs without one. */
+  component: { name: string; description: string; defaultAssignee: string };
 }
 
 export interface UpdateProductInput {
   name?: string;
   description?: string;
+  isActive?: boolean;
+}
+
+/** A second level under a component (backend lib/subcomponents.ts). */
+export interface Subcomponent {
+  id: number;
+  /** Stored value, `<name> [<component id>]` - what bugs and filters carry. */
+  value: string;
+  name: string;
+  /** Inactive ones stay on existing bugs but are no longer offered. */
+  isActive: boolean;
+  /** Admin product list only. Delete is possible only at 0. */
+  bugCount?: number;
+}
+
+export interface ProductComponent {
+  id?: number;
+  name: string;
+  /** Optional: an older backend does not send it. */
+  description?: string;
+  /** Inactive components keep their bugs but are closed for new ones. */
+  isActive?: boolean;
+  defaultAssignee: string;
+  /** Admin product list only. Delete is possible only at 0. */
+  bugCount?: number;
+  /** Optional: an older backend does not send it. */
+  subcomponents?: Subcomponent[];
+}
+
+export interface CreateSubcomponentInput {
+  componentId: number;
+  name: string;
+}
+
+export interface UpdateSubcomponentInput {
+  name?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateComponentInput {
+  name?: string;
+  description?: string;
+  defaultAssignee?: string;
   isActive?: boolean;
 }
 
@@ -381,6 +430,8 @@ export interface ListBugsParams {
 export interface CreateBugInput {
   product: string;
   component: string;
+  /** Stored value of one of the component's sub-components; omit for none. */
+  subcomponent?: string;
   summary: string;
   description?: string;
   version?: string;
@@ -414,6 +465,8 @@ export interface UpdateBugInput {
   severity?: string;
   product?: string;
   component?: string;
+  /** Stored sub-component value, or '' to clear. Changing component without it clears it. */
+  subcomponent?: string;
   version?: string;
   targetMilestone?: string;
   opSys?: string;
@@ -504,6 +557,10 @@ export interface Classification {
    * absent; never guess a browser onto a bug.
    */
   browsers: string[];
+  /** UI bugs: Web or Mobile, from the `[platform:…]` tag. Optional: older backends and older bugs lack it. */
+  uiPlatform?: 'Web' | 'Mobile' | null;
+  /** Mobile UI bugs: the device platforms (android, ios), from `[device:…]`. */
+  devices?: string[];
   /** Filed by a bench ("Automation") or by a person ("Manual"). Optional: an older backend does not send it. */
   source?: Source;
   /** API or UI, decided by the product. Optional, as above. */
@@ -548,6 +605,14 @@ export interface BugStats {
   bySeverity: Record<Severity, number>;
   byCategory: Record<Category, number>;
   byComponent: Record<string, number>;
+  /** Bugs per stored sub-component value (`---` = none). Optional: an older backend does not send it. */
+  bySubcomponent?: Record<string, number>;
+  /** Per-value counts for the remaining filter facets. Optional: an older backend does not send them. */
+  byProduct?: Record<string, number>;
+  byStatus?: Record<string, number>;
+  /** Keyed by the filter's spelling - 'Unresolved' for an open bug. */
+  byResolution?: Record<string, number>;
+  byPriority?: Record<string, number>;
   /**
    * Bugs per Playwright project. A key is present only when some bug in scope
    * carries that browser, so an empty object means "this scope has no
@@ -567,6 +632,7 @@ export interface BugStats {
   openBySeverity?: Record<Severity, number>;
   openByCategory?: Record<Category, number>;
   openByComponent?: Record<string, number>;
+  openBySubcomponent?: Record<string, number>;
   openByBrowser?: Record<string, number>;
   openMatrix?: Record<Severity, Record<Category, number>>;
   /** Automation vs Manual, every bug / open bugs. Optional: an older backend does not send them. */
@@ -594,6 +660,8 @@ export interface BugFilters {
   source: string[];
   product: string[];
   component: string[];
+  /** Stored sub-component values (`Login [42]`); `---` = bugs with none. */
+  subcomponent: string[];
   status: string[];
   /** Bugzilla resolutions. `Unresolved` is translated to Bugzilla's `---` server-side. */
   resolution: string[];
@@ -643,4 +711,41 @@ export function roleFromGroups(groups: string[]): Role {
   if (held.has('canconfirm')) return 'tester';
   if (held.has('reporter')) return 'reporter';
   return 'developer';
+}
+
+/* ------------------------------------------------------------------ activity */
+
+/** One recorded change (backend lib/bugActivity.ts). */
+export type ActivityChangeKind = 'status' | 'resolution' | 'assignee' | 'placement' | 'priority' | 'people' | 'text' | 'link' | 'visibility' | 'other';
+
+export interface ActivityChange {
+  field: string;
+  label: string;
+  kind: ActivityChangeKind;
+  removed: string;
+  added: string;
+}
+
+export interface ActivityEntry {
+  when: string;
+  who: string;
+  whoName: string;
+  changes: ActivityChange[];
+}
+
+export interface JourneyStep {
+  status: string;
+  /** The resolution in force at this step ('' while open). */
+  resolution: string;
+  when: string;
+  who: string;
+  whoName: string;
+}
+
+export interface BugActivity {
+  created: { when: string; who: string; whoName: string };
+  /** The status story, oldest first: filed, then every status change. */
+  journey: JourneyStep[];
+  /** Every save, newest first. */
+  entries: ActivityEntry[];
 }

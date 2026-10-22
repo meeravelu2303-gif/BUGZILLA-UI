@@ -1,11 +1,12 @@
 import { Boxes, CircleDot, Clock, Flag, Gauge, GitBranch, RotateCcw, ShieldCheck, Tag, Users } from 'lucide-react';
+import { subcomponentName } from '../../lib/utils';
 import { useAssignableUsers } from '../../api/hooks';
 import type { Bug, BugMeta, Product } from '../../types';
 import { parseBugRef, type BugEditor, type DraftKey } from '../../lib/useBugEditor';
 import { bugDisplayId, formatDateTime } from '../../lib/utils';
 import { Avatar } from '../ui/Avatar';
 import { Card } from '../ui/Card';
-import { BrowserPills } from '../ui/Pill';
+import { BrowserPills, MobilePill } from '../ui/Pill';
 import { Input, Select } from '../ui/Field';
 import { ChipInput } from './edit/ChipInput';
 import { Changed, EditSection } from './edit/EditSection';
@@ -13,7 +14,7 @@ import { Changed, EditSection } from './edit/EditSection';
 const SECTION_FIELDS: Record<string, DraftKey[]> = {
   status: ['status', 'resolution', 'dupeOf'],
   classification: ['priority', 'severity'],
-  placement: ['product', 'component', 'version', 'targetMilestone', 'opSys', 'platform'],
+  placement: ['product', 'component', 'subcomponent', 'version', 'targetMilestone', 'opSys', 'platform'],
   people: ['assignedTo', 'resetAssignedTo', 'qaContact', 'resetQaContact', 'cc'],
   relations: ['dependsOn', 'blocks', 'seeAlso', 'url'],
   time: ['estimatedTime', 'remainingTime', 'workTime', 'deadline'],
@@ -159,7 +160,7 @@ export function MetadataSidebar({
       </EditSection>
 
       {/* ---- Product & placement ---- */}
-      <EditSection id="placement" title="Product & component" icon={Boxes} changes={changesIn('placement')} summary={`${draft.product} / ${draft.component || '—'}`}>
+      <EditSection id="placement" title="Product & component" icon={Boxes} changes={changesIn('placement')} summary={`${draft.product} / ${draft.component || '—'}${draft.subcomponent ? ` / ${subcomponentName(draft.subcomponent)}` : ''}`}>
         <Changed when={editor.isDirty('product')}>
           <Select
             label="Product"
@@ -189,6 +190,33 @@ export function MetadataSidebar({
             ))}
           </Select>
         </Changed>
+        {/* Sub-component: the chosen component's live ones, plus the saved one if it has since been deactivated. */}
+        {(() => {
+          const subs = product?.components.find((c) => c.name === draft.component)?.subcomponents ?? [];
+          const offered = subs.filter((sc) => sc.isActive || sc.value === draft.subcomponent);
+          if (offered.length === 0 && !draft.subcomponent) return null;
+          return (
+            <Changed when={editor.isDirty('subcomponent')}>
+              <Select
+                label="Sub-component"
+                value={draft.subcomponent}
+                onChange={(e) => set('subcomponent', e.target.value)}
+                hint={editor.isDirty('component') ? 'Cleared because the component changed. Pick one from the new component, or leave it empty.' : undefined}
+              >
+                <option value="">None</option>
+                {offered.map((sc) => (
+                  <option key={sc.id} value={sc.value}>
+                    {sc.name}
+                    {sc.isActive ? '' : ' (inactive)'}
+                  </option>
+                ))}
+                {draft.subcomponent && !offered.some((sc) => sc.value === draft.subcomponent) && (
+                  <option value={draft.subcomponent}>{subcomponentName(draft.subcomponent)}</option>
+                )}
+              </Select>
+            </Changed>
+          );
+        })()}
         <div className="grid grid-cols-2 gap-3">
           <Changed when={editor.isDirty('version')}>
             <Select
@@ -563,15 +591,23 @@ export function MetadataSidebar({
             label="Whiteboard"
             value={draft.whiteboard}
             onChange={(e) => set('whiteboard', e.target.value)}
-            hint="Holds the [cat:…] and [browser:…] tags the test bench uses for classification."
+            hint="Holds the [cat:…], [platform:…], [browser:…] and [device:…] tags used for classification."
             className="font-mono text-xs"
           />
         </Changed>
-        {bug.triage?.browsers && bug.triage.browsers.length > 0 && (
+        {bug.triage?.uiPlatform === 'Mobile' ? (
           <div className="flex items-start justify-between gap-3 text-sm">
-            <span className="shrink-0 pt-0.5 text-slate-600">Browser</span>
-            <BrowserPills browsers={bug.triage.browsers} className="justify-end" />
+            <span className="shrink-0 pt-0.5 text-slate-600">Platform</span>
+            <MobilePill devices={bug.triage.devices} />
           </div>
+        ) : (
+          bug.triage?.browsers &&
+          bug.triage.browsers.length > 0 && (
+            <div className="flex items-start justify-between gap-3 text-sm">
+              <span className="shrink-0 pt-0.5 text-slate-600">{bug.triage.uiPlatform === 'Web' ? 'Web · Browser' : 'Browser'}</span>
+              <BrowserPills browsers={bug.triage.browsers} className="justify-end" />
+            </div>
+          )
         )}
       </EditSection>
 

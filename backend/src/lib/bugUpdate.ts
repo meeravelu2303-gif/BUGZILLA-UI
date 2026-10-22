@@ -16,6 +16,7 @@ export interface CurrentBug {
   assigned_to: string;
   product: string;
   component: string;
+  cf_subcomponent?: string;
   version: string;
   target_milestone?: string;
   depends_on?: number[];
@@ -24,7 +25,7 @@ export interface CurrentBug {
 }
 
 export const CURRENT_BUG_FIELDS =
-  'id,last_change_time,status,is_open,resolution,assigned_to,product,component,version,target_milestone,depends_on,blocks';
+  'id,last_change_time,status,is_open,resolution,assigned_to,product,component,cf_subcomponent,version,target_milestone,depends_on,blocks';
 
 /** Scalar fields copied straight across, camelCase -> Bugzilla's update parameter name. */
 const SCALARS: Record<string, string> = {

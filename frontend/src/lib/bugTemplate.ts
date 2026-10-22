@@ -21,6 +21,11 @@ export type BugKind = 'api' | 'ui';
 export const BUG_CATEGORIES = ['Functional', 'Security', 'Performance', 'Compatibility', 'Accessibility'] as const;
 
 export const BUG_BROWSERS = ['chromium', 'firefox', 'webkit', 'mobile-chrome'] as const;
+/** Mobile UI bugs: the device platforms the app was tested on. */
+export const BUG_DEVICES = ['android', 'ios'] as const;
+export const DEVICE_LABELS: Record<string, string> = { android: 'Android', ios: 'iOS' };
+/** A UI bug is either in the web app (browsers) or the mobile app (devices). */
+export type UiPlatform = 'web' | 'mobile';
 
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
 
@@ -111,7 +116,12 @@ export interface BugReportInput {
   path: string;
   /** UI only: the page or screen, e.g. "/kmail/inbox" or "Write Mail". */
   page: string;
+  /** UI only: the web app or the mobile app. */
+  uiPlatform: UiPlatform;
+  /** Web UI only. */
   browsers: string[];
+  /** Mobile UI only: android / ios. */
+  devices: string[];
   summary: string;
   whyItMatters: string;
   howToFix: string;
@@ -172,7 +182,11 @@ export function buildSummary(input: BugReportInput): string {
 
 export function buildWhiteboard(input: BugReportInput): string {
   const tags = [`[cat:${input.category}]`];
-  if (input.kind === 'ui' && input.browsers.length) tags.push(`[browser:${input.browsers.join(',')}]`);
+  if (input.kind === 'ui') {
+    tags.push(`[platform:${input.uiPlatform}]`);
+    if (input.uiPlatform === 'web' && input.browsers.length) tags.push(`[browser:${input.browsers.join(',')}]`);
+    if (input.uiPlatform === 'mobile' && input.devices.length) tags.push(`[device:${input.devices.join(',')}]`);
+  }
   return tags.join('');
 }
 
@@ -214,6 +228,10 @@ function numberSteps(steps: string): string {
 }
 
 function defaultPreconditions(input: BugReportInput): string {
+  if (input.kind === 'ui' && input.uiPlatform === 'mobile') {
+    const on = input.devices.map((d) => DEVICE_LABELS[d] ?? d).join('/');
+    return `Signed in with a valid test account on the mobile app${on ? ` (${on})` : ''}${input.component ? `, on the ${input.component} screen` : ''}.`;
+  }
   if (input.kind === 'ui') {
     const where = input.browsers.length ? `in ${input.browsers.join('/')}, ` : '';
     return `Signed in with a valid test account${where ? `, ${where.replace(/, $/, "")}` : ""}${input.component ? `, on the ${input.component} screen` : ""}.`;
@@ -240,8 +258,11 @@ export function buildDescription(input: BugReportInput): string {
   if (input.whyItMatters.trim()) lines.push('', ...wrap(`Why it matters: ${input.whyItMatters.trim()}`));
   if (input.howToFix.trim()) lines.push('', ...wrap(`How to fix: ${input.howToFix.trim()}`));
 
-  if (input.kind === 'ui' && input.browsers.length) {
-    lines.push('', `Browsers affected: ${input.browsers.join(', ')}.`);
+  if (input.kind === 'ui' && input.uiPlatform === 'mobile') {
+    lines.push('', `Platform: Mobile app${input.devices.length ? ` - ${input.devices.map((d) => DEVICE_LABELS[d] ?? d).join(', ')}` : ''}.`);
+  } else if (input.kind === 'ui') {
+    lines.push('', 'Platform: Web app.');
+    if (input.browsers.length) lines.push(`Browsers affected: ${input.browsers.join(', ')}.`);
   }
   if (input.correlationId.trim()) {
     lines.push('', `Correlation ID (search the application logs for it): ${input.correlationId.trim()}`);
@@ -302,6 +323,8 @@ export function validateReport(input: BugReportInput): ReportErrors {
     if (input.responseStatus.trim() && !/^[1-5]\d\d$/.test(input.responseStatus.trim())) {
       e.responseStatus = 'A 3-digit HTTP status, e.g. 500.';
     }
+  } else if (input.uiPlatform === 'mobile') {
+    if (input.devices.length === 0) e.devices = 'Tick Android, iOS or both.';
   } else if (input.browsers.length === 0) {
     e.browsers = 'Tick every browser you saw it in.';
   }

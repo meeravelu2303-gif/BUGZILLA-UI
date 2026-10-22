@@ -1,4 +1,5 @@
 import type { Env } from '../config/env';
+import { memo } from './memo';
 import { BugzillaClient } from './bugzillaClient';
 import { AppError } from './errors';
 import { groupNameForProduct } from './productGroups';
@@ -191,39 +192,75 @@ interface RawProduct {
  * else about the product's contents.
  */
 export async function describeTarget(service: BugzillaClient, product: string): Promise<TransferTarget | null> {
+  return (await describeTargets(service, [product]))[0] ?? null;
+}
+
+/**
+ * The same, for several products at once - three Bugzilla calls however many
+ * there are (the products, the group list, the gating groups' members), which
+ * matters now that a user may transfer to every product they can access.
+ * Inactive products, and products with no active component, are left out:
+ * a bug cannot be filed there.
+ */
+export async function describeTargets(service: BugzillaClient, products: string[]): Promise<TransferTarget[]> {
+  if (products.length === 0) return [];
   const [productResp, groupsResp] = await Promise.all([
     service.get<{ products: RawProduct[] }>('/product', {
-      names: product,
+      names: products,
       include_fields:
         'name,is_active,default_milestone,components.name,components.is_active,components.default_assigned_to,versions.name,versions.is_active',
     }),
     service.get<{ groups: { name: string }[] }>('/group', { membership: 0 }),
   ]);
-  const raw = productResp.products?.[0];
-  if (!raw || !raw.is_active) return null;
+  const raws = (productResp.products ?? []).filter((p) => p.is_active && p.components.some((c) => c.is_active));
+  if (raws.length === 0) return [];
 
-  const gate = groupNameForProduct(raw.name, (groupsResp.groups ?? []).map((g) => g.name));
-  const poolGroup = gate ?? 'editbugs';
+  const groupNames = (groupsResp.groups ?? []).map((g) => g.name);
+  const poolOf = new Map(raws.map((r) => [r.name, groupNameForProduct(r.name, groupNames) ?? 'editbugs']));
   const members = await service.get<{
-    groups: { membership?: { email?: string; real_name?: string; name?: string; can_login?: boolean }[] }[];
-  }>('/group', { names: poolGroup, membership: 1 });
+    groups: { name: string; membership?: { email?: string; real_name?: string; name?: string; can_login?: boolean }[] }[];
+  }>('/group', { names: [...new Set(poolOf.values())], membership: 1 });
+  const membersOf = new Map((members.groups ?? []).map((g) => [g.name.toLowerCase(), g.membership ?? []]));
 
-  const people = new Map<string, { email: string; name: string }>();
-  for (const m of members.groups?.[0]?.membership ?? []) {
-    if (!m.email || m.can_login === false || isServiceAccount(m.email)) continue;
-    people.set(m.email.toLowerCase(), { email: m.email, name: m.real_name || m.name || m.email });
-  }
-  const nameOf = (email: string) => people.get(email.toLowerCase())?.name ?? email;
+  return raws
+    .map((raw) => {
+      const people = new Map<string, { email: string; name: string }>();
+      for (const m of membersOf.get(poolOf.get(raw.name)!.toLowerCase()) ?? []) {
+        if (!m.email || m.can_login === false || isServiceAccount(m.email)) continue;
+        people.set(m.email.toLowerCase(), { email: m.email, name: m.real_name || m.name || m.email });
+      }
+      const nameOf = (email: string) => people.get(email.toLowerCase())?.name ?? email;
+      return {
+        product: raw.name,
+        components: raw.components
+          .filter((c) => c.is_active)
+          .map((c) => ({ name: c.name, defaultAssignee: c.default_assigned_to, defaultAssigneeName: nameOf(c.default_assigned_to) })),
+        versions: raw.versions.filter((v) => v.is_active).map((v) => v.name),
+        defaultMilestone: raw.default_milestone ?? null,
+        people: [...people.values()].sort((a, b) => a.name.localeCompare(b.name)),
+      };
+    })
+    .sort((a, b) => a.product.localeCompare(b.product));
+}
 
-  return {
-    product: raw.name,
-    components: raw.components
-      .filter((c) => c.is_active)
-      .map((c) => ({ name: c.name, defaultAssignee: c.default_assigned_to, defaultAssigneeName: nameOf(c.default_assigned_to) })),
-    versions: raw.versions.filter((v) => v.is_active).map((v) => v.name),
-    defaultMilestone: raw.default_milestone ?? null,
-    people: [...people.values()].sort((a, b) => a.name.localeCompare(b.name)),
-  };
+/**
+ * Every active product - the transfer destinations. Read on the SERVICE key, so
+ * a developer can hand a bug to a team whose product they have no access to;
+ * the move itself also runs on the service key, and they are CC'd to keep
+ * following the bug. Their own product access is not changed by this.
+ * Cached for five minutes (products change rarely).
+ */
+export async function allProductNames(env: Env): Promise<string[]> {
+  return memo('transfer-products', 'all', 5 * 60 * 1000, async () => {
+    const service = directoryClient(env);
+    const accessible = await service.get<{ ids: number[] }>('/product_accessible');
+    if (!accessible.ids?.length) return [];
+    const resp = await service.get<{ products: { name: string; is_active: boolean }[] }>('/product', {
+      ids: accessible.ids,
+      include_fields: 'name,is_active',
+    });
+    return (resp.products ?? []).filter((p) => p.is_active).map((p) => p.name);
+  });
 }
 
 // --------------------------------------------------------------- the transfer
@@ -252,6 +289,8 @@ export async function transferBug(opts: {
   id: number;
   request: TransferRequest;
   routes: Map<string, Set<string>>;
+  /** Valid destinations: every active product (allProductNames), besides the configured routes. */
+  accessibleProducts?: string[];
   useTargetMilestone: boolean;
 }): Promise<TransferResult> {
   const { env, userClient, actor, id, request, routes } = opts;
@@ -259,8 +298,10 @@ export async function transferBug(opts: {
   // 1. On the user's own token: visible to them, open, theirs to hand on.
   const bug = await loadTransferableBug(userClient, id, actor);
 
-  // 2. Only along a configured route.
-  if (!isTransferAllowed(bug.product, request.product, routes)) {
+  // 2. To any other active product (opts.accessibleProducts is the full list), or along a configured route.
+  const want = request.product.trim().toLowerCase();
+  const ownProduct = (opts.accessibleProducts ?? []).some((p) => p.toLowerCase() === want) && want !== bug.product.toLowerCase();
+  if (!ownProduct && !isTransferAllowed(bug.product, request.product, routes)) {
     throw new AppError(403, 'FORBIDDEN', `Bugs in ${bug.product} cannot be transferred to ${request.product}.`);
   }
 
@@ -300,6 +341,8 @@ export async function transferBug(opts: {
     component: component.name,
     version,
     assigned_to: assignee,
+    // A sub-component belongs to the OLD component; the receiving team picks their own.
+    cf_subcomponent: '---',
     cc: { add: [actor.email] },
     is_cc_accessible: true,
   };

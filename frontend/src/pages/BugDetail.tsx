@@ -16,6 +16,7 @@ import type { BugChanges, BugDetailResponse, BugMeta, Product } from '../types';
 import { AddCommentBox } from '../components/bugs/AddCommentBox';
 import { AttachmentList } from '../components/bugs/AttachmentList';
 import { CommentThread } from '../components/bugs/CommentThread';
+import { BugActivity } from '../components/bugs/BugActivity';
 import { MetadataSidebar } from '../components/bugs/MetadataSidebar';
 import { DescriptionReport } from '../components/bugs/DescriptionReport';
 import { Card, CardBody, CardHeader, CardTitle } from '../components/ui/Card';
@@ -118,13 +119,13 @@ function BugDetailView({
   /*
    * Offered on the same terms the server enforces (lib/productTransfer.ts), so
    * the button never leads to a refusal: an open bug, its assignee or a tester,
-   * and a configured route out of this product.
+   * Any other active product is a destination, including ones the user has no
+   * access to - a developer hands bugs to other teams (the server lists them).
    */
   const canTransfer =
     !isDeleted &&
     bug.isOpen &&
-    (canTriage || (!!currentUser && bug.assignedTo?.email.toLowerCase() === currentUser.toLowerCase())) &&
-    (meta?.transferRoutes?.[bug.product.toLowerCase()]?.length ?? 0) > 0;
+    (canTriage || (!!currentUser && bug.assignedTo?.email.toLowerCase() === currentUser.toLowerCase()));
 
   /*
    * The one-click end of the re-test loop.
@@ -261,6 +262,12 @@ function BugDetailView({
           <span className="font-medium text-slate-600">{bug.product}</span>
           <span className="text-slate-400">/</span>
           <span className="font-medium text-slate-600">{bug.component}</span>
+          {bug.subcomponentName && (
+            <>
+              <span className="text-slate-400">/</span>
+              <span className="font-medium text-slate-600" title="Sub-component">{bug.subcomponentName}</span>
+            </>
+          )}
           {(canTransfer || (canTriage && !isDeleted)) && (
             <span className="ml-auto flex items-center gap-1">
               {canTransfer && (
@@ -444,6 +451,9 @@ function BugDetailView({
               <AddCommentBox bugId={bug.id} />
             </CardBody>
           </Card>
+
+          {/* Every recorded change - status journey and timeline (components/bugs/BugActivity.tsx). */}
+          <BugActivity bugId={bug.id} />
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">

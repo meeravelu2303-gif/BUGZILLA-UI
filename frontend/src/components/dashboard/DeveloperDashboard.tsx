@@ -380,7 +380,10 @@ function BacklogRow({ bug, selected, onSelect }: { bug: Bug; selected: boolean; 
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-slate-500">
           <span className="inline-flex min-w-0 items-center gap-1">
             <Boxes className="h-3 w-3 shrink-0 text-violet-600" aria-hidden />
-            <span className="truncate">{bug.component}</span>
+            <span className="truncate">
+              {bug.component}
+              {bug.subcomponentName ? ` › ${bug.subcomponentName}` : ''}
+            </span>
           </span>
           <span className="inline-flex items-center gap-1">
             <Clock className="h-3 w-3 text-amber-600" aria-hidden />
@@ -515,7 +518,10 @@ function DetailPane({ bugId }: { bugId: number | null }) {
           <div className="flex items-center gap-1.5">
             <Boxes className="h-3.5 w-3.5 text-violet-600" aria-hidden />
             <dt className="sr-only">Component</dt>
-            <dd className="font-medium text-slate-700">{bug.component}</dd>
+            <dd className="font-medium text-slate-700">
+              {bug.component}
+              {bug.subcomponentName && <span className="font-normal text-slate-500"> › {bug.subcomponentName}</span>}
+            </dd>
           </div>
           {bug.assignedTo && (
             <div className="flex items-center gap-1.5">
@@ -603,6 +609,9 @@ const STATUS_DOT: Record<string, string> = {
   CONFIRMED: 'bg-amber-500',
   IN_PROGRESS: 'bg-sky-500',
   REOPENED: 'bg-orange-500',
+  PENDING_APPROVAL: 'bg-violet-500',
+  AWAITING_REQUIREMENT: 'bg-indigo-500',
+  IN_REVIEW: 'bg-teal-500',
   RESOLVED: 'bg-emerald-500',
   VERIFIED: 'bg-emerald-600',
 };

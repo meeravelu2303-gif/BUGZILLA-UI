@@ -61,6 +61,28 @@ interface ScopeEntry {
 
 const scopeCache = new Map<number, ScopeEntry>();
 
+/*
+ * Product details are the same for every user, but each user's first request
+ * used to re-read them all on their own session - a second full CGI round trip
+ * per person, after the first. Shared here, so only products nobody has read
+ * yet are fetched, and a user's access lookup is one round of calls.
+ */
+type ProductRecord = Record<string, unknown> & { name: string; id?: number };
+const productCache = { at: 0, byId: new Map<number, ProductRecord>() };
+
+async function productsByIds(client: BugzillaClient, ids: number[]): Promise<ProductRecord[]> {
+  if (Date.now() - productCache.at > ACCESS_TTL_MS) {
+    productCache.byId.clear();
+    productCache.at = Date.now();
+  }
+  const missing = ids.filter((id) => !productCache.byId.has(id));
+  if (missing.length > 0) {
+    const resp = await client.get<{ products: ProductRecord[] }>('/product', { ids: missing });
+    for (const p of resp.products ?? []) if (typeof p.id === 'number') productCache.byId.set(p.id, p);
+  }
+  return ids.map((id) => productCache.byId.get(id)).filter((p): p is ProductRecord => p !== undefined);
+}
+
 /**
  * Drop cached access, for everyone or one user.
  *
@@ -68,7 +90,10 @@ const scopeCache = new Map<number, ScopeEntry>();
  * edit takes effect on the next request instead of up to five minutes later.
  */
 export function clearAccessScope(bzUserId?: number): void {
-  if (bzUserId === undefined) scopeCache.clear();
+  if (bzUserId === undefined) {
+    scopeCache.clear();
+    productCache.byId.clear();
+  }
   else scopeCache.delete(bzUserId);
 }
 
@@ -110,10 +135,7 @@ async function readAccess(client: BugzillaClient, bzUserId: number): Promise<Acc
   const isAdmin = !groups || groups.some((g) => ADMIN_GROUPS.has(g));
   if (!enterable.ids?.length) return { products: [], names: [], isAdmin };
 
-  const full = await client.get<{ products: Array<Record<string, unknown> & { name: string }> }>('/product', {
-    ids: enterable.ids,
-  });
-  const products = full.products ?? [];
+  const products = await productsByIds(client, enterable.ids);
 
   if (isAdmin) return { products, names: null, isAdmin };
 

@@ -99,7 +99,25 @@ export function SaveBar({
         {showComment && (
           <div className="border-b border-hairline px-4 pt-3">
             <label htmlFor="save-comment" className="text-xs font-medium text-slate-600">
-              {editor.commentRequired ? (editor.draft.status === 'REOPENED' ? 'Why reopen? What still fails after the fix - required' : 'Comment - required for this status change') : 'Comment - saved with this change, so the history says why'}
+              {editor.commentRequired
+                ? editor.draft.status === 'REOPENED'
+                  ? 'Why reopen? What still fails after the fix - required'
+                  : editor.draft.status === 'PENDING_APPROVAL'
+                    ? 'Why does this need approval? (e.g. not in the requirements) - required'
+                    : editor.draft.status === 'IN_REVIEW'
+                      ? 'Link the pull request / commit the team lead should review - required'
+                      : editor.baseline.status === 'IN_REVIEW' && editor.draft.status === 'IN_PROGRESS'
+                        ? 'What did the review ask to change? - required'
+                        : editor.baseline.status === 'IN_REVIEW'
+                          ? 'Review approved and deployed - note the release or build - required'
+                    : editor.draft.status === 'AWAITING_REQUIREMENT'
+                      ? 'Which requirement is missing, and who will raise it? - required'
+                      : editor.baseline.status === 'AWAITING_REQUIREMENT'
+                        ? 'The requirement that was raised (ID or link), or why it was dropped - required'
+                        : editor.baseline.status === 'PENDING_APPROVAL'
+                          ? "The project manager's decision - required"
+                          : 'Comment - required for this status change'
+                : 'Comment - saved with this change, so the history says why'}
             </label>
             <textarea
               id="save-comment"

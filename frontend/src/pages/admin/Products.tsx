@@ -2,7 +2,7 @@ import { AlertCircle, Boxes, Plus, Search } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { ApiError } from '../../api/client';
 import { useAdminProducts, useCreateProduct, useMe, useMeta } from '../../api/hooks';
-import { ProductAdminCard } from '../../components/admin/ProductAdminCard';
+import { DeveloperSelect, ProductAdminCard } from '../../components/admin/ProductAdminCard';
 import { Button } from '../../components/ui/Button';
 import { Card, CardBody, CardHeader, CardTitle } from '../../components/ui/Card';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -29,6 +29,10 @@ export function Products() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [version, setVersion] = useState('');
+  // The first component, created with the product.
+  const [componentName, setComponentName] = useState('');
+  const [componentDescription, setComponentDescription] = useState('');
+  const [componentOwner, setComponentOwner] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   // One product open at a time keeps a 50-product page a list, not a wall.
@@ -41,7 +45,7 @@ export function Products() {
     const q = query.trim().toLowerCase();
     return all
       .filter((p) => (status === 'all' ? true : status === 'active' ? p.isActive : !p.isActive))
-      .filter((p) => !q || p.name.toLowerCase().includes(q) || p.components.some((c) => c.name.toLowerCase().includes(q)))
+      .filter((p) => !q || p.name.toLowerCase().includes(q) || p.components.some((c) => c.name.toLowerCase().includes(q) || (c.subcomponents ?? []).some((s) => s.name.toLowerCase().includes(q))))
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [all, query, status]);
@@ -49,16 +53,30 @@ export function Products() {
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
-    if (!name.trim() || !description.trim() || !version.trim()) {
-      setFormError('All fields are required');
+    if (!name.trim() || !description.trim() || !version.trim() || !componentName.trim() || !componentDescription.trim() || !componentOwner) {
+      setFormError('All fields are required, including the first component and its developer.');
       return;
     }
     try {
-      const result = await createProduct.mutateAsync({ name: name.trim(), description: description.trim(), version: version.trim() });
-      toast({ variant: 'success', title: 'Product created', description: result.product.name });
+      const result = await createProduct.mutateAsync({
+        name: name.trim(),
+        description: description.trim(),
+        version: version.trim(),
+        component: { name: componentName.trim(), description: componentDescription.trim(), defaultAssignee: componentOwner },
+      });
+      toast({
+        variant: 'success',
+        title: 'Product created',
+        description: `${result.product.name}, with its first component ${componentName.trim()}. It is ready for bugs.`,
+      });
+      // Access-group setup the server could not finish - shown, never swallowed.
+      for (const w of result.warnings ?? []) toast({ variant: 'info', title: 'Check this', description: w });
       setName('');
       setDescription('');
       setVersion('');
+      setComponentName('');
+      setComponentDescription('');
+      setComponentOwner('');
       setShowForm(false);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : 'Could not create the product.');
@@ -94,10 +112,24 @@ export function Products() {
           <form onSubmit={onCreate}>
             <CardBody className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" />
-                <Input label="Initial version" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="e.g. 1.0" />
+                <Input label="Name" required value={name} maxLength={64} onChange={(e) => setName(e.target.value)} placeholder="Product name" />
+                <Input label="Initial version" required value={version} onChange={(e) => setVersion(e.target.value)} placeholder="e.g. 1.0" />
               </div>
-              <Input label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+              <Input label="Description" required value={description} onChange={(e) => setDescription(e.target.value)} />
+
+              {/* A product cannot take bugs without a component, so its first one is part of creating it. */}
+              <div className="flex flex-col gap-3 rounded-xl border border-hairline bg-slate-50/60 p-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">First component</p>
+                  <p className="mt-0.5 text-xs text-slate-500">Bugs are filed against a component. Add more after the product is created.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Input label="Component name" required value={componentName} maxLength={64} onChange={(e) => setComponentName(e.target.value)} placeholder="e.g. Login" />
+                  <DeveloperSelect value={componentOwner} onChange={setComponentOwner} />
+                </div>
+                <Input label="Component description" required value={componentDescription} onChange={(e) => setComponentDescription(e.target.value)} />
+              </div>
+
               {formError && <p className="text-xs text-rose-600">{formError}</p>}
               <div className="flex justify-end gap-2 border-t border-white/30 pt-4">
                 <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>

@@ -72,6 +72,17 @@ export function FilterBar({
     values.map((v) => ({ value: v, label: v, count: counts?.[v] }));
 
   /*
+   * Every dropdown lists only the values present in the CURRENT view, each with
+   * its count - e.g. opened from "Selva - 12 open", Product offers just the
+   * products those 12 bugs are in. Counts follow the usual faceted rule (every
+   * other filter applied, not the facet's own), so sibling values stay
+   * reachable. A value already ticked is always kept, so it can be unticked.
+   * Until the counts arrive the full list is shown, never an empty menu.
+   */
+  const present = (options: MultiSelectOption[], selected: string[], counts: Record<string, number> | undefined): MultiSelectOption[] =>
+    counts === undefined ? options : options.filter((o) => (o.count ?? 0) > 0 || selected.includes(o.value));
+
+  /*
    * `stats.byComponent` is instance-wide — it lists the components of every product the caller
    * can see. Once a product is selected, the component facet must offer only THAT product's
    * components (Bugzilla components are product-scoped, and a component from another product can
@@ -94,8 +105,68 @@ export function FilterBar({
     .sort((a, b) => b[1] - a[1])
     .map(([name, count]) => ({ value: name, label: name, count }));
 
-  const productOptions: MultiSelectOption[] = (products ?? []).map((p) => ({ value: p.name, label: p.name }));
-  const statusOptions: MultiSelectOption[] = (meta?.statuses ?? []).map((s) => ({ value: s, label: s.replace('_', ' ') }));
+  /*
+   * Sub-components: the full list up front (every component in the chosen
+   * products, or everything the caller can see), narrowed to the chosen
+   * components' own sub-components once a Component is picked. Hidden when the
+   * scope has none - e.g. a chosen component without sub-components. Each
+   * option is a stored value (`Login [42]`), so two components' "Login" never
+   * collide; while more than one component is in scope the label names its
+   * component ("Mobile App › Login").
+   */
+  const selectedComponents = new Set(filters.component);
+  const subCounts = stats?.for('subcomponent')?.bySubcomponent;
+  const scopedComponents = (products ?? [])
+    .filter((p) => selectedProducts.size === 0 || selectedProducts.has(p.name))
+    .flatMap((p) => p.components)
+    .filter((c) => selectedComponents.size === 0 || selectedComponents.has(c.name));
+  const scopedSubs = scopedComponents.flatMap((c) => (c.subcomponents ?? []).map((s) => ({ ...s, component: c.name })));
+  const multiComponent = new Set(scopedSubs.map((s) => s.component)).size > 1;
+  const subcomponentOptions: MultiSelectOption[] = scopedSubs.length
+    ? [
+        ...scopedSubs
+          .filter((s) => s.isActive || (subCounts?.[s.value] ?? 0) > 0 || filters.subcomponent.includes(s.value))
+          .map((s) => ({
+            value: s.value,
+            label: multiComponent ? `${s.component} › ${s.name}` : s.name,
+            count: subCounts?.[s.value] ?? 0,
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+        { value: '---', label: 'None (no sub-component)', count: subCounts?.['---'] },
+      ]
+    : [];
+  const presentSubOptions = present(subcomponentOptions, filters.subcomponent, subCounts);
+  // "None" alone is not a choice worth a control: show it only when a real sub-component is in view.
+  const showSubcomponent = presentSubOptions.some((o) => o.value !== '---') || filters.subcomponent.length > 0;
+
+  /*
+   * A sub-component selection only makes sense under its own component. When
+   * the component choice changes - cleared, swapped, or a chip removed - any
+   * selected sub-component that no longer belongs is dropped, so the list is
+   * never silently narrowed by a filter the bar no longer shows.
+   */
+  const validSubs = new Set(scopedSubs.map((sc) => sc.value));
+  if (scopedSubs.length > 0) validSubs.add('---');
+  const prunedSubs = filters.subcomponent.filter((v) => validSubs.has(v));
+  const mustPrune = products !== undefined && prunedSubs.length !== filters.subcomponent.length;
+  useEffect(() => {
+    if (mustPrune) setFacet('subcomponent', prunedSubs);
+    // Re-run only when the verdict changes; prunedSubs is derived from the same inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mustPrune, prunedSubs.join('|')]);
+
+  const productCounts = stats?.for('product')?.byProduct;
+  const productOptions: MultiSelectOption[] = present(
+    (products ?? []).map((p) => ({ value: p.name, label: p.name, count: productCounts?.[p.name] })),
+    filters.product,
+    productCounts
+  ).sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label));
+  const statusCounts = stats?.for('status')?.byStatus;
+  const statusOptions: MultiSelectOption[] = present(
+    (meta?.statuses ?? []).map((s) => ({ value: s, label: s.replace('_', ' '), count: statusCounts?.[s] })),
+    filters.status,
+    statusCounts
+  );
 
   /*
    * Prefer the resolutions this Bugzilla actually declares; fall back to the standard set when
@@ -104,9 +175,10 @@ export function FilterBar({
    * translated back server-side.
    */
   const resolutionOptions: MultiSelectOption[] = (meta?.resolutions?.length
-    ? meta.resolutions.map((r) => (r === '---' ? 'Unresolved' : r))
+    ? ['Unresolved', ...meta.resolutions.filter((r) => r && r !== '---')]
     : [...RESOLUTION_VALUES]
-  ).map((r) => ({ value: r, label: r === 'Unresolved' ? 'Unresolved (open)' : r }));
+  ).map((r) => ({ value: r, label: r === 'Unresolved' ? 'Unresolved (open)' : r, count: stats?.for('resolution')?.byResolution?.[r] }));
+  const presentResolutionOptions = present(resolutionOptions, filters.resolution, stats?.for('resolution')?.byResolution);
 
   const hidden = totalCount !== undefined && resultCount !== undefined ? totalCount - resultCount : 0;
 
@@ -148,7 +220,7 @@ export function FilterBar({
 
         {/* Product leads the row: it is the top-level scope for a user with access to more
             than one product; the facets to its right narrow within that scope. */}
-        {productOptions.length > 1 && (
+        {(products?.length ?? 0) > 1 && (
           <MultiSelect
             label={FACET_LABELS.product}
             className="w-44"
@@ -161,7 +233,7 @@ export function FilterBar({
         <MultiSelect
           label={FACET_LABELS.severity}
           className="w-40"
-          options={withCounts(SEVERITIES, stats?.for('severity')?.bySeverity)}
+          options={present(withCounts(SEVERITIES, stats?.for('severity')?.bySeverity), filters.severity, stats?.for('severity')?.bySeverity)}
           selected={filters.severity}
           onToggle={(v) => toggleFacet('severity', v)}
           onClear={() => setFacet('severity', [])}
@@ -169,7 +241,7 @@ export function FilterBar({
         <MultiSelect
           label={FACET_LABELS.priority}
           className="w-36"
-          options={withCounts(PRIORITIES)}
+          options={present(withCounts(PRIORITIES, stats?.for('priority')?.byPriority), filters.priority, stats?.for('priority')?.byPriority)}
           selected={filters.priority}
           onToggle={(v) => toggleFacet('priority', v)}
           onClear={() => setFacet('priority', [])}
@@ -177,7 +249,7 @@ export function FilterBar({
         <MultiSelect
           label={FACET_LABELS.category}
           className="w-44"
-          options={withCounts(CATEGORIES, stats?.for('category')?.byCategory)}
+          options={present(withCounts(CATEGORIES, stats?.for('category')?.byCategory), filters.category, stats?.for('category')?.byCategory)}
           selected={filters.category}
           onToggle={(v) => toggleFacet('category', v)}
           onClear={() => setFacet('category', [])}
@@ -186,7 +258,7 @@ export function FilterBar({
         <MultiSelect
           label={FACET_LABELS.source}
           className="w-40"
-          options={withCounts(SOURCES, stats?.for('source')?.bySource)}
+          options={present(withCounts(SOURCES, stats?.for('source')?.bySource), filters.source, stats?.for('source')?.bySource)}
           selected={filters.source}
           onToggle={(v) => toggleFacet('source', v)}
           onClear={() => setFacet('source', [])}
@@ -209,6 +281,16 @@ export function FilterBar({
           onToggle={(v) => toggleFacet('component', v)}
           onClear={() => setFacet('component', [])}
         />
+        {showSubcomponent && (
+          <MultiSelect
+            label={FACET_LABELS.subcomponent}
+            className="w-52"
+            options={presentSubOptions}
+            selected={filters.subcomponent}
+            onToggle={(v) => toggleFacet('subcomponent', v)}
+            onClear={() => setFacet('subcomponent', [])}
+          />
+        )}
         <MultiSelect
           label={FACET_LABELS.status}
           className="w-40"
@@ -222,7 +304,7 @@ export function FilterBar({
         <MultiSelect
           label={FACET_LABELS.resolution}
           className="w-44"
-          options={resolutionOptions}
+          options={presentResolutionOptions}
           selected={filters.resolution}
           onToggle={(v) => toggleFacet('resolution', v)}
           onClear={() => setFacet('resolution', [])}

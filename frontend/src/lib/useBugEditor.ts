@@ -15,6 +15,8 @@ export interface BugDraft {
   severity: string;
   product: string;
   component: string;
+  /** Stored sub-component value; '' = none. */
+  subcomponent: string;
   version: string;
   targetMilestone: string;
   opSys: string;
@@ -54,6 +56,7 @@ export const FIELD_LABELS: Record<DraftKey, string> = {
   severity: 'Severity',
   product: 'Product',
   component: 'Component',
+  subcomponent: 'Sub-component',
   version: 'Version',
   targetMilestone: 'Milestone',
   opSys: 'OS',
@@ -81,7 +84,7 @@ export const FIELD_LABELS: Record<DraftKey, string> = {
 };
 
 /** Fallback until Bugzilla's workflow has loaded; the live list comes from meta (is_open per status). */
-export const OPEN_STATUSES = new Set(['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS', 'REOPENED']);
+export const OPEN_STATUSES = new Set(['UNCONFIRMED', 'CONFIRMED', 'PENDING_APPROVAL', 'AWAITING_REQUIREMENT', 'IN_PROGRESS', 'IN_REVIEW', 'REOPENED']);
 
 const LIST_KEYS = ['cc', 'dependsOn', 'blocks', 'seeAlso', 'alias', 'keywords', 'groups'] as const;
 type ListKey = (typeof LIST_KEYS)[number];
@@ -98,6 +101,7 @@ export function toDraft(bug: Bug): BugDraft {
     severity: bug.severity,
     product: bug.product,
     component: bug.component,
+    subcomponent: bug.subcomponent && bug.subcomponent !== '---' ? bug.subcomponent : '',
     version: bug.version,
     targetMilestone: bug.targetMilestone,
     opSys: bug.opSys,
@@ -224,6 +228,11 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
         }
         if (key === 'status' && openSet.has(String(value))) next.resolution = '';
         if (key === 'status' && String(value) === baseline.status) next.resolution = baseline.resolution;
+        // A sub-component belongs to one component: moving component clears it,
+        // and moving back restores the saved one.
+        if (key === 'component' || key === 'product') {
+          next.subcomponent = next.component === baseline.component && next.product === baseline.product ? baseline.subcomponent : '';
+        }
         // A new product invalidates its dependants unless the same name exists there too.
         if (key === 'product') {
           const target = products?.find((p) => p.name === value);
@@ -234,6 +243,7 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
           }
           if (value === baseline.product) {
             next.component = baseline.component;
+            next.subcomponent = baseline.subcomponent;
             next.version = baseline.version;
             next.targetMilestone = baseline.targetMilestone;
           }
@@ -317,7 +327,7 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
     const changed = (k: DraftKey) => !sameValue(draft[k], baseline[k]);
 
     const scalars = [
-      'summary', 'status', 'resolution', 'priority', 'severity', 'product', 'component', 'version',
+      'summary', 'status', 'resolution', 'priority', 'severity', 'product', 'component', 'subcomponent', 'version',
       'targetMilestone', 'opSys', 'platform', 'url', 'whiteboard',
     ] as const;
     for (const k of scalars) if (changed(k)) (p as Record<string, unknown>)[k] = k === 'summary' ? draft[k].trim() : draft[k];

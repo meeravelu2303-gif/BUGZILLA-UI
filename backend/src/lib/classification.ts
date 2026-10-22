@@ -164,6 +164,22 @@ const CATEGORY_TAG = /\[cat:([A-Za-z]+)\]/;
  * Hyphens are allowed: `mobile-chrome` is a project name.
  */
 const BROWSER_TAG = /\[browser:([A-Za-z0-9,-]+)\]/;
+/** UI bugs filed by hand say where: `[platform:web]` or `[platform:mobile]`. */
+const PLATFORM_TAG = /\[platform:(web|mobile)\]/i;
+/** Mobile UI bugs name the device platforms instead of browsers: `[device:android,ios]`. */
+const DEVICE_TAG = /\[device:([A-Za-z0-9,-]+)\]/;
+
+export type UiPlatform = 'Web' | 'Mobile';
+
+export function uiPlatformOf(whiteboard: string | undefined): UiPlatform | null {
+  const m = PLATFORM_TAG.exec(whiteboard ?? '');
+  return m ? (m[1].toLowerCase() === 'mobile' ? 'Mobile' : 'Web') : null;
+}
+
+export function devicesOf(whiteboard: string | undefined): string[] {
+  const m = DEVICE_TAG.exec(whiteboard ?? '');
+  return m ? m[1].split(',').map((d) => d.trim()).filter(Boolean) : [];
+}
 
 /**
  * The browsers a bug was observed on, in order, or an empty list when it
@@ -274,6 +290,10 @@ export interface Classification {
   classification: string | null;
   /** Which browsers the bug was seen on. Empty when the bug carries no tag. */
   browsers: string[];
+  /** UI bugs: Web or Mobile, from `[platform:…]`; null when not recorded. */
+  uiPlatform: UiPlatform | null;
+  /** Mobile UI bugs: android / ios, from `[device:…]`. */
+  devices: string[];
   /** Filed by a bench or by a person - see `sourceOf`. */
   source: Source;
   /** API or UI, from the product - see `testTypeOf`. */
@@ -303,6 +323,8 @@ export function classify(raw: {
     category: categoryOf(raw.whiteboard, raw.description),
     classification: classificationOf(raw.description),
     browsers: browsersOf(raw.whiteboard),
+    uiPlatform: uiPlatformOf(raw.whiteboard),
+    devices: devicesOf(raw.whiteboard),
   };
 }
 
@@ -338,6 +360,8 @@ export interface BugFilters {
   source?: Source[];
   product?: string[];
   component?: string[];
+  /** Stored sub-component values (lib/subcomponents.ts); `---` matches bugs with none. */
+  subcomponent?: string[];
   status?: string[];
   /** Bugzilla resolutions (FIXED, INVALID, DUPLICATE …). `Unresolved` maps to Bugzilla's `---`. */
   resolution?: string[];
@@ -635,6 +659,7 @@ export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
 
   if (filters.product?.length) query.product = filters.product;
   if (filters.component?.length) query.component = filters.component;
+  if (filters.subcomponent?.length) query.cf_subcomponent = filters.subcomponent;
   if (filters.status?.length) query.bug_status = filters.status;
   /*
    * Bugzilla spells "no resolution yet" as the literal `---`, not as an empty string, and a

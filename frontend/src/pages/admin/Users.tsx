@@ -25,16 +25,32 @@ import { useDebounce } from '../../lib/useDebounce';
 export function Users() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [searchInput, setSearchInput] = useState('');
-  const search = useDebounce(searchInput, 350);
+  const search = useDebounce(searchInput, 150);
   const [productFilter, setProductFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | ''>('');
-  const { data, isLoading, isFetching } = useAdminUsers(search);
+  /*
+   * Everyone is loaded once (about 60 accounts) and the search runs here, in
+   * the browser. Bugzilla's own user match - which this used to send the text
+   * to - only substring-matches terms of 3+ characters and treats a full name
+   * with a space as one string, so typing "sa" or "selva vinayagam" emptied the
+   * list. Locally every typed word must appear in the name or the email, any
+   * length, in any order, and the result updates as you type.
+   */
+  const { data, isLoading, isFetching } = useAdminUsers('');
   const { data: productsData } = useProducts();
   // Testers see this list read-only: no create, edit or delete (the BFF refuses those too).
   const { data: me } = useMe();
   const canManage = Boolean(me?.user.permissions.canManageUsers);
 
-  const allUsers = data?.users ?? [];
+  const everyone = data?.users ?? [];
+  const allUsers = useMemo(() => {
+    const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return everyone;
+    return everyone.filter((u) => {
+      const haystack = `${u.fullName ?? ''} ${u.email}`.toLowerCase();
+      return words.every((w) => haystack.includes(w));
+    });
+  }, [everyone, search]);
   // Product access in Bugzilla is granted through a group; on this instance each product has a
   // group of the same name, so "users with access to product X" = users whose groups include X.
   const users = useMemo(

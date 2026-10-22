@@ -183,3 +183,22 @@
 }
 
 
+
+/* Sign-in backdrop: the bug that lives its lifecycle (components/auth/BugJourney.tsx). */
+.lb-pop { transform-box: fill-box; transform-origin: center; animation: lb-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes lb-pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.lb-vanish { transform-origin: 0 0; animation: lb-vanish 0.5s ease-in forwards; }
+@keyframes lb-vanish { to { transform: scale(0) rotate(160deg); opacity: 0; } }
+.lb-ripple { transform-box: fill-box; transform-origin: center; animation: lb-ripple 1.3s ease-out forwards; }
+@keyframes lb-ripple { from { transform: scale(1); opacity: 0.6; } to { transform: scale(3.4); opacity: 0; } }
+.lb-spin { transform-origin: 0 0; animation: lb-spin 2.4s linear infinite; }
+@keyframes lb-spin { to { transform: rotate(360deg); } }
+.lb-burst { animation: lb-burst 0.9s ease-out forwards; }
+@keyframes lb-burst { from { transform: translate(0, 0) scale(1); opacity: 1; } to { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; } }
+.lb-legs-a, .lb-legs-b { transform-origin: 0 0; animation: lb-leg 0.26s ease-in-out infinite alternate; }
+.lb-legs-b { animation-direction: alternate-reverse; }
+@keyframes lb-leg { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+.lb-halo { transform-origin: 0 0; animation: lb-halo 2.2s ease-in-out infinite; }
+@keyframes lb-halo { 50% { transform: scale(1.25); } }
+.lb-chip { animation: lb-chip 0.4s ease-out both; }
+@keyframes lb-chip { from { opacity: 0; } to { opacity: 1; } }

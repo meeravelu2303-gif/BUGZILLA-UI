@@ -251,9 +251,15 @@ export function Login() {
     <div className={cn('relative min-h-screen overflow-hidden', THEME.canvas)}>
       <LoginBackdrop />
 
+      {/*
+        initial={false}: the sign-in content is VISIBLE from the first paint. It
+        used to start at opacity 0 and fade in - which a browser pauses in a
+        background tab (a link clicked in an email often opens one), so people
+        saw only the animated backdrop and no form until the fade caught up.
+      */}
       <motion.main
         variants={listVariants}
-        initial="hidden"
+        initial={false}
         animate="visible"
         className="relative z-10 mx-auto grid min-h-screen max-w-[1220px] grid-cols-1 items-center gap-14 px-6 py-14 sm:px-10 lg:grid-cols-[1.1fr_minmax(0,27rem)] lg:gap-20 lg:py-0"
       >
@@ -465,6 +471,8 @@ const TABS: Array<{ id: TabId; label: string; icon: typeof Rocket }> = [
  */
 function Showcase() {
   const [tab, setTab] = useState<TabId>('overview');
+  // The panel fades only when someone switches tabs - never on first load (see the note on <motion.main>).
+  const [switched, setSwitched] = useState(false);
 
   return (
     <motion.section variants={pageVariants} className="hidden lg:block">
@@ -502,7 +510,10 @@ function Showcase() {
             id={`showcase-tab-${t.id}`}
             aria-selected={tab === t.id}
             aria-controls={`showcase-panel-${t.id}`}
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              setSwitched(true);
+              setTab(t.id);
+            }}
             className={cn(
               'focus-ring inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all duration-premium ease-premium',
               tab === t.id ? THEME.tabActive : THEME.tabIdle
@@ -526,7 +537,7 @@ function Showcase() {
         id={`showcase-panel-${tab}`}
         aria-labelledby={`showcase-tab-${tab}`}
         variants={pageVariants}
-        initial="hidden"
+        initial={switched ? 'hidden' : false}
         animate="visible"
         className="mt-8 min-h-[27rem]"
       >

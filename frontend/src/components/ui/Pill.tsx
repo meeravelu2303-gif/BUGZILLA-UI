@@ -1,5 +1,8 @@
 import type { Source, TestType } from '../../types';
 import {
+  FileQuestion,
+  GitPullRequest,
+  Hourglass,
   Accessibility,
   AlertOctagon,
   AlertTriangle,
@@ -251,6 +254,16 @@ export function NoBrowserPill({ testType, className }: { testType?: TestType; cl
   );
 }
 
+/** A mobile-app UI bug, with the device platforms it was seen on - shown where browsers are. */
+export function MobilePill({ devices, className }: { devices?: string[]; className?: string }) {
+  const names = (devices ?? []).map((d) => ({ android: 'Android', ios: 'iOS' })[d.toLowerCase()] ?? d);
+  return (
+    <Pill tone="indigo" icon={Smartphone} className={className} title={names.length ? `Mobile app - ${names.join(', ')}` : 'Mobile app'}>
+      {names.length ? `Mobile · ${names.join(', ')}` : 'Mobile'}
+    </Pill>
+  );
+}
+
 /* ------------------------------------------------------------- test type */
 
 /**
@@ -345,6 +358,12 @@ export const STATUS_TONE: Record<string, Tone> = {
   ASSIGNED: 'sky',
   // Its own colour: a fix that did not hold is the thing a lead scans the list for.
   REOPENED: 'rose',
+  // Waiting on the project manager: open, but nobody should work on it yet.
+  PENDING_APPROVAL: 'violet',
+  // Blocked on a requirement document being raised, not on a developer.
+  AWAITING_REQUIREMENT: 'indigo',
+  // Fixed, waiting for the team lead's code review before it goes live.
+  IN_REVIEW: 'teal',
   RESOLVED: 'emerald',
   VERIFIED: 'emerald',
   CLOSED: 'emerald',
@@ -358,6 +377,9 @@ const STATUS_ICON: Record<string, ComponentType<{ className?: string }>> = {
   IN_PROGRESS: Timer,
   ASSIGNED: Timer,
   REOPENED: RotateCcw,
+  PENDING_APPROVAL: Hourglass,
+  AWAITING_REQUIREMENT: FileQuestion,
+  IN_REVIEW: GitPullRequest,
   RESOLVED: CheckCircle2,
   VERIFIED: CheckCircle2,
   CLOSED: CheckCircle2,

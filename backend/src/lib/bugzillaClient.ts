@@ -133,6 +133,8 @@ export function restToRpc(
     if (seg[0] === 'group' && seg.length === 2) return { rpcMethod: 'Group.get', rpcParams: ids(seg[1]) };
     if (p === 'classification') return { rpcMethod: 'Classification.get', rpcParams: params };
     if (p === 'flag_type') return { rpcMethod: 'FlagType.get', rpcParams: params };
+    // The SubComponents extension (ops/bugzilla/extensions/SubComponents).
+    if (p === 'subcomponent') return { rpcMethod: 'SubComponent.list', rpcParams: params };
   }
 
   if (method === 'POST') {
@@ -145,6 +147,13 @@ export function restToRpc(
     if (p === 'user') return { rpcMethod: 'User.create', rpcParams: params };
     if (p === 'group') return { rpcMethod: 'Group.create', rpcParams: params };
     if (p === 'flag_type') return { rpcMethod: 'FlagType.create', rpcParams: params };
+    if (p === 'subcomponent') return { rpcMethod: 'SubComponent.create', rpcParams: params };
+    if (p === 'subcomponent/update') return { rpcMethod: 'SubComponent.update', rpcParams: params };
+    if (p === 'subcomponent/remove') return { rpcMethod: 'SubComponent.remove', rpcParams: params };
+    if (p === 'subcomponent/purge') return { rpcMethod: 'SubComponent.purge_orphans', rpcParams: params };
+    if (p === 'subcomponent/component/remove') return { rpcMethod: 'SubComponent.remove_component', rpcParams: params };
+    if (p === 'subcomponent/component/update') return { rpcMethod: 'SubComponent.update_component', rpcParams: params };
+    if (p === 'subcomponent/product/setup') return { rpcMethod: 'SubComponent.setup_product_access', rpcParams: params };
   }
 
   if (method === 'PUT') {

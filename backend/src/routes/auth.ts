@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { accessSnapshot } from '../lib/access';
 import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { SESSION_COOKIE_NAME, type Env } from '../config/env';
@@ -287,6 +288,9 @@ export function authRouter(env: Env): Router {
       clearLoginFailures(rateKey);
 
       const client = new BugzillaClient(env.BUGZILLA_URL, { kind: 'token', token });
+      // Started now, alongside the user lookup below, so it is ready (or in
+      // flight, and shared) when the dashboard asks a moment later.
+      void accessSnapshot(client, id).catch(() => undefined);
       const userResp = await client.get<{ users: unknown[] }>(`/user/${id}`);
       const user = userDetailSchema.parse(userResp.users[0]);
       const permissions = derivePermissions(user.groups);

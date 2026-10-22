@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import { announceDirectoryChange } from '../lib/liveUpdates';
 import { AppError } from '../lib/errors';
 import { checkUserDeletion, deleteUserViaBugzilla } from '../lib/userDelete';
 import { directoryClient, isServiceAccount } from '../lib/productTransfer';
@@ -15,6 +16,11 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
 export function adminUsersRouter(env: Env): Router {
   const router = Router();
+  // Live updates: tell every browser that products / people changed (lib/liveUpdates.ts).
+  router.use((req, res, next) => {
+    if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode < 400) announceDirectoryChange(); });
+    next();
+  });
   const gate = [requireAuth(env), requirePermission('canManageUsers')];
   /*
    * Testers may LIST and OPEN accounts, read-only. Bugzilla shows group

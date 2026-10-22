@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
+import { subcomponentName } from './utils';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import type { BugFilters, Category, Priority, Severity } from '../types';
 import { describeRange, type DateField } from './dateRange';
@@ -27,6 +28,7 @@ export const FACET_KEYS = [
   'source',
   'product',
   'component',
+  'subcomponent',
   'status',
   'resolution',
 ] as const;
@@ -40,6 +42,7 @@ export const FACET_LABELS: Record<FacetKey, string> = {
   source: 'Source',
   product: 'Product',
   component: 'Component',
+  subcomponent: 'Sub-component',
   status: 'Status',
   resolution: 'Resolution',
 };
@@ -132,6 +135,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       source: readAll(params, 'source'),
       product: readAll(params, 'product'),
       component: readAll(params, 'component'),
+      subcomponent: readAll(params, 'subcomponent'),
       status: readAll(params, 'status'),
       resolution: readAll(params, 'resolution'),
       search: params.get('search') ?? '',
@@ -208,7 +212,8 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       readAll(params, key).map((value) => ({
         key,
         value,
-        label: `${FACET_LABELS[key]}: ${value}`,
+        // Sub-components travel as stored values (`Login [42]`); the chip shows the name.
+        label: `${FACET_LABELS[key]}: ${key === 'subcomponent' ? subcomponentName(value) || 'None' : value}`,
       }))
     );
     for (const key of PERSON_KEYS) {

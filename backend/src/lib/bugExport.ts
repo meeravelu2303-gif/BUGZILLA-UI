@@ -221,6 +221,7 @@ export async function buildBugWorkbook(bugs: ExportBug[], ctx: ExportContext): P
     { header: 'Narrative', key: 'narrative', width: 50 },
     { header: 'Product', key: 'product', width: 14 },
     { header: 'Component', key: 'component', width: 24 },
+    { header: 'Sub-component', key: 'subcomponent', width: 20 },
     { header: 'Endpoints', key: 'endpoints', width: 44 },
     { header: 'Test Type', key: 'testType', width: 15 },
     { header: 'Classification', key: 'classification', width: 28 },
@@ -275,6 +276,7 @@ export async function buildBugWorkbook(bugs: ExportBug[], ctx: ExportContext): P
       narrative: fitCell(report.narrative),
       product: bug.product,
       component: bug.component,
+      subcomponent: bug.subcomponentName,
       // One endpoint per line: a comma-joined list of URL paths is unreadable.
       endpoints: fitCell(report.endpoints.join('\n')),
       // Same four labels the list badge shows (UI/API Automation, Manual UI/API test).

@@ -23,14 +23,14 @@ import {
 } from '../lib/classification';
 import type { BugzillaClient } from '../lib/bugzillaClient';
 import { reassignedBugIds } from '../lib/bugHistory';
-import { canServeFromSnapshot, getBugSnapshot, inScope, invalidateBugSnapshot, matchesFilters, type SnapshotBug } from '../lib/bugSnapshot';
+import { canServeFromSnapshot, getBugSnapshot, inScope, invalidateBugSnapshot, matchesFilters, snapshotSorter, type SnapshotBug } from '../lib/bugSnapshot';
 import { accessibleProductNames } from '../lib/access';
 import { categoryOf } from '../lib/classification';
 import { closedStatuses, narrowStatusFilter } from '../lib/bugStatus';
 import { allGroupNames, bugFeatures } from '../lib/bugFeatures';
 import { CURRENT_BUG_FIELDS, toBugzillaUpdate, validateBugUpdate, type CurrentBug } from '../lib/bugUpdate';
 import { groupNameForProduct } from '../lib/productGroups';
-import { describeTarget, directoryClient, loadTransferableBug, parseTransferRoutes, transferBug, transferTargetsFor } from '../lib/productTransfer';
+import { allProductNames, describeTargets, directoryClient, loadTransferableBug, parseTransferRoutes, transferBug, transferTargetsFor } from '../lib/productTransfer';
 import { clearCategoryIndex } from '../lib/categoryIndex';
 import { DELETED_GROUP, DELETED_RESOLUTION, deletedInfoFrom, restoreBugs, softDeleteBugs } from '../lib/softDelete';
 import { effectiveReport, isReportRevision, normaliseReport, revisionComment, stripRevision, withCategoryTag } from '../lib/reportRevision';
@@ -41,6 +41,9 @@ import { proofQueryString, proofSecret, signProof } from '../lib/proofLinks';
 import { parseDescription } from '../lib/grouping';
 import { displayNameFor, resolveDisplayNames } from '../lib/displayNames';
 import { parseInput } from '../lib/validate';
+import { NO_SUBCOMPONENT, resolveSubcomponent, subcomponentName } from '../lib/subcomponents';
+import { loadBugActivity } from '../lib/bugActivity';
+import { announceBugChange } from '../lib/liveUpdates';
 import {
   addCommentSchema,
   bugCountRowSchema,
@@ -78,7 +81,9 @@ interface StatsRow {
   priority: string;
   status: string;
   component: string;
+  cf_subcomponent?: string;
   product: string;
+  resolution?: string;
   whiteboard?: string;
   is_open: boolean;
   assigned_to?: string;
@@ -289,6 +294,7 @@ const EXPORT_MAX_ROWS = 10_000;
 const EXPORT_FILTER_LABELS: Array<[keyof BugFilters, string]> = [
   ['product', 'Product'],
   ['component', 'Component'],
+  ['subcomponent', 'Sub-component'],
   ['status', 'Status'],
   ['resolution', 'Resolution'],
   ['severity', 'Severity'],
@@ -557,7 +563,7 @@ function bugMarkdown(bug: ExportBug): string {
   const lines = [
     `# Bug ${bug.id}: ${bug.summary}`,
     '',
-    `- Product: ${bug.product} / ${bug.component}`,
+    `- Product: ${bug.product} / ${bug.component}${bug.subcomponentName ? ` / ${bug.subcomponentName}` : ''}`,
     `- Status: ${bug.status}${bug.resolution ? ` (${bug.resolution})` : ''}`,
     `- Severity: ${bug.triage.severity}, Priority: ${bug.triage.priority}, Category: ${bug.triage.category}`,
     bug.triage.browsers.length ? `- Browsers: ${bug.triage.browsers.join(', ')}` : '',
@@ -659,6 +665,30 @@ function appOriginOf(origin: string | undefined, referer: string | undefined): s
 
 export function bugsRouter(env: Env): Router {
   const router = Router();
+
+  /*
+   * Live updates (lib/liveUpdates.ts). After ANY successful change through this
+   * router - edit, comment, attachment, status, transfer, delete, create - the
+   * bugs it touched are re-read into the in-memory copy and every connected
+   * browser is told, so other people's screens refresh without a reload.
+   * Ids come from the path (/:id/...), a body `ids` list (bulk actions), or
+   * res.locals.bugIds (create). Exports are reads, despite being POSTs.
+   */
+  router.use((req, res, next) => {
+    if (req.method === 'GET' || req.path.startsWith('/export')) return next();
+    res.on('finish', () => {
+      if (res.statusCode >= 400) return;
+      const ids = new Set<number>();
+      const fromPath = /^\/(\d+)(?:\/|$)/.exec(req.path);
+      if (fromPath) ids.add(Number(fromPath[1]));
+      const bodyIds = (req.body as { ids?: unknown } | undefined)?.ids;
+      if (Array.isArray(bodyIds)) for (const v of bodyIds) if (Number.isInteger(Number(v))) ids.add(Number(v));
+      for (const id of (res.locals.bugIds as number[] | undefined) ?? []) ids.add(id);
+      if (ids.size > 0) void announceBugChange(env, [...ids]);
+      else invalidateBugSnapshot();
+    });
+    next();
+  });
   const auth = requireAuth(env);
 
   // GET /api/bugs
@@ -732,11 +762,30 @@ export function bugsRouter(env: Env): Router {
         params.bug_status = narrowed as unknown as string;
       }
 
-      // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
-      // never count another product's bugs. No-op when an explicit product filter is set.
-      await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
-
-      const raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
+      /*
+       * From the in-memory snapshot when the filters and sort allow it
+       * (lib/bugSnapshot.ts) - the same copy, scope and filter logic the counts
+       * use, so a list and the count above it cannot disagree, and a page is
+       * served in milliseconds instead of a 1-2 s Bugzilla search. Free-text
+       * search and CC still go to Bugzilla.
+       */
+      const sorter = canServeFromSnapshot(query) ? await snapshotSorter(env, query.sortBy, query.sortDir) : null;
+      let raw: { bugs: unknown[] };
+      if (sorter) {
+        const [snap, names] = await Promise.all([
+          getBugSnapshot(env),
+          accessibleProductNames(req.bugzilla!, req.sessionUser!.bzUserId),
+        ]);
+        const effective = params.bug_status ? { ...query, status: params.bug_status as unknown as string[] } : query;
+        const rows = snap.rows.filter((r) => inScope(r, names, effective) && matchesFilters(r, effective)).sort(sorter);
+        const window = filteringByAssignment ? rows : rows.slice(query.offset, query.offset + query.limit + 1);
+        raw = { bugs: window.map((r) => r.raw) };
+      } else {
+        // Scope to the caller's accessible products so instance-wide totals (dashboard, All Bugs)
+        // never count another product's bugs. No-op when an explicit product filter is set.
+        await scopeToAccessibleProducts(params, req.bugzilla!, req.sessionUser!.bzUserId);
+        raw = await req.bugzilla!.get<{ bugs: unknown[] }>('/bug', params);
+      }
 
       let hasMore: boolean;
       let page: ReturnType<typeof normalizeBug>[];
@@ -1007,7 +1056,8 @@ export function bugsRouter(env: Env): Router {
     });
 
     const filters = EXPORT_FILTER_LABELS.flatMap(([key, label]) => {
-      const value = query[key];
+      // Sub-components travel as stored values (`Login [42]`); the sheet names them.
+      const value = key === 'subcomponent' ? query.subcomponent?.map((v) => subcomponentName(v) || 'None') : query[key];
       const text = Array.isArray(value) ? value.join(', ') : value;
       return text ? [{ label, value: String(text) }] : [];
     });
@@ -1355,7 +1405,7 @@ export function bugsRouter(env: Env): Router {
 
       const params: Record<string, unknown> = {
         limit: 0,
-        include_fields: 'id,severity,priority,status,component,product,whiteboard,is_open,assigned_to',
+        include_fields: 'id,severity,priority,status,resolution,component,cf_subcomponent,product,whiteboard,is_open,assigned_to',
       };
       applyBugFilters(params, query);
 
@@ -1386,7 +1436,9 @@ export function bugsRouter(env: Env): Router {
               priority: r.priority,
               status: r.status,
               component: r.component,
+              cf_subcomponent: r.subcomponent,
               product: r.product,
+              resolution: r.resolution,
               whiteboard: r.whiteboard,
               is_open: r.isOpen,
               assigned_to: r.assignedTo,
@@ -1423,6 +1475,18 @@ export function bugsRouter(env: Env): Router {
       const openBySeverity = zeroed(SEVERITIES);
       const openByCategory = zeroed(CATEGORIES);
       const openByComponent: Record<string, number> = {};
+      // Keyed by stored value (`Login [42]`, or `---` for none) - unambiguous across components.
+      const bySubcomponent: Record<string, number> = {};
+      /*
+       * Per-value counts for the remaining filter facets, so every dropdown can
+       * list only the values present in the current view, each with its count.
+       * Resolution uses the filter's own spelling: 'Unresolved' for an open bug.
+       */
+      const byProduct: Record<string, number> = {};
+      const byStatus: Record<string, number> = {};
+      const byResolution: Record<string, number> = {};
+      const byPriority: Record<string, number> = {};
+      const openBySubcomponent: Record<string, number> = {};
       const openMatrix = Object.fromEntries(SEVERITIES.map((s) => [s, zeroed(CATEGORIES)])) as Record<
         Severity,
         Record<Category, number>
@@ -1455,19 +1519,26 @@ export function bugsRouter(env: Env): Router {
           byAssignee[assignee] = (byAssignee[assignee] ?? 0) + 1;
           if (row.is_open) openByAssignee[assignee] = (openByAssignee[assignee] ?? 0) + 1;
         }
-        const { severity, source } = classify({
+        byProduct[row.product] = (byProduct[row.product] ?? 0) + 1;
+        byStatus[row.status] = (byStatus[row.status] ?? 0) + 1;
+        const resolutionKey = row.resolution ? row.resolution : 'Unresolved';
+        byResolution[resolutionKey] = (byResolution[resolutionKey] ?? 0) + 1;
+        const { severity, source, priority } = classify({
           severity: row.severity,
           priority: row.priority,
           whiteboard: row.whiteboard,
           product: row.product,
         });
         bySource[source] += 1;
+        byPriority[priority] = (byPriority[priority] ?? 0) + 1;
         if (row.is_open) openBySource[source] += 1;
         const category = categoryOf(row.whiteboard, undefined);
         bySeverity[severity] += 1;
         byCategory[category] += 1;
         matrix[severity][category] += 1;
         byComponent[row.component] = (byComponent[row.component] ?? 0) + 1;
+        const sub = row.cf_subcomponent || NO_SUBCOMPONENT;
+        bySubcomponent[sub] = (bySubcomponent[sub] ?? 0) + 1;
         const browsers = browsersOf(row.whiteboard);
         for (const browser of browsers) byBrowser[browser] = (byBrowser[browser] ?? 0) + 1;
         if (row.is_open) {
@@ -1476,6 +1547,7 @@ export function bugsRouter(env: Env): Router {
           openByCategory[category] += 1;
           openMatrix[severity][category] += 1;
           openByComponent[row.component] = (openByComponent[row.component] ?? 0) + 1;
+          openBySubcomponent[sub] = (openBySubcomponent[sub] ?? 0) + 1;
           for (const browser of browsers) openByBrowser[browser] = (openByBrowser[browser] ?? 0) + 1;
         }
       }
@@ -1487,6 +1559,11 @@ export function bugsRouter(env: Env): Router {
         bySeverity,
         byCategory,
         byComponent,
+        bySubcomponent,
+        byProduct,
+        byStatus,
+        byResolution,
+        byPriority,
         byBrowser,
         bySource,
         byAssignee,
@@ -1495,6 +1572,7 @@ export function bugsRouter(env: Env): Router {
         openBySeverity,
         openByCategory,
         openByComponent,
+        openBySubcomponent,
         openByBrowser,
         openBySource,
         openMatrix,
@@ -1826,15 +1904,16 @@ export function bugsRouter(env: Env): Router {
 
   // POST /api/bugs
   router.post('/', auth, async (req, res, next) => {
-    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
-    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const input = parseInput(createBugSchema, req.body);
       const client = req.bugzilla!;
 
+      // Must be a live sub-component of the chosen component (lib/subcomponents.ts).
+      const subcomponent = input.subcomponent ? await resolveSubcomponent(env, input.product, input.component, input.subcomponent) : NO_SUBCOMPONENT;
       const payload = {
         product: input.product,
         component: input.component,
+        ...(subcomponent !== NO_SUBCOMPONENT ? { cf_subcomponent: subcomponent } : {}),
         summary: input.summary,
         description: input.description ?? '',
         // Brief-mandated defaults - this Bugzilla instance requires both fields explicitly (docs/API_CONTRACT.md #7).
@@ -1855,6 +1934,7 @@ export function bugsRouter(env: Env): Router {
       };
 
       const created = await client.post<{ id: number }>('/bug', payload);
+      res.locals.bugIds = [created.id];
 
       const bugResp = await client.get<{ bugs: unknown[] }>(`/bug/${created.id}`);
       const bug = normalizeBug(rawBugSchema.parse(bugResp.bugs[0]));
@@ -1872,8 +1952,6 @@ export function bugsRouter(env: Env): Router {
    * array). Registered before `/:id` so the collection route is not shadowed by the item route.
    */
   router.patch('/', auth, async (req, res, next) => {
-    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
-    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { ids, assignedTo } = parseInput(bulkReassignSchema, req.body);
       // All-or-nothing: Bugzilla applies the whole id array in one call, so a
@@ -1964,8 +2042,6 @@ export function bugsRouter(env: Env): Router {
   });
 
   router.post('/delete', auth, triage, async (req, res, next) => {
-    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
-    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { ids, reason } = parseInput(softDeleteSchema, req.body);
       const deleted = await softDeleteBugs(req.bugzilla!, [...new Set(ids)], reason, actorName(req));
@@ -1976,8 +2052,6 @@ export function bugsRouter(env: Env): Router {
   });
 
   router.post('/restore', auth, triage, async (req, res, next) => {
-    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
-    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { ids } = parseInput(restoreSchema, req.body);
       const client = req.bugzilla!;
@@ -2002,26 +2076,35 @@ export function bugsRouter(env: Env): Router {
    */
   const transferRoutes = parseTransferRoutes(env.PRODUCT_TRANSFER_ROUTES);
 
+  /*
+   * Where a bug may be transferred: EVERY active product, whether or not the
+   * person transferring has access to it - a developer must be able to hand a
+   * bug to another team. Only the destination list widens: their own product
+   * access is unchanged, the move runs on the service key, and they are CC'd so
+   * they can keep following the bug. Never the bug's own product.
+   */
+  async function accessibleProductList(_req: Request): Promise<string[]> {
+    return allProductNames(env);
+  }
+  function transferTargetNames(from: string, accessible: string[]): string[] {
+    const byKey = new Map<string, string>();
+    for (const name of [...accessible, ...transferTargetsFor(from, transferRoutes)]) {
+      if (name.toLowerCase() !== from.toLowerCase()) byKey.set(name.toLowerCase(), name);
+    }
+    return [...byKey.values()];
+  }
+
   router.get('/:id/transfer-options', auth, async (req, res, next) => {
     try {
       const { id } = parseInput(idParamSchema, req.params);
       const user = req.sessionUser!;
       const bug = await loadTransferableBug(req.bugzilla!, id, { email: user.email, canTriage: user.permissions.canTriage });
-      const names = transferTargetsFor(bug.product, transferRoutes);
-      const directory = directoryClient(env);
-      const targets = (
-        await Promise.all(
-          names.map((n) =>
-            describeTarget(directory, n).catch((err: unknown) => {
-              // Logged, not swallowed: an empty target list with no reason is undiagnosable.
-              console.error(`[transfer] could not describe target ${n} for bug ${id}:`, err instanceof Error ? err.message : err);
-              return null;
-            })
-          )
-        )
-      ).filter(
-        (t): t is NonNullable<typeof t> => t !== null
-      );
+      const names = transferTargetNames(bug.product, await accessibleProductList(req));
+      const targets = await describeTargets(directoryClient(env), names).catch((err: unknown) => {
+        // Logged, not swallowed: an empty target list with no reason is undiagnosable.
+        console.error(`[transfer] could not describe targets for bug ${id}:`, err instanceof Error ? err.message : err);
+        return [];
+      });
       res.set('Cache-Control', 'no-store').json({ from: { product: bug.product, component: bug.component }, targets });
     } catch (err) {
       next(err);
@@ -2029,8 +2112,6 @@ export function bugsRouter(env: Env): Router {
   });
 
   router.post('/:id/transfer', auth, async (req, res, next) => {
-    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
-    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { id } = parseInput(idParamSchema, req.params);
       const request = parseInput(transferBugSchema, req.body);
@@ -2043,6 +2124,7 @@ export function bugsRouter(env: Env): Router {
         id,
         request,
         routes: transferRoutes,
+        accessibleProducts: await accessibleProductList(req),
         useTargetMilestone: features.targetMilestone,
       });
       // The bug changed product: per-user category / stats caches must not keep counting it where it was.
@@ -2054,8 +2136,6 @@ export function bugsRouter(env: Env): Router {
   });
 
   router.patch('/:id', auth, async (req, res, next) => {
-    // The in-memory bug snapshot is dropped once this write has succeeded (lib/bugSnapshot.ts).
-    res.on('finish', () => { if (res.statusCode < 400) invalidateBugSnapshot(); });
     try {
       const { id } = parseInput(idParamSchema, req.params);
       const input = parseInput(updateBugSchema, req.body);
@@ -2071,6 +2151,21 @@ export function bugsRouter(env: Env): Router {
       await validateBugUpdate(client, current, input, features, { canTriage: req.sessionUser!.permissions.canTriage });
 
       const payload = toBugzillaUpdate(input);
+
+      /*
+       * Sub-component. It belongs to one component, so it is checked against the
+       * bug's component AFTER this edit; moving product or component without
+       * naming a new one clears it rather than leaving a value from elsewhere.
+       */
+      const nextProduct = input.product ?? current.product;
+      const nextComponent = input.component ?? current.component;
+      const movesComponent = nextProduct !== current.product || nextComponent !== current.component;
+      const unchanged = !movesComponent && (input.subcomponent || NO_SUBCOMPONENT) === (current.cf_subcomponent || NO_SUBCOMPONENT);
+      if (input.subcomponent !== undefined && !unchanged) {
+        payload.cf_subcomponent = await resolveSubcomponent(env, nextProduct, nextComponent, input.subcomponent);
+      } else if (movesComponent) {
+        payload.cf_subcomponent = NO_SUBCOMPONENT;
+      }
 
       /*
        * Resolving as DUPLICATE needs the bug being duplicated.
@@ -2132,6 +2227,20 @@ export function bugsRouter(env: Env): Router {
       // What Bugzilla actually recorded, so the UI can confirm the change rather
       // than echo what was asked for - a no-op edit returns an empty map.
       res.json({ bug, changes: result.bugs?.find((b) => b.id === id)?.changes ?? {} });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /*
+   * GET /api/bugs/:id/activity - every recorded change, who and when, plus the
+   * status journey (lib/bugActivity.ts). On the caller's own session, so it
+   * shows exactly what Bugzilla lets them see of this bug.
+   */
+  router.get('/:id/activity', auth, async (req, res, next) => {
+    try {
+      const { id } = parseInput(idParamSchema, req.params);
+      res.set('Cache-Control', 'no-store').json(await loadBugActivity(req.bugzilla!, id));
     } catch (err) {
       next(err);
     }

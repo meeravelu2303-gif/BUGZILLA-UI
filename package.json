@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently -n backend,frontend -c blue,green --kill-others-on-fail \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "serve": "npm --prefix frontend run build && concurrently -n backend,frontend -c blue,green --kill-others-on-fail \"npm --prefix backend run dev\" \"node scripts/wait-for-port.cjs 4000 && npm --prefix frontend run preview\"",
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
     "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install"

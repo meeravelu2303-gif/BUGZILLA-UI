@@ -79,7 +79,7 @@ function OverviewPanel() {
    */
   const { data: meta } = useMeta();
   const workflow = meta?.workflow ?? [];
-  const openStatuses = workflow.length ? workflow.filter((w) => w.isOpen).map((w) => w.status) : ['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS', 'REOPENED'];
+  const openStatuses = workflow.length ? workflow.filter((w) => w.isOpen).map((w) => w.status) : ['UNCONFIRMED', 'CONFIRMED', 'PENDING_APPROVAL', 'AWAITING_REQUIREMENT', 'IN_PROGRESS', 'IN_REVIEW', 'REOPENED'];
   const closedStatuses = workflow.length ? workflow.filter((w) => !w.isOpen).map((w) => w.status) : ['RESOLVED', 'VERIFIED'];
   const reopenedTotal = reopenedCount?.counts.total;
 

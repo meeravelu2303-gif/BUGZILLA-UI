@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CATEGORIES, PRIORITIES, SEVERITIES, SOURCES } from '../lib/classification';
 import { normalizeUser, userDetailSchema } from './common';
+import { subcomponentName } from '../lib/subcomponents';
 
 /**
  * Loose schema for a raw Bugzilla bug object (list item or detail). Uses
@@ -83,6 +84,10 @@ export interface NormalizedBug {
   isConfirmed: boolean;
   product: string;
   component: string;
+  /** Stored sub-component value (`<name> [<component id>]`), `---` for none. */
+  subcomponent: string;
+  /** Its display name; '' for none. */
+  subcomponentName: string;
   version: string;
   priority: string;
   severity: string;
@@ -131,6 +136,9 @@ export function normalizeBug(raw: RawBug): NormalizedBug {
     isConfirmed: raw.is_confirmed ?? raw.status !== 'UNCONFIRMED',
     product: raw.product,
     component: raw.component,
+    // A custom field, so it only arrives through .passthrough().
+    subcomponent: typeof raw.cf_subcomponent === 'string' && raw.cf_subcomponent ? raw.cf_subcomponent : '---',
+    subcomponentName: subcomponentName(typeof raw.cf_subcomponent === 'string' ? raw.cf_subcomponent : ''),
     version: raw.version,
     priority: raw.priority,
     severity: raw.severity,
@@ -308,6 +316,8 @@ export const listBugsQuerySchema = z.object({
   // --- multi-select facets over Bugzilla's own values ---
   product: repeatable(facetValue),
   component: repeatable(facetValue),
+  /** Stored sub-component values (`<name> [<component id>]`); `---` = bugs with none. */
+  subcomponent: repeatable(facetValue),
   status: repeatable(facetValue),
   /*
    * Resolution, so a reader can separate FIXED from INVALID and DUPLICATE among closed bugs.
@@ -358,6 +368,7 @@ export type ListBugsQuery = z.infer<typeof listBugsQuerySchema>;
 export const countBugsQuerySchema = listBugsQuerySchema.pick({
   product: true,
   component: true,
+  subcomponent: true,
   status: true,
   resolution: true,
   severity: true,
@@ -531,6 +542,8 @@ export function tallyBugCounts(
 export const createBugSchema = z.object({
   product: z.string().min(1, 'Product is required'),
   component: z.string().min(1, 'Component is required'),
+  /** Stored value of one of the component's sub-components; omitted or '' = none. */
+  subcomponent: z.string().max(80).optional(),
   summary: z.string().min(1, 'Summary is required').max(255),
   description: z.string().optional(),
   version: z.string().optional(),
@@ -604,6 +617,12 @@ export const updateBugSchema = z
     /** Moving products needs a component and version that exist in the new one. */
     product: z.string().min(1).optional(),
     component: z.string().optional(),
+    /**
+     * Stored sub-component value, or '' to clear. Must belong to the bug's
+     * (new) component. Changing product or component without sending this
+     * clears it, since the old one belongs to the old component.
+     */
+    subcomponent: z.string().max(80).optional(),
     version: z.string().optional(),
     targetMilestone: z.string().optional(),
     opSys: z.string().optional(),

@@ -1,9 +1,19 @@
 import { z } from 'zod';
 
 export const createProductSchema = z.object({
-  name: z.string().min(1, 'Product name is required'),
-  description: z.string().min(1, 'Description is required'),
-  version: z.string().min(1, 'An initial version is required'),
+  name: z.string().trim().min(1, 'Product name is required').max(64, 'At most 64 characters'),
+  description: z.string().trim().min(1, 'Description is required'),
+  version: z.string().trim().min(1, 'An initial version is required'),
+  /**
+   * The product's first component, created in the same request. A product with
+   * no component cannot take bugs and Bugzilla leaves it out of every filing
+   * list, so it is required rather than left for later.
+   */
+  component: z.object({
+    name: z.string().trim().min(1, 'Component name is required').max(64, 'At most 64 characters'),
+    description: z.string().trim().min(1, 'Component description is required'),
+    defaultAssignee: z.string().trim().email('Choose the developer who owns this component'),
+  }),
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
@@ -29,3 +39,27 @@ export const createComponentSchema = z.object({
 });
 
 export type CreateComponentInput = z.infer<typeof createComponentSchema>;
+
+/** A sub-component under one of the product's components (lib/subcomponents.ts). */
+export const createSubcomponentSchema = z.object({
+  componentId: z.number().int().positive(),
+  name: z.string().min(1, 'Sub-component name is required').max(100),
+});
+
+export const updateSubcomponentSchema = z
+  .object({
+    name: z.string().min(1, 'Sub-component name is required').max(100).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => v.name !== undefined || v.isActive !== undefined, { message: 'Nothing to change' });
+
+/** Editing a component (through the SubComponents extension - Bugzilla's REST cannot). */
+export const updateComponentSchema = z
+  .object({
+    /** Bugzilla limits component names to 64 characters (MAX_COMPONENT_SIZE). */
+    name: z.string().trim().min(1, 'Component name is required').max(64, 'At most 64 characters').optional(),
+    description: z.string().trim().min(1, 'Description is required').max(2000).optional(),
+    defaultAssignee: z.string().trim().email('Enter a valid assignee email').optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to change' });

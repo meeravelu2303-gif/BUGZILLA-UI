@@ -3,6 +3,7 @@ import type { Env } from '../config/env';
 import { accessSnapshot } from '../lib/access';
 import { requireAuth } from '../middleware/auth';
 import { normalizeProduct, rawProductSchema } from '../schemas/product';
+import { byComponent, getSubcomponents } from '../lib/subcomponents';
 
 /**
  * Products the signed-in user may work in.
@@ -46,8 +47,12 @@ export function productsRouter(env: Env): Router {
    */
   router.get('/', requireAuth(env), async (req, res, next) => {
     try {
-      const { products, names } = await accessSnapshot(req.bugzilla!, req.sessionUser!.bzUserId);
-      const normalized = products.map((p) => normalizeProduct(rawProductSchema.parse(p)));
+      const [{ products, names }, subs] = await Promise.all([
+        accessSnapshot(req.bugzilla!, req.sessionUser!.bzUserId),
+        getSubcomponents(env),
+      ]);
+      const grouped = byComponent(subs);
+      const normalized = products.map((p) => normalizeProduct(rawProductSchema.parse(p), grouped));
 
       /*
        * `?scope=filing` returns everything Bugzilla says this user may FILE

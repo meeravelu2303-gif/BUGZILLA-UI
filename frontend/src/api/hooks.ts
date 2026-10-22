@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, buildQuery } from './client';
 import type { BugQueryParams } from '../lib/useBugFilters';
 import type {
+  BugActivity,
   AdminGroup,
   AdminUser,
   Attachment,
@@ -14,6 +15,9 @@ import type {
   BugMeta,
   CreateBugInput,
   CreateComponentInput,
+  CreateSubcomponentInput,
+  UpdateComponentInput,
+  UpdateSubcomponentInput,
   CreateProductInput,
   CreateUserInput,
   Product,
@@ -214,6 +218,18 @@ export function useBug(id: number) {
   return useQuery({
     queryKey: ['bugs', id],
     queryFn: () => api.get<BugDetailResponse>(`/bugs/${id}`),
+    enabled: Number.isFinite(id) && id > 0,
+  });
+}
+
+/**
+ * A bug's recorded changes and status journey. Keyed under ['bugs', id] so
+ * every save that refreshes the bug refreshes its activity too.
+ */
+export function useBugActivity(id: number) {
+  return useQuery({
+    queryKey: ['bugs', id, 'activity'],
+    queryFn: () => api.get<BugActivity>(`/bugs/${id}/activity`),
     enabled: Number.isFinite(id) && id > 0,
   });
 }
@@ -433,7 +449,7 @@ function invalidateProductLists(qc: ReturnType<typeof useQueryClient>) {
 export function useCreateProduct() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateProductInput) => api.post<{ product: Product }>('/admin/products', input),
+    mutationFn: (input: CreateProductInput) => api.post<{ product: Product; warnings?: string[] }>('/admin/products', input),
     onSuccess: () => invalidateProductLists(qc),
   });
 }
@@ -476,6 +492,52 @@ export function useAdminGroups() {
     queryFn: () => api.get<{ groups: AdminGroup[] }>('/admin/meta/groups'),
     staleTime: 5 * 60 * 1000,
     retry: false,
+  });
+}
+
+/** Sub-components (backend lib/subcomponents.ts). Adding follows the add-component rule; edit and delete are admin-only. */
+export function useCreateSubcomponent(productId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateSubcomponentInput) => api.post<{ product: Product }>(`/admin/products/${productId}/subcomponents`, input),
+    onSuccess: () => invalidateProductLists(qc),
+  });
+}
+
+export function useUpdateSubcomponent(productId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: UpdateSubcomponentInput & { id: number }) =>
+      api.patch<{ product: Product }>(`/admin/products/${productId}/subcomponents/${id}`, input),
+    onSuccess: () => invalidateProductLists(qc),
+  });
+}
+
+export function useDeleteSubcomponent(productId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<{ product: Product }>(`/admin/products/${productId}/subcomponents/${id}`),
+    onSuccess: () => invalidateProductLists(qc),
+  });
+}
+
+/** Admins and testers. A rename carries the component's bugs and sub-components along. */
+export function useUpdateComponent(productId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ componentId, ...input }: UpdateComponentInput & { componentId: number }) =>
+      api.patch<{ product: Product }>(`/admin/products/${productId}/components/${componentId}`, input),
+    onSuccess: () => invalidateProductLists(qc),
+  });
+}
+
+/** Admins and testers, and only for an empty component that is not the product's last one. */
+export function useDeleteComponent(productId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ componentId, confirmName }: { componentId: number; confirmName: string }) =>
+      api.deleteWithBody<{ product: Product }>(`/admin/products/${productId}/components/${componentId}`, { confirmName }),
+    onSuccess: () => invalidateProductLists(qc),
   });
 }
 

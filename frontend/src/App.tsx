@@ -1,30 +1,53 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PermissionGate } from './components/layout/PermissionGate';
 import { RequireAuth } from './components/layout/RequireAuth';
-import { AdvancedSearch } from './pages/AdvancedSearch';
-import { BugDetail } from './pages/BugDetail';
-import { BugList } from './pages/BugList';
-import { CreateBug } from './pages/CreateBug';
-import { Dashboard } from './pages/Dashboard';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
 import { ResetPassword } from './pages/ResetPassword';
-import { MyBugs } from './pages/MyBugs';
-import { Preferences } from './pages/Preferences';
-import { Reports } from './pages/Reports';
-import { CreateUser } from './pages/admin/CreateUser';
-import { FieldValues } from './pages/admin/FieldValues';
-import { Groups } from './pages/admin/Groups';
-import { Parameters } from './pages/admin/Parameters';
-import { Products } from './pages/admin/Products';
-import { SanityCheck } from './pages/admin/SanityCheck';
-import { UserDetail } from './pages/admin/UserDetail';
-import { Users } from './pages/admin/Users';
-import { Workflow } from './pages/admin/Workflow';
+
+/*
+ * Every page behind sign-in is loaded on demand, in its own chunk. Before this,
+ * opening /login downloaded the WHOLE app - dashboards, bug editor, admin
+ * screens - before the form could appear. The sign-in pages stay in the main
+ * bundle so they show at once.
+ */
+const page = <K extends string>(load: () => Promise<Record<K, React.ComponentType>>, name: K) =>
+  lazy(() => load().then((m) => ({ default: m[name] })));
+const AdvancedSearch = page(() => import('./pages/AdvancedSearch'), 'AdvancedSearch');
+const BugDetail = page(() => import('./pages/BugDetail'), 'BugDetail');
+const BugList = page(() => import('./pages/BugList'), 'BugList');
+const CreateBug = page(() => import('./pages/CreateBug'), 'CreateBug');
+const Dashboard = page(() => import('./pages/Dashboard'), 'Dashboard');
+const MyBugs = page(() => import('./pages/MyBugs'), 'MyBugs');
+const Preferences = page(() => import('./pages/Preferences'), 'Preferences');
+const Reports = page(() => import('./pages/Reports'), 'Reports');
+const CreateUser = page(() => import('./pages/admin/CreateUser'), 'CreateUser');
+const FieldValues = page(() => import('./pages/admin/FieldValues'), 'FieldValues');
+const Groups = page(() => import('./pages/admin/Groups'), 'Groups');
+const Parameters = page(() => import('./pages/admin/Parameters'), 'Parameters');
+const Products = page(() => import('./pages/admin/Products'), 'Products');
+const SanityCheck = page(() => import('./pages/admin/SanityCheck'), 'SanityCheck');
+const UserDetail = page(() => import('./pages/admin/UserDetail'), 'UserDetail');
+const Users = page(() => import('./pages/admin/Users'), 'Users');
+const Workflow = page(() => import('./pages/admin/Workflow'), 'Workflow');
+
+/** Shown in the content area while a page's code arrives; the app shell stays put. */
+function PageLoading() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Loading">
+      <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+    </div>
+  );
+}
 
 /** Wraps an element in the authenticated app shell. */
 function Protected({ children }: { children: React.ReactNode }) {
-  return <RequireAuth>{children}</RequireAuth>;
+  return (
+    <RequireAuth>
+      <Suspense fallback={<PageLoading />}>{children}</Suspense>
+    </RequireAuth>
+  );
 }
 
 export function App() {

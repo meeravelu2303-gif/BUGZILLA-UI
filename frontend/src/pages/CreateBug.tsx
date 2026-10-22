@@ -1,4 +1,4 @@
-import { Check, Eye, FilePlus2, FileText, MonitorSmartphone, Paperclip, Plus, Server, Sparkles, X } from 'lucide-react';
+import { Check, Eye, FilePlus2, FileText, Globe, MonitorSmartphone, Paperclip, Plus, Server, Smartphone, Sparkles, X } from 'lucide-react';
 import { assigneeLabel } from '../lib/roles';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +13,9 @@ import { Input, RequiredMark, Select, Textarea } from '../components/ui/Field';
 import { useToast } from '../context/ToastContext';
 import {
   BUG_BROWSERS,
+  BUG_DEVICES,
+  DEVICE_LABELS,
+  type UiPlatform,
   BUG_CATEGORIES,
   classificationOptions,
   DEFAULT_ENVIRONMENT,
@@ -130,6 +133,7 @@ const FIELD_LABELS: Partial<Record<keyof BugReportInput, string>> = {
   component: 'Component',
   path: 'Endpoint',
   browsers: 'Browsers affected',
+  devices: 'Devices affected',
   title: 'Title',
   classification: 'Classification',
   summary: 'Summary',
@@ -165,6 +169,8 @@ export function CreateBug() {
   const [tag] = useState(mintTag);
   const [product, setProduct] = useState('');
   const [component, setComponent] = useState('');
+  /** Stored sub-component value; '' = none. Reset whenever the component changes. */
+  const [subcomponent, setSubcomponent] = useState('');
   const [version, setVersion] = useState('');
   const [kind, setKind] = useState<BugKind>('api');
   const [title, setTitle] = useState('');
@@ -177,6 +183,9 @@ export function CreateBug() {
   const [path, setPath] = useState('');
   const [page, setPage] = useState('');
   const [browsers, setBrowsers] = useState<string[]>(['chromium']);
+  /** UI bugs: the web app or the mobile app. */
+  const [uiPlatform, setUiPlatform] = useState<UiPlatform>('web');
+  const [devices, setDevices] = useState<string[]>(['android']);
   const [summary, setSummary] = useState('');
   const [whyItMatters, setWhyItMatters] = useState('');
   const [howToFix, setHowToFix] = useState('');
@@ -212,13 +221,18 @@ export function CreateBug() {
   const ownerUsers = (assignable?.users ?? []).filter((u) => ownerSet.has(u.email.toLowerCase()));
   const otherUsers = (assignable?.users ?? []).filter((u) => !ownerSet.has(u.email.toLowerCase()));
 
-  const ownerEmail = selectedProduct?.components.find((c) => c.name === component)?.defaultAssignee ?? '';
+  const selectedComponent = selectedProduct?.components.find((c) => c.name === component);
+  const ownerEmail = selectedComponent?.defaultAssignee ?? '';
+  // Only live sub-components are offered for a new bug.
+  const subOptions = (selectedComponent?.subcomponents ?? []).filter((sc) => sc.isActive);
   const ownerName = assignable?.users.find((u) => u.email === ownerEmail)?.name ?? '';
 
   function onSelectProduct(name: string) {
     setProduct(name);
     const p = products.find((x) => x.name === name);
-    setComponent(p?.components[0]?.name ?? '');
+    // Inactive components are closed for new bugs (Bugzilla refuses them).
+    setComponent(p?.components.find((c) => c.isActive !== false)?.name ?? '');
+    setSubcomponent('');
     setVersion(p?.versions.includes('unspecified') ? 'unspecified' : (p?.versions[0] ?? ''));
     if (name) changeKind(kindForProduct(name));
   }
@@ -227,6 +241,10 @@ export function CreateBug() {
     setKind(next);
     // Swap the environment only while it is still the other kind's default - never over an edit.
     setEnvironment((env) => (Object.values(DEFAULT_ENVIRONMENT).includes(env) || !env.trim() ? DEFAULT_ENVIRONMENT[next] : env));
+  }
+
+  function toggleDevice(d: string) {
+    setDevices((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : BUG_DEVICES.filter((x) => x === d || prev.includes(x))));
   }
 
   function toggleBrowser(b: string) {
@@ -253,7 +271,9 @@ export function CreateBug() {
     method,
     path,
     page,
+    uiPlatform,
     browsers,
+    devices,
     summary,
     whyItMatters,
     howToFix,
@@ -306,6 +326,7 @@ export function CreateBug() {
       const result = await createBug.mutateAsync({
         product,
         component,
+        ...(subcomponent ? { subcomponent } : {}),
         summary: buildSummary(final),
         description: buildDescription(final),
         whiteboard: buildWhiteboard(final),
@@ -398,19 +419,40 @@ export function CreateBug() {
                   label="Component (module)"
                   placeholder={product ? 'Select a component' : 'Select a product first'}
                   value={component}
-                  onChange={(e) => setComponent(e.target.value)}
+                  onChange={(e) => {
+                    setComponent(e.target.value);
+                    setSubcomponent('');
+                  }}
                   error={errors.component}
                   disabled={!selectedProduct}
                   hint={ownerEmail ? `Assigned to ${ownerName || ownerEmail}` : undefined}
                   required
                 >
-                  {selectedProduct?.components.map((c) => (
+                  {selectedProduct?.components.filter((c) => c.isActive !== false).map((c) => (
                     <option key={c.name} value={c.name}>
                       {c.name}
                     </option>
                   ))}
                 </Select>
               </div>
+              {/* Optional, and only shown when the chosen component has sub-components. */}
+              {subOptions.length > 0 && (
+                <div data-field="subcomponent">
+                  <Select
+                    label="Sub-component"
+                    value={subcomponent}
+                    onChange={(e) => setSubcomponent(e.target.value)}
+                    hint={`Narrows the bug within ${component}. Optional.`}
+                  >
+                    <option value="">None</option>
+                    {subOptions.map((sc) => (
+                      <option key={sc.id} value={sc.value}>
+                        {sc.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              )}
               {/*
                 Assignee, chosen at filing time.
                 
@@ -547,8 +589,92 @@ export function CreateBug() {
                 />
               </div>
             ) : (
+              <>
+              {/* Web app or mobile app: decides whether browsers or devices are asked for. */}
+              <div className="flex flex-col gap-1.5">
+                <span id="ui-platform-label" className="text-sm font-medium text-slate-700">
+                  Where is it?
+                  <RequiredMark />
+                </span>
+                <div role="radiogroup" aria-labelledby="ui-platform-label" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-900/[0.06] p-1 sm:max-w-sm">
+                  {([
+                    ['web', 'Web', Globe, 'In a browser'],
+                    ['mobile', 'Mobile', Smartphone, 'In the mobile app'],
+                  ] as const).map(([value, label, Icon, hint]) => {
+                    const on = uiPlatform === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => setUiPlatform(value)}
+                        className={cn(
+                          'focus-ring flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-all',
+                          on ? 'bg-white font-semibold text-brand-800 shadow-sm ring-1 ring-slate-900/5' : 'font-medium text-slate-600 hover:bg-white/50'
+                        )}
+                      >
+                        <Icon className={cn('h-4 w-4 shrink-0', on ? 'text-brand-600' : 'text-slate-400')} aria-hidden />
+                        <span className="flex flex-col leading-tight">
+                          {label}
+                          <span className="text-2xs font-normal text-slate-500">{hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Input id="new-bug-page" autoComplete="off" label="Page / screen" value={page} onChange={(e) => setPage(e.target.value)} placeholder="/kmail/inbox or Write Mail" hint="Where in the app it happens." />
+                <Input
+                  id="new-bug-page"
+                  autoComplete="off"
+                  label={uiPlatform === 'mobile' ? 'Screen' : 'Page / screen'}
+                  value={page}
+                  onChange={(e) => setPage(e.target.value)}
+                  placeholder={uiPlatform === 'mobile' ? 'Inbox, Write Mail, Settings…' : '/kmail/inbox or Write Mail'}
+                  hint="Where in the app it happens."
+                />
+                {uiPlatform === 'mobile' ? (
+                  <div className="flex flex-col gap-1.5" data-field="devices" data-invalid={invalid('devices')}>
+                    <span id="devices-label" className="text-sm font-medium text-slate-700">
+                      Devices affected
+                      <RequiredMark />
+                    </span>
+                    <div role="group" aria-labelledby="devices-label" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-900/[0.06] p-1">
+                      {BUG_DEVICES.map((d) => {
+                        const on = devices.includes(d);
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => toggleDevice(d)}
+                            className={cn(
+                              'focus-ring flex items-center gap-2 rounded-lg px-2.5 py-[7px] text-sm transition-all',
+                              on ? 'bg-white font-semibold text-brand-800 shadow-sm ring-1 ring-slate-900/5' : 'font-medium text-slate-600 hover:bg-white/50'
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
+                                on ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-white'
+                              )}
+                              aria-hidden
+                            >
+                              {on && <Check className="h-3 w-3" strokeWidth={3} />}
+                            </span>
+                            {DEVICE_LABELS[d]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {errors.devices ? (
+                      <p role="alert" className="text-xs font-medium text-rose-600">{errors.devices}</p>
+                    ) : (
+                      <p className="text-xs text-slate-600">Tick every device platform it happens on.</p>
+                    )}
+                  </div>
+                ) : (
                 <div className="flex flex-col gap-1.5" data-field="browsers" data-invalid={invalid('browsers')}>
                   <span id="browsers-label" className="text-sm font-medium text-slate-700">
                     Browsers affected
@@ -588,7 +714,9 @@ export function CreateBug() {
                     <p className="text-xs text-slate-600">Tick every browser it happens in.</p>
                   )}
                 </div>
+                )}
               </div>
+              </>
             )}
 
             <div data-field="title" data-invalid={invalid('title')}>
@@ -913,7 +1041,7 @@ export function CreateBug() {
                     {SEVERITY_LEVELS[level].severity} · {SEVERITY_LEVELS[level].priority}
                   </span>
                   <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-800 ring-1 ring-inset ring-slate-900/10">{category}</span>
-                  {product && <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-800 ring-1 ring-inset ring-slate-900/10">{product}{component ? ` / ${component}` : ''}</span>}
+                  {product && <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-800 ring-1 ring-inset ring-slate-900/10">{product}{component ? ` / ${component}` : ''}{subcomponent ? ` / ${subOptions.find((sc) => sc.value === subcomponent)?.name ?? ''}` : ''}</span>}
                 </div>
                 <p className="font-mono text-[0.7333rem] text-slate-500">whiteboard {whiteboard}</p>
               </div>

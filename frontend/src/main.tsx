@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { ToastProvider } from './context/ToastContext';
+import './fonts';
 import './index.css';
 
 const queryClient = new QueryClient({

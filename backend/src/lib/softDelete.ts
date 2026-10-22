@@ -125,13 +125,37 @@ export async function restoreBugs(
     if (previous?.status === 'REOPENED') {
       // RESOLVED -> REOPENED is allowed directly (it needs a comment, which this carries).
       await client.put(`/bug/${bug.id}`, { ids: [bug.id], status: 'REOPENED', groups, comment });
-    } else if (!previous || ['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS'].includes(previous.status)) {
+    } else if (!previous || ['UNCONFIRMED', 'CONFIRMED', 'IN_PROGRESS', 'PENDING_APPROVAL', 'AWAITING_REQUIREMENT', 'IN_REVIEW'].includes(previous.status)) {
       // Reopen. RESOLVED cannot jump straight to IN_PROGRESS in this workflow,
       // so an in-progress bug comes back via CONFIRMED in a second step.
       const target = previous?.status === 'UNCONFIRMED' ? 'UNCONFIRMED' : OPEN_FALLBACK;
       await client.put(`/bug/${bug.id}`, { ids: [bug.id], status: target, groups, comment });
       if (previous?.status === 'IN_PROGRESS') {
         await client.put(`/bug/${bug.id}`, { ids: [bug.id], status: 'IN_PROGRESS' });
+      }
+      // Back to waiting on the project manager - that move needs a comment in this workflow.
+      // Back into review: via IN_PROGRESS (CONFIRMED -> IN_PROGRESS -> IN_REVIEW is the allowed path).
+      if (previous?.status === 'IN_REVIEW') {
+        await client.put(`/bug/${bug.id}`, { ids: [bug.id], status: 'IN_PROGRESS' });
+        await client.put(`/bug/${bug.id}`, {
+          ids: [bug.id],
+          status: 'IN_REVIEW',
+          comment: { body: "Restored as In code review - it was waiting for the team lead's review before it was deleted." },
+        });
+      }
+      if (previous?.status === 'AWAITING_REQUIREMENT') {
+        await client.put(`/bug/${bug.id}`, {
+          ids: [bug.id],
+          status: 'AWAITING_REQUIREMENT',
+          comment: { body: 'Restored as Awaiting requirement - it was waiting for a requirement to be raised before it was deleted.' },
+        });
+      }
+      if (previous?.status === 'PENDING_APPROVAL') {
+        await client.put(`/bug/${bug.id}`, {
+          ids: [bug.id],
+          status: 'PENDING_APPROVAL',
+          comment: { body: 'Restored as Pending approval - it was waiting on the project manager before it was deleted.' },
+        });
       }
     } else {
       // It was closed before deletion: put its old resolution back, status untouched.

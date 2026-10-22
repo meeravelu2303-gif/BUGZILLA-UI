@@ -1,5 +1,6 @@
 import type { Env } from '../config/env';
 import { BugzillaClient } from './bugzillaClient';
+import { memo } from './memo';
 import {
   BUGZILLA_PRIORITIES,
   BUGZILLA_SEVERITIES,
@@ -42,6 +43,8 @@ export interface SnapshotBug {
   id: number;
   product: string;
   component: string;
+  /** Stored sub-component value (`<name> [<component id>]`), `---` for none. */
+  subcomponent: string;
   status: string;
   resolution: string;
   isOpen: boolean;
@@ -53,6 +56,12 @@ export interface SnapshotBug {
   creatorName: string;
   creationTime: string;
   lastChangeTime: string;
+  /**
+   * The bug as Bugzilla's search returns it, with every field a LIST row needs
+   * (rawBugSchema's required ones plus assignee/reporter details), so lists can
+   * be served from this copy too - not only counts.
+   */
+  raw: Record<string, unknown>;
 }
 
 export interface BugSnapshot {
@@ -64,6 +73,7 @@ interface RawRow {
   id: number;
   product?: string;
   component?: string;
+  cf_subcomponent?: string;
   status?: string;
   resolution?: string;
   is_open?: boolean;
@@ -73,6 +83,14 @@ interface RawRow {
   assigned_to?: string;
   creator?: string;
   creator_detail?: { real_name?: string; name?: string };
+  assigned_to_detail?: unknown;
+  summary?: string;
+  version?: string;
+  op_sys?: string;
+  platform?: string;
+  target_milestone?: string;
+  alias?: unknown;
+  cf_mantis_ref?: string;
   creation_time?: string;
   last_change_time?: string;
 }
@@ -81,17 +99,22 @@ let current: BugSnapshot | null = null;
 let inFlight: Promise<BugSnapshot> | null = null;
 let invalidatedAt = 0;
 
+const SNAPSHOT_FIELDS =
+  'id,alias,summary,product,component,cf_subcomponent,version,op_sys,platform,target_milestone,status,resolution,is_open,severity,priority,whiteboard,assigned_to,assigned_to_detail,creator,creator_detail,cf_mantis_ref,creation_time,last_change_time';
+
+const serviceClient = (env: Env) => new BugzillaClient(env.BUGZILLA_URL, { kind: 'api_key', apiKey: env.BUGZILLA_API_KEY });
+
 async function fetchAll(env: Env): Promise<BugSnapshot> {
-  const client = new BugzillaClient(env.BUGZILLA_URL, { kind: 'api_key', apiKey: env.BUGZILLA_API_KEY });
-  const resp = await client.get<{ bugs: RawRow[] }>('/bug', {
-    limit: 0,
-    include_fields:
-      'id,product,component,status,resolution,is_open,severity,priority,whiteboard,assigned_to,creator,creator_detail,creation_time,last_change_time',
-  });
-  const rows: SnapshotBug[] = (resp.bugs ?? []).map((b) => ({
+  const resp = await serviceClient(env).get<{ bugs: RawRow[] }>('/bug', { limit: 0, include_fields: SNAPSHOT_FIELDS });
+  return { rows: (resp.bugs ?? []).map(toRow), builtAt: Date.now() };
+}
+
+function toRow(b: RawRow): SnapshotBug {
+  return {
     id: b.id,
     product: b.product ?? '',
     component: b.component ?? '',
+    subcomponent: b.cf_subcomponent || '---',
     status: b.status ?? '',
     resolution: b.resolution ?? '',
     isOpen: Boolean(b.is_open),
@@ -103,8 +126,35 @@ async function fetchAll(env: Env): Promise<BugSnapshot> {
     creatorName: b.creator_detail?.real_name || b.creator_detail?.name || b.creator || '',
     creationTime: b.creation_time ?? '',
     lastChangeTime: b.last_change_time ?? '',
-  }));
-  return { rows, builtAt: Date.now() };
+    raw: b as unknown as Record<string, unknown>,
+  };
+}
+
+/*
+ * ------------------------------------------------------------- live patching
+ *
+ * When bugs change - through this app, or found by the change watcher
+ * (lib/liveUpdates.ts) - only THOSE bugs are re-read and swapped into the copy,
+ * one quick Bugzilla call instead of rebuilding all 13,000 (about 6 s). Every
+ * screen that refreshes a moment later is then answered from the patched copy.
+ *
+ * A full refresh that was already in flight may have read the bugs before they
+ * changed, so patches made while it runs are re-applied when it lands.
+ */
+const patchedAt = new Map<number, number>();
+let refreshStartedAt = 0;
+
+export async function patchBugSnapshot(env: Env, ids: number[]): Promise<void> {
+  const unique = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+  if (unique.length === 0 || !current) return;
+  const now = Date.now();
+  for (const id of unique) patchedAt.set(id, now);
+  const resp = await serviceClient(env).get<{ bugs: RawRow[] }>('/bug', { id: unique, include_fields: SNAPSHOT_FIELDS });
+  const fresh = new Map((resp.bugs ?? []).map((b) => [b.id, toRow(b)]));
+  if (!current) return;
+  const rows = current.rows.filter((r) => !unique.includes(r.id) || fresh.has(r.id)).map((r) => fresh.get(r.id) ?? r);
+  for (const [id, row] of fresh) if (!current.rows.some((r) => r.id === id)) rows.push(row);
+  current = { rows, builtAt: current.builtAt };
 }
 
 let timer: NodeJS.Timeout | null = null;
@@ -112,10 +162,16 @@ let timer: NodeJS.Timeout | null = null;
 /** One refresh at a time; concurrent callers share it. Re-arms the background timer when done. */
 function refresh(env: Env): Promise<BugSnapshot> {
   if (!inFlight) {
+    refreshStartedAt = Date.now();
+    const startedAt = refreshStartedAt;
     inFlight = fetchAll(env)
-      .then((snap) => {
+      .then(async (snap) => {
         current = snap;
-        return snap;
+        // Re-apply patches made while this read was running (it may predate them).
+        const stale = [...patchedAt].filter(([, at]) => at >= startedAt).map(([id]) => id);
+        for (const [id, at] of patchedAt) if (at < startedAt) patchedAt.delete(id);
+        if (stale.length) await patchBugSnapshot(env, stale).catch(() => undefined);
+        return current!;
       })
       .finally(() => {
         inFlight = null;
@@ -196,6 +252,7 @@ export function matchesFilters(row: SnapshotBug, f: BugFilters): boolean {
   if (prioritySet && !prioritySet.has(row.priority)) return false;
 
   if (f.component?.length && !f.component.some((c) => lower(c) === lower(row.component))) return false;
+  if (f.subcomponent?.length && !f.subcomponent.includes(row.subcomponent)) return false;
   if (f.status?.length && !f.status.includes(row.status)) return false;
   if (f.resolution?.length) {
     const wanted = f.resolution.map((r) => (r === '' || r === 'Unresolved' ? '' : r));
@@ -228,4 +285,73 @@ export function matchesFilters(row: SnapshotBug, f: BugFilters): boolean {
   if (deleted === 'only' && row.resolution !== 'DELETED') return false;
   if (deleted === 'exclude' && row.resolution === 'DELETED') return false;
   return true;
+}
+
+/*
+ * ------------------------------------------------------------------ sorting
+ *
+ * The list's sort columns, evaluated on the snapshot exactly as Bugzilla's own
+ * ORDER BY does it (routes/bugs.ts SORT_FIELDS): select fields - severity,
+ * priority, status - by their per-value `sortkey`, not alphabetically; text
+ * case-insensitively; and bug id ascending as the final tiebreaker, so pages
+ * never shuffle. An unknown sort returns null and the caller asks Bugzilla.
+ */
+type Key = (r: SnapshotBug) => number | string;
+
+async function selectSortKeys(env: Env): Promise<Map<string, Map<string, number>>> {
+  return memo('snapshot-sortkeys', 'all', 10 * 60 * 1000, async () => {
+    const resp = await new BugzillaClient(env.BUGZILLA_URL, { kind: 'api_key', apiKey: env.BUGZILLA_API_KEY }).get<{
+      fields: { name: string; values?: { name: string | null; sort_key?: number; sortkey?: number }[] }[];
+    }>('/field/bug', { names: ['bug_severity', 'priority', 'bug_status'] });
+    return new Map(
+      (resp.fields ?? []).map((f) => [
+        f.name,
+        // Bugzilla lists one unnamed status (the "no status yet" slot); skip it.
+        new Map((f.values ?? []).filter((v): v is { name: string; sort_key?: number; sortkey?: number } => typeof v.name === 'string').map((v) => [v.name.toLowerCase(), v.sort_key ?? v.sortkey ?? 0])),
+      ])
+    );
+  });
+}
+
+export async function snapshotSorter(
+  env: Env,
+  sortBy: string,
+  sortDir: 'asc' | 'desc'
+): Promise<((a: SnapshotBug, b: SnapshotBug) => number) | null> {
+  const text = (v: unknown) => String(v ?? '').toLowerCase();
+  let keys: Key[];
+  switch (sortBy) {
+    case 'id': keys = [(r) => r.id]; break;
+    case 'creation_time': keys = [(r) => r.creationTime]; break;
+    case 'last_change_time': keys = [(r) => r.lastChangeTime]; break;
+    case 'summary': keys = [(r) => text(r.raw.summary)]; break;
+    case 'product': keys = [(r) => text(r.product)]; break;
+    case 'component': keys = [(r) => text(r.component)]; break;
+    case 'assigned_to': keys = [(r) => r.assignedTo]; break;
+    case 'status_whiteboard': keys = [(r) => text(r.whiteboard)]; break;
+    case 'severity':
+    case 'priority':
+    case 'status':
+    case 'importance': {
+      const sk = await selectSortKeys(env).catch(() => null);
+      if (!sk) return null;
+      const by = (field: string, value: (r: SnapshotBug) => string): Key => (r) => sk.get(field)?.get(value(r).toLowerCase()) ?? 9999;
+      const sev = by('bug_severity', (r) => r.severity);
+      const pri = by('priority', (r) => r.priority);
+      keys = sortBy === 'severity' ? [sev] : sortBy === 'priority' ? [pri] : sortBy === 'status' ? [by('bug_status', (r) => r.status)] : [sev, pri];
+      break;
+    }
+    default:
+      return null;
+  }
+  const dir = sortDir === 'desc' ? -1 : 1;
+  return (a, b) => {
+    for (const key of keys) {
+      const x = key(a);
+      const y = key(b);
+      if (x < y) return -dir;
+      if (x > y) return dir;
+    }
+    return a.id - b.id;
+  };
 }

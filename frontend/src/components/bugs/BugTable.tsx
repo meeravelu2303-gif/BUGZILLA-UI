@@ -5,7 +5,7 @@ import { bugDisplayId, cn, timeAgo } from '../../lib/utils';
 import type { Bug } from '../../types';
 import { Avatar } from '../ui/Avatar';
 import { EmptyState } from '../ui/EmptyState';
-import { BrowserPills, CategoryPill, NoBrowserPill, PriorityPill, SeverityPill, StatusPill, TestTypePill } from '../ui/Pill';
+import { BrowserPills, CategoryPill, MobilePill, NoBrowserPill, PriorityPill, SeverityPill, StatusPill, TestTypePill } from '../ui/Pill';
 import { TableSkeleton } from '../ui/Skeleton';
 
 interface Column {
@@ -88,7 +88,7 @@ export function BugTable({
   const [expanded, setExpanded] = useState<number | null>(null);
 
   const showBrowser =
-    showBrowserColumn ?? bugs.some((bug) => (bug.triage?.browsers?.length ?? 0) > 0);
+    showBrowserColumn ?? bugs.some((bug) => (bug.triage?.browsers?.length ?? 0) > 0 || bug.triage?.uiPlatform === 'Mobile');
 
   /*
    * One filtered list drives the header, the body and every colSpan below, so a
@@ -235,8 +235,9 @@ export function BugTable({
                         <span className="text-slate-300" aria-hidden>
                           ·
                         </span>
-                        <span className="truncate text-xs text-slate-500" title={bug.component}>
+                        <span className="truncate text-xs text-slate-500" title={bug.subcomponentName ? `${bug.component} / ${bug.subcomponentName}` : bug.component}>
                           {bug.component}
+                          {bug.subcomponentName && <span className="text-slate-400"> › {bug.subcomponentName}</span>}
                         </span>
                       </div>
                     </td>
@@ -245,7 +246,9 @@ export function BugTable({
                     <td className="px-3 py-3 align-middle">{triage && <CategoryPill category={triage.category} />}</td>
                     {showBrowser && (
                       <td className="px-3 py-3 align-middle">
-                        {triage?.browsers && triage.browsers.length > 0 ? (
+                        {triage?.uiPlatform === 'Mobile' ? (
+                          <MobilePill devices={triage.devices} />
+                        ) : triage?.browsers && triage.browsers.length > 0 ? (
                           <BrowserPills browsers={triage.browsers} />
                         ) : (
                           /*

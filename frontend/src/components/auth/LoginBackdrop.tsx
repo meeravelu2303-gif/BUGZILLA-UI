@@ -1,3 +1,17 @@
+import { BugJourney, type JourneyStation } from './BugJourney';
+
+// The lifecycle path, in a 1600x900 frame. One gentle S-curve, left to right.
+// Routed through the free margins: up the left edge, along the top, down the gap
+// between the showcase and the form, under the form, then up the right edge.
+const PATH = 'M -60 640 C 40 640, 120 600, 120 560 C 120 400, 60 120, 300 60 S 700 40, 850 170 C 950 260, 760 440, 850 560 S 1200 720, 1480 620 C 1620 570, 1560 400, 1500 262';
+const STATIONS: JourneyStation[] = [
+  { x: 120, y: 560, label: 'Filed', tone: '#64748b' },
+  { x: 850, y: 170, label: 'Confirmed', tone: '#d97706' },
+  { x: 850, y: 560, label: 'In progress', tone: '#0284c7' },
+  { x: 1480, y: 620, label: 'Fixed', tone: '#2563eb' },
+  { x: 1500, y: 262, label: 'Verified', tone: '#059669' },
+];
+
 /**
  * The sign-in page's background: the life of a bug, drawn as weather.
  *
@@ -13,22 +27,10 @@
  *      boards inside.
  *
  * Everything is CSS and inline SVG: no image to load, nothing to license, and
- * it repaints cheaply. The only movement is the slow drift of the light pools
- * and the tickets, and that is skipped for anyone who prefers reduced motion.
+ * it repaints cheaply. On top, BugJourney acts out one bug's life along the
+ * line (see BugJourney.tsx). All movement is skipped for reduced motion.
  */
 export function LoginBackdrop() {
-  // The lifecycle path, in a 1600x900 frame. One gentle S-curve, left to right.
-  // Routed through the free margins: up the left edge, along the top, down the gap
-  // between the showcase and the form, under the form, then up the right edge.
-  const PATH = 'M -60 640 C 40 640, 120 600, 120 560 C 120 400, 60 120, 300 60 S 700 40, 850 170 C 950 260, 760 440, 850 560 S 1200 720, 1480 620 C 1620 570, 1560 400, 1500 262';
-  const STATIONS = [
-    { x: 120, y: 560, label: 'Filed', tone: '#64748b' },
-    { x: 850, y: 170, label: 'Confirmed', tone: '#d97706' },
-    { x: 850, y: 560, label: 'In progress', tone: '#0284c7' },
-    { x: 1480, y: 620, label: 'Fixed', tone: '#2563eb' },
-    { x: 1500, y: 262, label: 'Verified', tone: '#059669' },
-  ];
-
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       {/* 1. light */}
@@ -70,6 +72,8 @@ export function LoginBackdrop() {
             </text>
           </g>
         ))}
+        {/* one bug living its lifecycle along the line */}
+        <BugJourney path={PATH} stations={STATIONS} />
       </svg>
 
       {/* 3. tickets */}

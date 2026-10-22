@@ -1,9 +1,12 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
+import { createServer } from 'node:http';
 import session from 'express-session';
 import { loadEnv, SESSION_COOKIE_NAME, trustProxySetting } from './config/env';
 import { rpcCall } from './lib/bugzillaClient';
+import { getBugSnapshot } from './lib/bugSnapshot';
+import { eventsRouter, startChangeWatcher } from './lib/liveUpdates';
 import { createSessionStore } from './lib/sessionStore';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { adminMetaRouter } from './routes/adminMeta';
@@ -101,6 +104,7 @@ async function main(): Promise<void> {
   });
 
   app.use('/api/auth', authRouter(env));
+  app.use('/api/events', eventsRouter(env));
   app.use('/api/bugs', bugsRouter(env));
   app.use('/api/products', productsRouter(env));
   app.use('/api/meta', metaRouter(env));
@@ -113,8 +117,22 @@ async function main(): Promise<void> {
   app.use(notFoundHandler);
   app.use(errorHandler);
 
-  app.listen(env.PORT, () => {
+  /*
+   * 64 KB of request headers instead of Node's 16 KB default. Cookies are per HOST,
+   * not per port, so every app on 192.168.0.50 - Bugzilla's own pages included -
+   * adds to the Cookie header the browser sends here. Past 16 KB Node answers
+   * 431 to every request and that browser cannot use the app at all.
+   */
+  createServer({ maxHeaderSize: 64 * 1024 }, app).listen(env.PORT, () => {
     console.log(`BFF listening on http://localhost:${env.PORT}`);
+    // Live updates: notice bugs changed outside this app (benches, Bugzilla pages).
+    startChangeWatcher(env);
+    // Build the in-memory bug copy now (it then refreshes itself), so the first
+    // dashboard after a restart is not the one that waits for it.
+    const warmStart = Date.now();
+    getBugSnapshot(env)
+      .then((snap) => console.log(`[snapshot] ${snap.rows.length} bugs loaded in ${Date.now() - warmStart} ms`))
+      .catch((err) => console.warn('[snapshot] warm-up failed (will load on first use):', err instanceof Error ? err.message : err));
     console.log(`Bugzilla at ${env.BUGZILLA_URL} (JSON-RPC transport, credentials in request bodies)`);
     console.log(`Sessions: ${env.SESSION_STORE} · cookie secure: ${env.COOKIE_SECURE} · trust proxy: ${env.TRUST_PROXY}`);
     if (env.PRODUCT_TRANSFER_ROUTES.trim() && !env.TRANSFER_API_KEY) {
