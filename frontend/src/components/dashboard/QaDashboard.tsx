@@ -117,15 +117,15 @@ export function QaDashboard({ reporter, mine = false }: { reporter?: string; min
    * it here would keep it in the queue after QA had done exactly what the queue
    * asked for.
    *
-   * VERIFIED is excluded for free by naming RESOLVED explicitly - so marking a
+   * CLOSED is excluded for free by naming RESOLVED explicitly - so marking a
    * bug verified drops it from this count on the next refresh. The same holds
    * for any future CLOSED status.
    *
    * Soft-deleted bugs are excluded by the API's default `deleted=exclude`.
    */
   const { data: retestCounts } = useBugCounts({ ...who, status: ['RESOLVED'] });
-  /** Closed for good: re-tested and VERIFIED (fixed, invalid, duplicate, won't fix…). */
-  const { data: closedCounts } = useBugCounts({ ...who, status: ['VERIFIED'] });
+  /** Closed for good: re-tested and CLOSED (fixed, invalid, duplicate, won't fix…). */
+  const { data: closedCounts } = useBugCounts({ ...who, status: ['CLOSED'] });
   /*
    * Scoped to the open statuses so `blockerCritical` counts CURRENT load.
    *
@@ -199,12 +199,12 @@ export function QaDashboard({ reporter, mine = false }: { reporter?: string; min
         />
 
         <StatCard
-          label="Blocker / critical"
-          value={openCounts?.counts.blockerCritical ?? 0}
+          label="Urgent"
+          value={openCounts?.counts.urgent ?? openCounts?.counts.blockerCritical ?? 0}
           icon={Siren}
           tone="rose"
-          to={withWho(`/bugs?${openQs}&severity=Critical`)}
-          hint={yours('open, high severity', 'Open, high severity')}
+          to={withWho(`/bugs?${openQs}&urgent=1`)}
+          hint={yours('open, Critical or P0', 'Open, Critical or P0')}
         />
 
         <StatCard
@@ -221,7 +221,7 @@ export function QaDashboard({ reporter, mine = false }: { reporter?: string; min
           value={closedCounts?.counts.total ?? 0}
           icon={CheckCircle2}
           tone="slate"
-          to={withWho('/bugs?status=VERIFIED&sortBy=last_change_time&sortDir=desc')}
+          to={withWho('/bugs?status=CLOSED&sortBy=last_change_time&sortDir=desc')}
           hint={yours('verified and closed', 'Verified and closed')}
         />
       </div>

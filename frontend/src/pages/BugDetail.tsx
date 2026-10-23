@@ -133,15 +133,15 @@ function BugDetailView({
    * Offered only when the workflow really allows it: `editor.allowedStatuses`
    * is Bugzilla's own `status_workflow` for this bug's stored status, so this
    * button can never lead to a refusal on save. That same check is why there is
-   * no "CLOSED" action here - this instance has no such status, and VERIFIED is
-   * already `is_open = 0`, i.e. closed as far as every list and count goes.
+   * the final step: QA re-tested the fix, it passed, and the bug becomes CLOSED
+   * (renamed from VERIFIED on 2026-10-23 - ops/bugzilla/rename-status.pl).
    */
-  const canVerify = !isDeleted && canTriage && bug.status === 'RESOLVED' && editor.allowedStatuses.includes('VERIFIED');
+  const canVerify = !isDeleted && canTriage && bug.status === 'RESOLVED' && editor.allowedStatuses.includes('CLOSED');
 
   async function onVerify() {
     try {
       await updateBug.mutateAsync({
-        status: 'VERIFIED',
+        status: 'CLOSED',
         // A status alone does not say who re-tested it or when; six months on,
         // the comment is the part a reader sees without opening the history.
         comment: {
@@ -151,7 +151,7 @@ function BugDetailView({
       editor.markSaved();
       toast({
         variant: 'success',
-        title: `${bugDisplayId(bug)} verified`,
+        title: `${bugDisplayId(bug)} verified and closed`,
         description: 'Re-test recorded as a comment. It has left the re-test queue.',
       });
       await onReload();

@@ -4,9 +4,9 @@ import { memo } from './memo';
 import {
   BUGZILLA_PRIORITIES,
   BUGZILLA_SEVERITIES,
-  PRIORITY_FOR_SEVERITY,
   browsersOf,
   categoryOf,
+  isUrgent,
   nextDay,
   sourceOf,
   type BugFilters,
@@ -236,20 +236,11 @@ export function inScope(row: SnapshotBug, accessible: string[] | null, filters: 
  * the same filters.
  */
 export function matchesFilters(row: SnapshotBug, f: BugFilters): boolean {
-  // severity bands pin a paired priority set; priority filters intersect it
+  // Severity and priority are separate facets - each filters on its own field only.
   const bands = (f.severity ?? []).filter((s) => s !== 'Unclassified') as Exclude<Severity, 'Unclassified'>[];
-  let prioritySet: Set<string> | null = null;
-  if (bands.length > 0) {
-    const sevSet = new Set(bands.flatMap((b) => BUGZILLA_SEVERITIES[b]));
-    if (!sevSet.has(row.severity)) return false;
-    prioritySet = new Set(bands.flatMap((b) => BUGZILLA_PRIORITIES[PRIORITY_FOR_SEVERITY[b] as Exclude<Priority, 'Unclassified'>]));
-  }
+  if (bands.length > 0 && !new Set(bands.flatMap((b) => BUGZILLA_SEVERITIES[b])).has(row.severity)) return false;
   const prios = (f.priority ?? []).filter((p) => p !== 'Unclassified') as Exclude<Priority, 'Unclassified'>[];
-  if (prios.length > 0) {
-    const wanted = new Set(prios.flatMap((p) => BUGZILLA_PRIORITIES[p]));
-    prioritySet = prioritySet ? new Set([...prioritySet].filter((p) => wanted.has(p))) : wanted;
-  }
-  if (prioritySet && !prioritySet.has(row.priority)) return false;
+  if (prios.length > 0 && !new Set(prios.flatMap((p) => BUGZILLA_PRIORITIES[p])).has(row.priority)) return false;
 
   if (f.component?.length && !f.component.some((c) => lower(c) === lower(row.component))) return false;
   if (f.subcomponent?.length && !f.subcomponent.includes(row.subcomponent)) return false;
@@ -280,6 +271,8 @@ export function matchesFilters(row: SnapshotBug, f: BugFilters): boolean {
     if (from && stamp < from) return false;
     if (to && stamp >= nextDay(to)) return false;
   }
+
+  if (f.urgent && !isUrgent(row.severity, row.priority)) return false;
 
   const deleted = f.deleted ?? 'exclude';
   if (deleted === 'only' && row.resolution !== 'DELETED') return false;

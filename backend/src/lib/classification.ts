@@ -109,6 +109,7 @@ const SEVERITY_FROM_BUGZILLA: Record<string, Severity> = {
   // Legacy-only value: the old bench used `normal` for the P2 band that the new
   // bench calls `minor`.
   normal: 'Minor',
+  minor: 'Minor',
   trivial: 'Trivial',
 };
 
@@ -121,7 +122,10 @@ const SEVERITY_FROM_BUGZILLA: Record<string, Severity> = {
 function severityOf(rawSeverity: string, rawPriority: string): Severity {
   const direct = SEVERITY_FROM_BUGZILLA[rawSeverity];
   if (direct) return direct;
-  if (rawSeverity === 'minor') return rawPriority === 'Low' || rawPriority === 'Lowest' ? 'Trivial' : 'Minor';
+  // Severity and priority are independent (2026-10-23): a tester may file a Minor bug as
+  // P0. Priority no longer decides between Minor and Trivial - `minor` is Minor, and
+  // Trivial is Bugzilla's `trivial`. (rawPriority is kept in the signature for callers.)
+  void rawPriority;
   return 'Unclassified';
 }
 
@@ -336,11 +340,18 @@ export function classify(raw: {
  * encodings; a band is additionally pinned by its priority (below) so the two
  * do not bleed into each other.
  */
+/** What "urgent" means: Critical severity or P0 priority (see BugFilters.urgent). */
+export const URGENT_SEVERITIES = ['blocker', 'critical'] as const;
+export const URGENT_PRIORITY = 'Highest';
+export function isUrgent(severity: string, priority: string): boolean {
+  return (URGENT_SEVERITIES as readonly string[]).includes(severity.toLowerCase()) || priority === URGENT_PRIORITY;
+}
+
 export const BUGZILLA_SEVERITIES: Record<Exclude<Severity, 'Unclassified'>, string[]> = {
   Critical: ['blocker', 'critical'],
   Major: ['major'],
   Minor: ['normal', 'minor'],
-  Trivial: ['trivial', 'minor'],
+  Trivial: ['trivial'],
 };
 
 export const BUGZILLA_PRIORITIES: Record<Exclude<Priority, 'Unclassified'>, string[]> = {
@@ -375,6 +386,12 @@ export interface BugFilters {
    * export they open would quietly include bugs everyone agreed were gone.
    */
   deleted?: 'exclude' | 'only' | 'include';
+  /**
+   * "Urgent": severity Critical (blocker / critical) OR priority P0 (Highest).
+   * The one either/or filter - every other facet narrows (AND). Used by the
+   * dashboards' Urgent tiles, now that priority can differ from severity.
+   */
+  urgent?: boolean;
   /** Inclusive day range (`YYYY-MM-DD`) on the filing date or the last-change date. */
   dateField?: 'created' | 'updated';
   from?: string;
@@ -642,19 +659,14 @@ export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
 
   const severities = (filters.severity ?? []).filter((s) => s !== 'Unclassified') as Exclude<Severity, 'Unclassified'>[];
   if (severities.length > 0) {
+    // Severity only. It used to also require the band's paired priority, which hid
+    // every Critical bug not at P0 - wrong once priority can be set independently.
     query.bug_severity = [...new Set(severities.flatMap((s) => BUGZILLA_SEVERITIES[s]))];
-    // Pin the band with its paired priority so the overloaded `minor` value
-    // cannot pull legacy Trivial bugs into a Minor filter (or vice versa).
-    query.priority = [...new Set(severities.flatMap((s) => BUGZILLA_PRIORITIES[PRIORITY_FOR_SEVERITY[s] as 'P0']))];
   }
 
   const priorities = (filters.priority ?? []).filter((p) => p !== 'Unclassified') as Exclude<Priority, 'Unclassified'>[];
   if (priorities.length > 0) {
-    const wanted = [...new Set(priorities.flatMap((p) => BUGZILLA_PRIORITIES[p]))];
-    // If severity already pinned a priority set, intersect rather than widen -
-    // the two facets are AND'd, not OR'd.
-    const existing = query.priority as string[] | undefined;
-    query.priority = existing ? existing.filter((p) => wanted.includes(p)) : wanted;
+    query.priority = [...new Set(priorities.flatMap((p) => BUGZILLA_PRIORITIES[p]))];
   }
 
   if (filters.product?.length) query.product = filters.product;
@@ -680,6 +692,12 @@ export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
    * whenever a search was also active.
    */
   const chart = chartWriter(query);
+  if (filters.urgent) {
+    chart.open();
+    for (const sev of URGENT_SEVERITIES) chart.pushWith('bug_severity', 'equals', sev);
+    chart.pushWith('priority', 'equals', URGENT_PRIORITY);
+    chart.close();
+  }
   whiteboardCharts(filters, chart);
   searchChart(filters, query, chart);
 

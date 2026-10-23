@@ -347,7 +347,7 @@ export function BrowserPills({ browsers, className }: { browsers: string[]; clas
  *   needs attention (amber) -> being worked (sky) -> finished (emerald)
  *
  * UNCONFIRMED stays slate because it is the absence of triage, not a stage of
- * it. VERIFIED shares emerald with RESOLVED - both are "done" to anyone
+ * it. CLOSED (formerly VERIFIED) shares emerald with RESOLVED - both are "done" to anyone
  * scanning a list, and the word still separates them.
  */
 export const STATUS_TONE: Record<string, Tone> = {

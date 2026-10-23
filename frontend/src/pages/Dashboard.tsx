@@ -80,8 +80,10 @@ function OverviewPanel() {
   const { data: meta } = useMeta();
   const workflow = meta?.workflow ?? [];
   const openStatuses = workflow.length ? workflow.filter((w) => w.isOpen).map((w) => w.status) : ['UNCONFIRMED', 'CONFIRMED', 'PENDING_APPROVAL', 'AWAITING_REQUIREMENT', 'IN_PROGRESS', 'IN_REVIEW', 'REOPENED'];
-  const closedStatuses = workflow.length ? workflow.filter((w) => !w.isOpen).map((w) => w.status) : ['RESOLVED', 'VERIFIED'];
+  const closedStatuses = workflow.length ? workflow.filter((w) => !w.isOpen).map((w) => w.status) : ['RESOLVED', 'CLOSED'];
   const reopenedTotal = reopenedCount?.counts.total;
+  // Urgent = Critical severity OR P0 priority, open bugs only.
+  const { data: openCountsAll } = useBugCounts({ status: openStatuses }, { enabled: workflow.length > 0 });
 
   /*
    * This page reports *current defect load*, so every breakdown below counts open
@@ -144,10 +146,11 @@ function OverviewPanel() {
           <StatCard icon={CheckCircle2} label="Resolved" value={stats.resolved} tone="emerald" to={listUrl({ status: closedStatuses })} />
           <StatCard
             icon={AlertOctagon}
-            label="Critical (P0) open"
-            value={loadBySeverity?.Critical ?? 0}
+            label="Urgent open"
+            value={openCountsAll?.counts.urgent ?? loadBySeverity?.Critical ?? 0}
             tone="rose"
-            to={listUrl({ severity: ['Critical'], status: openStatuses })}
+            to={`${listUrl({ status: openStatuses })}&urgent=1`}
+            hint="Critical or P0"
           />
           {/*
             Always shown, unlike the role boards' per-user versions: Overview

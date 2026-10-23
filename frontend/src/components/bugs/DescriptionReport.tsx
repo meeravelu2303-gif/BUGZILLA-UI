@@ -279,13 +279,24 @@ export function DescriptionReport({ description }: { description: string }) {
         </div>
       )}
 
-      {parsed.steps && (
-        <div className="flex flex-col gap-2">
-          <p className="text-[0.7333rem] font-semibold uppercase tracking-wide text-slate-500">Steps to reproduce</p>
-          <pre className="whitespace-pre-wrap break-words rounded-xl bg-white/70 p-4 font-sans text-[0.9333rem] leading-7 text-slate-800 ring-1 ring-inset ring-slate-200">
-            {parsed.steps}
-          </pre>
+      {/* Filed without steps (allowed for Medium / Low severity): say so plainly instead of hiding the section. */}
+      {parsed.steps.trim() === '(not given)' ? (
+        <div className="flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-600/20">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+          <span>
+            <strong className="font-semibold">No steps given.</strong> The reporter did not list how to reproduce this. If it cannot be
+            reproduced from the summary, ask them in a comment.
+          </span>
         </div>
+      ) : (
+        parsed.steps && (
+          <div className="flex flex-col gap-2">
+            <p className="text-[0.7333rem] font-semibold uppercase tracking-wide text-slate-500">Steps to reproduce</p>
+            <pre className="whitespace-pre-wrap break-words rounded-xl bg-white/70 p-4 font-sans text-[0.9333rem] leading-7 text-slate-800 ring-1 ring-inset ring-slate-200">
+              {parsed.steps}
+            </pre>
+          </div>
+        )
       )}
 
       {(parsed.curl || parsed.repro || parsed.responseBody) && (

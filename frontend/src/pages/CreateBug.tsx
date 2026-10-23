@@ -14,6 +14,9 @@ import { useToast } from '../context/ToastContext';
 import {
   BUG_BROWSERS,
   BUG_DEVICES,
+  PRIORITY_OPTIONS,
+  priorityLabel,
+  stepsRequired,
   DEVICE_LABELS,
   type UiPlatform,
   BUG_CATEGORIES,
@@ -176,6 +179,9 @@ export function CreateBug() {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<string>('Functional');
   const [level, setLevel] = useState<SeverityLevel>('HIGH');
+  /** Bugzilla priority. Follows the severity until the tester picks one themselves. */
+  const [priority, setPriority] = useState<string>(SEVERITY_LEVELS.HIGH.priority);
+  const [priorityManual, setPriorityManual] = useState(false);
   /** Empty = let Bugzilla apply the component's default owner. */
   const [assignee, setAssignee] = useState('');
   const [classification, setClassification] = useState('');
@@ -267,6 +273,7 @@ export function CreateBug() {
     title,
     category,
     level,
+    priority,
     classification,
     method,
     path,
@@ -335,7 +342,7 @@ export function CreateBug() {
         opSys: 'All',
         platform: 'All',
         severity: levelFields.severity,
-        priority: levelFields.priority,
+        priority,
         /*
          * Sent only when a person was chosen. Left blank, Bugzilla applies the
          * component's default owner - the same routing the automated bench
@@ -762,7 +769,13 @@ export function CreateBug() {
             <Segmented
               label="Severity"
               value={level}
-              onChange={setLevel}
+              onChange={(next: SeverityLevel) => {
+                setLevel(next);
+                // Priority follows severity until the tester has chosen one deliberately.
+                if (!priorityManual) setPriority(SEVERITY_LEVELS[next].priority);
+                // A manual choice that now equals this severity's default is no longer an override.
+                else if (priority === SEVERITY_LEVELS[next].priority) setPriorityManual(false);
+              }}
               options={(Object.keys(SEVERITY_LEVELS) as SeverityLevel[]).map((l) => ({
                 value: l,
                 label: l[0] + l.slice(1).toLowerCase(),
@@ -775,6 +788,40 @@ export function CreateBug() {
                   </span>{' '}
                   - {SEVERITY_LEVELS[level].hint}.
                 </>
+              }
+            />
+
+            {/* Priority: how soon to fix it - separate from how bad it is. Starts from the severity. */}
+            <Segmented
+              label="Priority"
+              value={priority}
+              onChange={(next: string) => {
+                setPriority(next);
+                setPriorityManual(next !== SEVERITY_LEVELS[level].priority);
+              }}
+              options={PRIORITY_OPTIONS.map((p) => ({ value: p.value, label: p.label }))}
+              hint={
+                priorityManual ? (
+                  <>
+                    <span className="font-medium text-amber-700">Priority set manually</span> - {priorityLabel(priority)} instead of{' '}
+                    {priorityLabel(SEVERITY_LEVELS[level].priority)} for this severity.{' '}
+                    <button
+                      type="button"
+                      className="font-medium text-brand-700 underline-offset-2 hover:underline"
+                      onClick={() => {
+                        setPriority(SEVERITY_LEVELS[level].priority);
+                        setPriorityManual(false);
+                      }}
+                    >
+                      Use the default
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {PRIORITY_OPTIONS.find((p) => p.value === priority)?.hint} - set from the severity. Change it if this bug is more or less
+                    urgent than its severity suggests.
+                  </>
+                )
               }
             />
           </Section>
@@ -805,24 +852,30 @@ export function CreateBug() {
             <div data-field="steps" data-invalid={invalid('steps')}>
               <Textarea
                 id="new-bug-steps" autoComplete="off" label="Steps to reproduce"
-                required
+                required={stepsRequired(level)}
                 value={steps}
                 onChange={(e) => setSteps(e.target.value)}
                 error={errors.steps}
                 rows={4}
                 className={MONO}
                 placeholder={'Log in as a test user\nOpen KMail → Inbox\nClick "Mark all as read"'}
-                hint="One step per line - they are numbered automatically."
+                hint={
+                  stepsRequired(level)
+                    ? 'Required for Critical and High severity. One step per line - they are numbered automatically.'
+                    : steps.trim()
+                      ? 'One step per line - they are numbered automatically.'
+                      : 'Optional for Medium and Low severity - but developers fix bugs faster with steps. One per line.'
+                }
               />
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div data-field="expected" data-invalid={invalid('expected')}>
                 <Textarea
                   id="new-bug-expected" autoComplete="off" label="Expected"
-                  required
                   value={expected}
                   onChange={(e) => setExpected(e.target.value)}
                   error={errors.expected}
+                  hint={expected.trim() ? undefined : "Optional - say what should happen if it isn't obvious from the title."}
                   rows={4}
                   className={MONO}
                   placeholder={kind === 'api' ? 'empty subject → 400\nbody: {"status":"error","message":…}' : 'All unread mails are marked as read.'}
@@ -831,10 +884,10 @@ export function CreateBug() {
               <div data-field="actual" data-invalid={invalid('actual')}>
                 <Textarea
                   id="new-bug-actual" autoComplete="off" label="Actual"
-                  required
                   value={actual}
                   onChange={(e) => setActual(e.target.value)}
                   error={errors.actual}
+                  hint={actual.trim() ? undefined : 'Optional - the Summary already says what goes wrong; add detail if it helps.'}
                   rows={4}
                   className={MONO}
                   placeholder={kind === 'api' ? 'empty subject → 500' : 'Nothing happens; the unread count stays the same.'}

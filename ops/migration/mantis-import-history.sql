@@ -8,7 +8,7 @@
 --
 -- What is imported (Mantis history type 0 = a field change), for every Mantis
 -- bug that exists in live Bugzilla (cf_mantis_ref):
---   status      -> bug_status   (10,20 UNCONFIRMED; 30,40 CONFIRMED; 50 IN_PROGRESS; 80 RESOLVED; 90 VERIFIED)
+--   status      -> bug_status   (10,20 UNCONFIRMED; 30,40 CONFIRMED; 50 IN_PROGRESS; 80 RESOLVED; 90 CLOSED - was VERIFIED until 2026-10-23)
 --   resolution  -> resolution   (20 FIXED; 40 WORKSFORME; 60 DUPLICATE; 70 INVALID; 50,80,90 WONTFIX; 10,30 none)
 --   handler_id  -> assigned_to  (Mantis user -> live login via zz_user_map)
 --   category    -> component    (names, as stored)
@@ -66,7 +66,7 @@ SELECT * FROM (
       WHEN 'category' THEN @f_component WHEN 'project_id' THEN @f_product WHEN 'summary' THEN @f_summary END fieldid,
     LEFT(CASE h.field_name
       WHEN 'status' THEN CASE h.old_value WHEN '10' THEN 'UNCONFIRMED' WHEN '20' THEN 'UNCONFIRMED' WHEN '30' THEN 'CONFIRMED' WHEN '40' THEN 'CONFIRMED'
-                                          WHEN '50' THEN 'IN_PROGRESS' WHEN '80' THEN 'RESOLVED' WHEN '90' THEN 'VERIFIED' ELSE h.old_value END
+                                          WHEN '50' THEN 'IN_PROGRESS' WHEN '80' THEN 'RESOLVED' WHEN '90' THEN 'CLOSED' ELSE h.old_value END
       WHEN 'resolution' THEN CASE h.old_value WHEN '20' THEN 'FIXED' WHEN '40' THEN 'WORKSFORME' WHEN '60' THEN 'DUPLICATE' WHEN '70' THEN 'INVALID'
                                               WHEN '50' THEN 'WONTFIX' WHEN '80' THEN 'WONTFIX' WHEN '90' THEN 'WONTFIX' ELSE '' END
       WHEN 'handler_id' THEN CASE WHEN h.old_value IN ('', '0') THEN '' ELSE COALESCE(om.live_login, 'mantis-unknown@mantis.invalid') END
@@ -74,7 +74,7 @@ SELECT * FROM (
       ELSE h.old_value END, 255) removed,
     LEFT(CASE h.field_name
       WHEN 'status' THEN CASE h.new_value WHEN '10' THEN 'UNCONFIRMED' WHEN '20' THEN 'UNCONFIRMED' WHEN '30' THEN 'CONFIRMED' WHEN '40' THEN 'CONFIRMED'
-                                          WHEN '50' THEN 'IN_PROGRESS' WHEN '80' THEN 'RESOLVED' WHEN '90' THEN 'VERIFIED' ELSE h.new_value END
+                                          WHEN '50' THEN 'IN_PROGRESS' WHEN '80' THEN 'RESOLVED' WHEN '90' THEN 'CLOSED' ELSE h.new_value END
       WHEN 'resolution' THEN CASE h.new_value WHEN '20' THEN 'FIXED' WHEN '40' THEN 'WORKSFORME' WHEN '60' THEN 'DUPLICATE' WHEN '70' THEN 'INVALID'
                                               WHEN '50' THEN 'WONTFIX' WHEN '80' THEN 'WONTFIX' WHEN '90' THEN 'WONTFIX' ELSE '' END
       WHEN 'handler_id' THEN CASE WHEN h.new_value IN ('', '0') THEN '' ELSE COALESCE(nm.live_login, 'mantis-unknown@mantis.invalid') END

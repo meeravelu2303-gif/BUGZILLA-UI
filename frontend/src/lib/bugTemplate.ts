@@ -39,6 +39,30 @@ export const SEVERITY_LEVELS = {
 export type SeverityLevel = keyof typeof SEVERITY_LEVELS;
 
 /**
+ * Steps to reproduce are REQUIRED only for Critical and Major (HIGH) bugs - the
+ * ones a developer must reproduce quickly. For Minor and Trivial bugs, and for
+ * Expected / Actual on every bug, they are optional: the required Summary
+ * already says what goes wrong. Anything left empty is written to the
+ * description as NOT_GIVEN, so the bug page can say so plainly.
+ */
+export const STEPS_REQUIRED_LEVELS: ReadonlySet<SeverityLevel> = new Set<SeverityLevel>(['CRITICAL', 'HIGH']);
+export const stepsRequired = (level: SeverityLevel) => STEPS_REQUIRED_LEVELS.has(level);
+export const NOT_GIVEN = '(not given)';
+
+/**
+ * Priority, separate from severity (2026-10-23). It starts as the severity's
+ * paired priority (Critical -> P0 ... Low -> P3) and the tester may override it:
+ * a Minor bug can be P0 before a demo, a Low one P1. Values are Bugzilla's.
+ */
+export const PRIORITY_OPTIONS = [
+  { value: 'Highest', label: 'P0', hint: 'Fix immediately' },
+  { value: 'High', label: 'P1', hint: 'Fix in this cycle' },
+  { value: 'Normal', label: 'P2', hint: 'Fix in a coming cycle' },
+  { value: 'Low', label: 'P3', hint: 'Fix when there is time' },
+] as const;
+export const priorityLabel = (value: string) => PRIORITY_OPTIONS.find((p) => p.value === value)?.label ?? value;
+
+/**
  * Every classification in use - collected from the bugs already in this tracker AND the rule ids the
  * test bench's validators emit (kpost-testbench_v2/src), so a manual bug can always pick the exact
  * value its bench-filed twin carries and the two group together in search, charts and the export.
@@ -111,6 +135,8 @@ export interface BugReportInput {
   title: string;
   category: string;
   level: SeverityLevel;
+  /** Bugzilla priority (Highest / High / Normal / Low); defaults to the severity's pair. */
+  priority?: string;
   classification: string;
   method: string;
   path: string;
@@ -247,7 +273,7 @@ export function buildDescription(input: BugReportInput): string {
     `Category: ${input.category}`,
     `${input.kind === 'api' ? 'Representative endpoint:' : 'Endpoint:'} ${endpoint || '(not applicable)'}`,
     `Module: ${input.component}`,
-    `Severity: ${level.severity} / Priority: ${level.priority}`,
+    `Severity: ${level.severity} / Priority: ${input.priority ?? level.priority}`,
     '',
     `Preconditions: ${input.preconditions.trim() || defaultPreconditions(input)}`,
     '',
@@ -268,13 +294,13 @@ export function buildDescription(input: BugReportInput): string {
     lines.push('', `Correlation ID (search the application logs for it): ${input.correlationId.trim()}`);
   }
 
-  lines.push('', 'Expected:', input.expected.trim(), '', 'Actual:', input.actual.trim());
+  lines.push('', 'Expected:', input.expected.trim() || NOT_GIVEN, '', 'Actual:', input.actual.trim() || NOT_GIVEN);
 
   if (input.kind === 'api' && input.responseBody.trim()) {
     lines.push('', `Response body (HTTP ${input.responseStatus.trim() || '?'}):`, input.responseBody.trim());
   }
 
-  lines.push('', 'Steps to reproduce:', numberSteps(input.steps));
+  lines.push('', 'Steps to reproduce:', input.steps.trim() ? numberSteps(input.steps) : NOT_GIVEN);
 
   if (input.kind === 'api' && input.curl.trim()) lines.push('', 'curl:', input.curl.trim());
 
@@ -312,9 +338,8 @@ export function validateReport(input: BugReportInput): ReportErrors {
   if (input.title.trim().length < 10) e.title = 'Describe the problem in at least 10 characters.';
   if (!input.classification.trim()) e.classification = 'Pick or type a classification, e.g. response.status-code.';
   if (input.summary.trim().length < 20) e.summary = 'Explain what goes wrong in a sentence or two.';
-  if (!input.steps.trim()) e.steps = 'List the steps that reproduce it.';
-  if (!input.expected.trim()) e.expected = 'Say what should have happened.';
-  if (!input.actual.trim()) e.actual = 'Say what actually happened.';
+  // Expected / Actual are optional; steps only for Critical and Major (see STEPS_REQUIRED_LEVELS).
+  if (stepsRequired(input.level) && !input.steps.trim()) e.steps = 'Critical and High severity bugs need the steps that reproduce them.';
   if (!input.environment.trim()) e.environment = 'Name the environment it was seen on.';
 
   if (input.kind === 'api') {

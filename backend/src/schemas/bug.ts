@@ -341,6 +341,8 @@ export const listBugsQuerySchema = z.object({
    * the component owner map, the same way the counts are.
    */
   assignment: z.enum(['picked', 'queued', 'reassigned']).optional(),
+  /** `urgent=1`: Critical severity OR P0 priority (BugFilters.urgent). */
+  urgent: z.enum(['1', 'true']).transform(() => true).optional(),
   creator: z.string().optional(),
   cc: z.string().optional(),
   search: z.string().optional(),
@@ -378,6 +380,7 @@ export const countBugsQuerySchema = listBugsQuerySchema.pick({
   source: true,
   assignedTo: true,
   assignment: true,
+  urgent: true,
   creator: true,
   cc: true,
   search: true,
@@ -407,6 +410,8 @@ export const bugCountRowSchema = z
     is_open: z.boolean(),
     status: z.string(),
     severity: z.string(),
+    /** For the urgent tally (Critical or P0). Optional for older callers. */
+    priority: z.string().optional(),
     /* For the unassigned tally below - optional so an older caller that does
        not ask for them still parses. */
     assigned_to: z.string().optional(),
@@ -451,6 +456,8 @@ export interface BugCounts {
   open: number;
   resolved: number;
   blockerCritical: number;
+  /** Critical severity OR P0 priority - what the dashboards' Urgent tiles show. */
+  urgent: number;
   /** Full-population breakdowns for the dashboard charts - every bug, not a page. */
   byStatus: Record<string, number>;
   bySeverity: Record<string, number>;
@@ -497,6 +504,7 @@ export function tallyBugCounts(
 ): BugCounts {
   let open = 0;
   let blockerCritical = 0;
+  let urgent = 0;
   let queued = 0;
   let picked = 0;
   const byStatus: Record<string, number> = {};
@@ -505,6 +513,7 @@ export function tallyBugCounts(
   for (const row of rows) {
     if (row.is_open) open += 1;
     if (HIGH_SEVERITIES.has(row.severity)) blockerCritical += 1;
+    if (HIGH_SEVERITIES.has(row.severity) || row.priority === 'Highest') urgent += 1;
 
     /*
      * Open only: a resolved bug still sitting with the default owner was
@@ -530,6 +539,7 @@ export function tallyBugCounts(
     open,
     resolved: rows.length - open,
     blockerCritical,
+    urgent,
     queued,
     picked,
     // Filled in by the caller, which alone can reach bug history.

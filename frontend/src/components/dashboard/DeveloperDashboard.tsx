@@ -71,14 +71,14 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
   const t = all
     ? {
         openBacklog: 'Open backlog',
-        highSeverity: 'Blockers / critical',
+        highSeverity: 'Urgent',
         resolved: 'Resolved',
         backlog: 'Team backlog',
         empty: 'No open bugs are assigned to any developer right now.',
       }
     : {
         openBacklog: isSelf ? 'My open backlog' : 'Open backlog',
-        highSeverity: isSelf ? 'My blockers / critical' : 'Blockers / critical',
+        highSeverity: isSelf ? 'My urgent bugs' : 'Urgent',
         resolved: isSelf ? 'Resolved by me' : `Resolved by ${first}`,
         backlog: isSelf ? 'My backlog' : `${first}'s backlog`,
         empty: isSelf ? 'No open bugs are assigned to you right now.' : `No open bugs are assigned to ${name} right now.`,
@@ -148,7 +148,7 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
 
   /*
    * Card 4 - lifetime fixes. Every closed status the workflow defines, so
-   * VERIFIED counts alongside RESOLVED and any future CLOSED is picked up
+   * CLOSED counts alongside RESOLVED, and any other closed status is picked up
    * without a code change.
    */
   const { data: myResolved } = useBugCounts(
@@ -168,7 +168,8 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
   // Blocker + critical only - the same rule as the QA board's "Blocker / critical" tile. Major
   // was counted too, and since most open bugs are major the card read close to the whole backlog.
   const HIGH = ['blocker', 'critical'];
-  const myHighSeverity = HIGH.reduce((n, key) => n + (myOpen?.counts.bySeverity?.[key] ?? 0), 0);
+  // Urgent = Critical severity OR P0 priority (from the BFF); the raw-severity tally is the fallback for an older backend.
+  const myHighSeverity = myOpen?.counts.urgent ?? HIGH.reduce((n, key) => n + (myOpen?.counts.bySeverity?.[key] ?? 0), 0);
 
   const bugs = useMemo(() => (data?.bugs ?? []).filter((b) => b.isOpen), [data]);
 
@@ -219,8 +220,8 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
             value={myHighSeverity}
             icon={AlertOctagon}
             tone="rose"
-            to={`/bugs?${openStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}&severity=Critical${whoQs}`}
-            hint="Open bugs, blocker or critical"
+            to={`/bugs?${openStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}&urgent=1${whoQs}`}
+            hint="Open bugs, Critical or P0"
           />
         </motion.div>
         <motion.div variants={pageVariants}>
@@ -613,7 +614,7 @@ const STATUS_DOT: Record<string, string> = {
   AWAITING_REQUIREMENT: 'bg-indigo-500',
   IN_REVIEW: 'bg-teal-500',
   RESOLVED: 'bg-emerald-500',
-  VERIFIED: 'bg-emerald-600',
+  CLOSED: 'bg-emerald-600',
 };
 const RAW_SEVERITY_DOT: Record<string, string> = {
   blocker: 'bg-rose-600',

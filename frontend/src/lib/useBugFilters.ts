@@ -78,7 +78,7 @@ type PersonKey = (typeof PERSON_KEYS)[number];
 const PERSON_LABELS: Record<PersonKey, string> = { assignedTo: 'Assigned to', creator: 'Reported by' };
 
 export interface ActiveChip {
-  key: FacetKey | PersonKey | 'search' | 'date';
+  key: FacetKey | PersonKey | 'search' | 'date' | 'urgent';
   value: string;
   label: string;
 }
@@ -222,6 +222,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     }
     const search = params.get('search');
     if (search) chips.push({ key: 'search', value: search, label: `Search: ${search}` });
+    if (params.get('urgent') === '1') chips.push({ key: 'urgent', value: '1', label: 'Urgent: Critical or P0' });
     if (filters.from || filters.to) {
       const what = filters.dateField === 'updated' ? 'Updated' : 'Created';
       chips.unshift({ key: 'date', value: `${filters.from}..${filters.to}`, label: `${what}: ${describeRange({ from: filters.from || undefined, to: filters.to || undefined })}` });
@@ -251,7 +252,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     () =>
       commit((next) => {
         for (const key of FACET_KEYS) next.delete(key);
-        for (const k of ['search', 'dateField', 'from', 'to', ...PERSON_KEYS]) next.delete(k);
+        for (const k of ['search', 'dateField', 'from', 'to', 'urgent', ...PERSON_KEYS]) next.delete(k);
       }),
     [commit]
   );
@@ -316,6 +317,8 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     }
     if (showDeleted) out.deleted = 'only';
     if (assignment) out.assignment = assignment;
+    // Critical severity OR P0 priority - from the dashboards' Urgent tiles.
+    if (params.get('urgent') === '1') out.urgent = '1';
     for (const key of PERSON_KEYS) {
       const who = params.get(key)?.trim();
       if (who) out[key] = who;

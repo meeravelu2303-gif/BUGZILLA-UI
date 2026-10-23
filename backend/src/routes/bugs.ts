@@ -92,7 +92,7 @@ interface StatsRow {
 /** A counter object with every key present at zero, so absent bands still render. */
 /** A snapshot row in the shape `tallyBugCounts` reads. */
 function toCountRow(r: SnapshotBug) {
-  return { id: r.id, is_open: r.isOpen, status: r.status, severity: r.severity, assigned_to: r.assignedTo, product: r.product, component: r.component };
+  return { id: r.id, is_open: r.isOpen, status: r.status, severity: r.severity, priority: r.priority, assigned_to: r.assignedTo, product: r.product, component: r.component };
 }
 
 function zeroed<T extends readonly string[]>(keys: T): Record<T[number], number> {
@@ -301,6 +301,7 @@ const EXPORT_FILTER_LABELS: Array<[keyof BugFilters, string]> = [
   ['priority', 'Priority'],
   ['category', 'Category'],
   ['browser', 'Browser'],
+  ['urgent', 'Urgent (Critical or P0)'],
   ['assignedTo', 'Assigned to'],
   ['creator', 'Reported by'],
   ['cc', 'CC'],
@@ -875,7 +876,7 @@ export function bugsRouter(env: Env): Router {
         limit: 0,
         // assigned_to/product/component feed the "unassigned" tally - the bugs
         // still sitting with their component's default owner.
-        include_fields: 'id,is_open,status,severity,assigned_to,product,component',
+        include_fields: 'id,is_open,status,severity,priority,assigned_to,product,component',
       };
       applyBugFilters(params, query);
 

@@ -401,6 +401,8 @@ export interface BugCounts {
   open: number;
   resolved: number;
   blockerCritical: number;
+  /** Critical severity OR P0 priority. Optional: an older backend does not send it. */
+  urgent?: number;
   /** Full-population chart data - keyed by Bugzilla's own status/severity values. */
   byStatus: Record<string, number>;
   bySeverity: Record<string, number>;
