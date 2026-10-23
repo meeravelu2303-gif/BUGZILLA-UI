@@ -1,0 +1,50 @@
+[%# This Source Code Form is subject to the terms of the Mozilla Public
+  # License, v. 2.0. If a copy of the MPL was not distributed with this
+  # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+  #
+  # This Source Code Form is "Incompatible With Secondary Licenses", as
+  # defined by the Mozilla Public License, v. 2.0.
+  #%]
+[%#
+  # Bug Tracker customisation (BUGZILLA-UI repo: ops/bugzilla/templates).
+  # Plain-text twin of bugmail.html.tmpl: every bug email is short.
+  #%]
+[% isnew = bug.lastdiffed ? 0 : 1 %]
+[% app_url = "http://192.168.0.50:5175" %]
+[% short_title = bug.short_desc.replace('^\s*\[(KP|MT)-[0-9A-Za-z]+\]\s*', '') %]
+[% IF short_title.length > 80 %][% short_title = short_title.substr(0, 77).replace('\s+\S*$', '') _ '...' %][% END %]
+[% who = changer ? (changer.name || changer.login) : '' %]
+[% IF isnew %]
+New bug filed: KPA-[% bug.id %]
+[%+ short_title %]
+
+Status: [% bug.bug_status %]
+[% ELSE %]
+Bug KPA-[% bug.id %] updated[% IF who %] by [% who %][% END %]
+[%+ short_title %]
+[% shown = 0 %][% more = 0 %]
+[% FOREACH change = diffs %]
+[% IF change.blocker %]
+[%+ "  Depends on: KPA-" _ change.blocker.id _ " changed status" %]
+[% ELSE %]
+[% PROCESS "email/bugmail-common.txt.tmpl" %]
+[% IF change.field_name == 'resolution' && (!new_value || new_value == '---') %]
+[%# reopened: the Status line already says so %]
+[% ELSIF shown < 6 %]
+[%+ "  " _ field_label _ ": " _ (old_value && old_value != "---" ? old_value _ " -> " : "") _ (new_value || "cleared") %]
+[% shown = shown + 1 %]
+[% ELSE %][% more = more + 1 %][% END %]
+[% END %]
+[% END %]
+[% IF more %]
+[%+ "  + " _ more _ " more" %]
+[% END %]
+[% IF new_comments.size %]
+[% latest = new_comments.last %]
+[% text = latest.body.replace('\s+', ' ') %]
+[% IF text.length > 240 %][% text = text.substr(0, 237).replace('\s+\S*$', '') _ '...' %][% END %]
+[%+ "\n" _ (latest.author.name || latest.author.login) _ " commented:\n  " _ text %]
+[% END %]
+[% END %]
+
+Open the bug: [% app_url %]/bugs/[% bug.id %]

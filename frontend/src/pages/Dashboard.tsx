@@ -146,11 +146,11 @@ function OverviewPanel() {
           <StatCard icon={CheckCircle2} label="Resolved" value={stats.resolved} tone="emerald" to={listUrl({ status: closedStatuses })} />
           <StatCard
             icon={AlertOctagon}
-            label="Urgent open"
+            label="Top priority"
             value={openCountsAll?.counts.urgent ?? loadBySeverity?.Critical ?? 0}
             tone="rose"
             to={`${listUrl({ status: openStatuses })}&urgent=1`}
-            hint="Critical or P0"
+            hint="Open, Critical or P0"
           />
           {/*
             Always shown, unlike the role boards' per-user versions: Overview

@@ -1,0 +1,103 @@
+[%# This Source Code Form is subject to the terms of the Mozilla Public
+  # License, v. 2.0. If a copy of the MPL was not distributed with this
+  # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+  #
+  # This Source Code Form is "Incompatible With Secondary Licenses", as
+  # defined by the Mozilla Public License, v. 2.0.
+  #%]
+[%#
+  # Bug Tracker customisation (BUGZILLA-UI repo: ops/bugzilla/templates).
+  # EVERY bug email is short - only what matters, never the whole bug:
+  #   new bug  -> number, title, status, link
+  #   update   -> number, title, who changed it, what changed (old -> new),
+  #               the start of a new comment, link
+  # The link opens the bug in the Bug Tracker app.
+  # app_url: where the Bug Tracker app lives; update it if the address changes.
+  #%]
+[% isnew = bug.lastdiffed ? 0 : 1 %]
+[% app_url = "http://192.168.0.50:5175" %]
+[% short_title = bug.short_desc.replace('^\s*\[(KP|MT)-[0-9A-Za-z]+\]\s*', '') %]
+[% IF short_title.length > 80 %][% short_title = short_title.substr(0, 77).replace('\s+\S*$', '') _ '...' %][% END %]
+[% PROCESS collect_changes %]
+<html>
+  <body style="margin:0;padding:0;background:#f1f5f9;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:20px 12px;">
+      <tr><td align="center">
+        <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:12px;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+          <tr><td style="padding:20px 22px 4px 22px;">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#2563eb;">
+              [% IF isnew %]New bug filed[% ELSE %]Bug updated[% IF who %] by [% who FILTER html %][% END %][% END %]
+            </div>
+            <div style="font-size:20px;font-weight:700;margin-top:6px;">KPA-[% bug.id FILTER html %]</div>
+            <div style="font-size:14px;color:#334155;margin-top:4px;">[% short_title FILTER html %]</div>
+          </td></tr>
+
+          [% IF isnew %]
+          <tr><td style="padding:12px 22px 0 22px;font-size:13px;color:#334155;">
+            Status: <strong>[% bug.bug_status FILTER html %]</strong>
+          </td></tr>
+          [% ELSE %]
+            [% IF changes.size %]
+            <tr><td style="padding:12px 22px 0 22px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="font-size:13px;line-height:1.8;color:#334155;">
+                [% FOREACH c = changes %]
+                <tr>
+                  <td style="color:#64748b;padding-right:14px;vertical-align:top;">[% c.label FILTER html %]</td>
+                  <td>
+                    [% IF c.text %][% c.text FILTER html %][% ELSE %]
+                      [% IF c.old && c.old != '---' %]<span style="color:#94a3b8;text-decoration:line-through;">[% c.old FILTER html %]</span> &rarr; [% END %]<strong>[% c.new || 'cleared' FILTER html %]</strong>
+                    [% END %]
+                  </td>
+                </tr>
+                [% END %]
+                [% IF more_changes %]<tr><td></td><td style="color:#64748b;">+ [% more_changes %] more [% more_changes == 1 ? 'change' : 'changes' %]</td></tr>[% END %]
+              </table>
+            </td></tr>
+            [% END %]
+            [% IF comment_text %]
+            <tr><td style="padding:12px 22px 0 22px;">
+              <div style="font-size:12px;color:#64748b;">[% comment_by FILTER html %] commented:</div>
+              <div style="font-size:14px;line-height:1.5;color:#0f172a;margin-top:2px;border-left:3px solid #bfdbfe;padding-left:10px;">[% comment_text FILTER html %]</div>
+            </td></tr>
+            [% END %]
+          [% END %]
+
+          <tr><td style="padding:16px 22px 22px 22px;">
+            <a href="[% app_url FILTER html %]/bugs/[% bug.id FILTER uri %]" style="background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 20px;border-radius:999px;display:inline-block;">Open the bug</a>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>
+
+[%# Gathers the short facts both email formats show. %]
+[% BLOCK collect_changes %]
+  [% who = changer ? (changer.name || changer.login) : '' %]
+  [% changes = [] %]
+  [% more_changes = 0 %]
+  [% IF !isnew %]
+    [% FOREACH change = diffs %]
+      [% IF change.blocker %]
+        [% changes.push({ label => 'Depends on', text => 'KPA-' _ change.blocker.id _ ' changed status' }) %]
+      [% ELSE %]
+        [% PROCESS "email/bugmail-common.txt.tmpl" %]
+        [% IF change.field_name == 'resolution' && (!new_value || new_value == '---') %]
+          [%# reopened: the Status line already says so %]
+        [% ELSIF changes.size < 6 %]
+          [% changes.push({ label => field_label, old => old_value, new => new_value }) %]
+        [% ELSE %]
+          [% more_changes = more_changes + 1 %]
+        [% END %]
+      [% END %]
+    [% END %]
+  [% END %]
+  [% comment_text = '' %]
+  [% comment_by = '' %]
+  [% IF !isnew && new_comments.size %]
+    [% latest = new_comments.last %]
+    [% comment_text = latest.body.replace('\s+', ' ') %]
+    [% IF comment_text.length > 240 %][% comment_text = comment_text.substr(0, 237).replace('\s+\S*$', '') _ '...' %][% END %]
+    [% comment_by = latest.author.name || latest.author.login %]
+  [% END %]
+[% END %]

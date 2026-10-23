@@ -21,7 +21,10 @@ export function SaveBar({
   onSave,
   onReloadLatest,
   privateComments,
+  inline = false,
 }: {
+  /** Render inside the Details panel (under "Created") instead of floating over the page. */
+  inline?: boolean;
   editor: BugEditor;
   saving: boolean;
   /** Set when the last save was refused because someone else saved first. */
@@ -77,11 +80,21 @@ export function SaveBar({
   const count = labels.length;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-4 sm:px-6">
+    /*
+     * Inline (the bug page): a section at the foot of the Details panel, right
+     * under "Created", next to the fields being edited. Otherwise it floats.
+     */
+    <div
+      className={
+        inline
+          ? 'border-t border-hairline'
+          : 'pointer-events-none fixed inset-x-0 top-[4.75rem] z-40 flex justify-center px-4 sm:px-6 lg:pl-[calc(15rem+1.5rem)] xl:pl-[calc(17rem+1.5rem)]'
+      }
+    >
       <div
         role="region"
         aria-label="Unsaved changes"
-        className="pointer-events-auto w-full max-w-3xl animate-toast-in glass-raised rounded-2xl"
+        className={inline ? 'bg-brand-50/50' : 'pointer-events-auto w-full max-w-3xl animate-toast-in glass-raised rounded-2xl'}
       >
         {conflict && (
           <div className="flex flex-wrap items-center gap-3 rounded-t-2xl border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
@@ -158,7 +171,7 @@ export function SaveBar({
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className={cn('flex shrink-0 items-center gap-1.5', inline && 'w-full justify-end')}>
             <Button
               size="sm"
               variant="ghost"

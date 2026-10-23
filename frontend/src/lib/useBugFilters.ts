@@ -222,7 +222,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     }
     const search = params.get('search');
     if (search) chips.push({ key: 'search', value: search, label: `Search: ${search}` });
-    if (params.get('urgent') === '1') chips.push({ key: 'urgent', value: '1', label: 'Urgent: Critical or P0' });
+    if (params.get('urgent') === '1') chips.push({ key: 'urgent', value: '1', label: 'Top priority: Critical or P0' });
     if (filters.from || filters.to) {
       const what = filters.dateField === 'updated' ? 'Updated' : 'Created';
       chips.unshift({ key: 'date', value: `${filters.from}..${filters.to}`, label: `${what}: ${describeRange({ from: filters.from || undefined, to: filters.to || undefined })}` });
@@ -317,7 +317,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     }
     if (showDeleted) out.deleted = 'only';
     if (assignment) out.assignment = assignment;
-    // Critical severity OR P0 priority - from the dashboards' Urgent tiles.
+    // Critical severity OR P0 priority - from the dashboards' Top priority tiles.
     if (params.get('urgent') === '1') out.urgent = '1';
     for (const key of PERSON_KEYS) {
       const who = params.get(key)?.trim();

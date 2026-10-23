@@ -1,0 +1,38 @@
+[%# This Source Code Form is subject to the terms of the Mozilla Public
+  # License, v. 2.0. If a copy of the MPL was not distributed with this
+  # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+  #
+  # This Source Code Form is "Incompatible With Secondary Licenses", as
+  # defined by the Mozilla Public License, v. 2.0.
+  #%]
+[%#
+  # Bug Tracker customisation (BUGZILLA-UI repo: ops/bugzilla/templates).
+  # A SIMPLE subject on every bug email: the KPA number and what happened -
+  # "KPA-12 new bug filed", "KPA-12 bug status update", "KPA-12 new comment"
+  # or "KPA-12 bug updated".
+  # No title: the email body has it.
+  #%]
+
+[% PROCESS "global/reason-descs.none.tmpl" %]
+[% isnew = bug.lastdiffed ? 0 : 1 %]
+[% status_changed = changedfields.grep('^(bug_status|resolution)$').size %]
+[% IF isnew %]
+  [% what = 'new bug filed' %]
+[% ELSIF status_changed %]
+  [% what = 'bug status update' %]
+[% ELSIF !changedfields.size && new_comments.size %]
+  [% what = 'new comment' %]
+[% ELSE %]
+  [% what = 'bug updated' %]
+[% END %]
+
+From: [% Param('mailfrom') %]
+To: [% to_user.email %]
+Subject: KPA-[%+ bug.id %] [%+ what %]
+Date: [% date %]
+X-Bugzilla-Reason: [% reasonsheader %]
+X-Bugzilla-Type: [% bugmailtype %]
+X-Bugzilla-Watch-Reason: [% reasonswatchheader %]
+[%+ INCLUDE "email/header-common.txt.tmpl" %]
+X-Bugzilla-Changed-Fields: [% changedfields.join(" ") %]
+[%+ threadingmarker %]

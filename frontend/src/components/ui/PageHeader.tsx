@@ -1,6 +1,6 @@
 import { ArrowLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 
 /**
@@ -11,17 +11,15 @@ import { cn } from '../../lib/utils';
  * route when the page was opened directly (a bookmark, a pasted link), where
  * browser-back would leave the app entirely.
  */
+/**
+ * Goes exactly where its label says (`to`). It used to step back in the
+ * browser history instead, so "Back to dashboard" opened whatever page came
+ * before - All Bugs, if that is where you came from.
+ */
 export function BackLink({ to, label = 'Back', className }: { to: string; label?: string; className?: string }) {
-  const navigate = useNavigate();
-  const hasHistory = typeof window !== 'undefined' && (window.history.state?.idx ?? 0) > 0;
   return (
     <Link
       to={to}
-      onClick={(e) => {
-        if (!hasHistory) return;
-        e.preventDefault();
-        navigate(-1);
-      }}
       className={cn('focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-900', className)}
     >
       <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> {label}

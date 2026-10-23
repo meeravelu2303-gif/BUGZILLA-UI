@@ -488,7 +488,26 @@ function BugDetailView({
 
           {/* A disabled fieldset turns every control inside read-only in one place. */}
           <fieldset disabled={isDeleted} className="min-w-0">
-            <MetadataSidebar bug={bug} meta={meta} editor={editor} products={products} currentUser={currentUser} />
+            <MetadataSidebar
+              bug={bug}
+              meta={meta}
+              editor={editor}
+              products={products}
+              currentUser={currentUser}
+              saveBar={
+                !isDeleted && (
+                  <SaveBar
+                    inline
+                    editor={editor}
+                    saving={updateBug.isPending}
+                    conflict={conflict}
+                    onSave={onSave}
+                    onReloadLatest={reloadLatest}
+                    privateComments={Boolean(meta?.features.privateComments)}
+                  />
+                )
+              }
+            />
           </fieldset>
         </div>
       </div>
@@ -498,19 +517,7 @@ function BugDetailView({
         <TransferBugDialog open={transferring} bugId={bug.id} onClose={() => setTransferring(false)} onTransferred={() => void onReload()} />
       )}
 
-      {/* Room for the floating save bar, so it never covers the last comment. */}
-      {(editor.dirty.length > 0 || conflict) && <div className="h-28" aria-hidden />}
-
-      {!isDeleted && (
-        <SaveBar
-          editor={editor}
-          saving={updateBug.isPending}
-          conflict={conflict}
-          onSave={onSave}
-          onReloadLatest={reloadLatest}
-          privateComments={Boolean(meta?.features.privateComments)}
-        />
-      )}
+      {/* Save / discard lives in the Details panel, under "Created" (SaveBar inline). */}
     </div>
   );
 }

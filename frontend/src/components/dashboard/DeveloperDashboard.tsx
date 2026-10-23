@@ -71,14 +71,14 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
   const t = all
     ? {
         openBacklog: 'Open backlog',
-        highSeverity: 'Urgent',
+        highSeverity: 'Top priority',
         resolved: 'Resolved',
         backlog: 'Team backlog',
         empty: 'No open bugs are assigned to any developer right now.',
       }
     : {
         openBacklog: isSelf ? 'My open backlog' : 'Open backlog',
-        highSeverity: isSelf ? 'My urgent bugs' : 'Urgent',
+        highSeverity: isSelf ? 'My top priority' : 'Top priority',
         resolved: isSelf ? 'Resolved by me' : `Resolved by ${first}`,
         backlog: isSelf ? 'My backlog' : `${first}'s backlog`,
         empty: isSelf ? 'No open bugs are assigned to you right now.' : `No open bugs are assigned to ${name} right now.`,
@@ -251,7 +251,7 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
             icon={CheckCircle2}
             tone="emerald"
             to={`/bugs?${closedStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}${whoQs}&sortBy=last_change_time&sortDir=desc`}
-            hint="Lifetime fixes"
+            hint="All-time total"
           />
         </motion.div>
       </motion.div>

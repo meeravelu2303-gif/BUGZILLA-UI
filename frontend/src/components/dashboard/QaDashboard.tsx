@@ -199,7 +199,7 @@ export function QaDashboard({ reporter, mine = false }: { reporter?: string; min
         />
 
         <StatCard
-          label="Urgent"
+          label="Top priority"
           value={openCounts?.counts.urgent ?? openCounts?.counts.blockerCritical ?? 0}
           icon={Siren}
           tone="rose"

@@ -1,4 +1,5 @@
 import { Boxes, CircleDot, Clock, Flag, Gauge, GitBranch, RotateCcw, ShieldCheck, Tag, Users } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { subcomponentName } from '../../lib/utils';
 import { useAssignableUsers } from '../../api/hooks';
 import type { Bug, BugMeta, Product } from '../../types';
@@ -36,7 +37,10 @@ export function MetadataSidebar({
   editor,
   products,
   currentUser,
+  saveBar,
 }: {
+  /** The save / discard section, shown under "Created" while there are unsaved changes. */
+  saveBar?: ReactNode;
   bug: Bug;
   meta?: BugMeta;
   editor: BugEditor;
@@ -638,7 +642,7 @@ export function MetadataSidebar({
           <dt>Created</dt>
           <dd className="font-medium text-slate-800">{formatDateTime(bug.creationTime)}</dd>
         </div>
-        {editor.dirty.length > 0 && (
+        {!saveBar && editor.dirty.length > 0 && (
           <button
             type="button"
             onClick={editor.reset}
@@ -648,6 +652,7 @@ export function MetadataSidebar({
           </button>
         )}
       </dl>
+      {saveBar}
     </Card>
   );
 }
