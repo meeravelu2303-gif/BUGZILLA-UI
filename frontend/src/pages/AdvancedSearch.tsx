@@ -1,7 +1,7 @@
 import { RotateCcw } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAssignableUsers, useBugCounts, useBugs, useMeta, useProducts, useReporters } from '../api/hooks';
+import { useBugCounts, useBugs, useMeta, useProducts, useReporters, useSearchableAssignees } from '../api/hooks';
 import { BugTable } from '../components/bugs/BugTable';
 import { ExportButton } from '../components/bugs/ExportButton';
 import { FilterBar } from '../components/bugs/FilterBar';
@@ -33,8 +33,9 @@ export function AdvancedSearch() {
   const assignedTo = params.get('assignedTo') ?? '';
   const creator = params.get('creator') ?? '';
 
-  // The two person lists, sorted by name. Same sources as the dashboards' pickers.
-  const { data: assigneeData, isLoading: assigneesLoading } = useAssignableUsers();
+  // The two person lists, sorted by name. The assignee list is the SEARCH one:
+  // everyone who can hold a bug, testers, reporters and yourself included.
+  const { data: assigneeData, isLoading: assigneesLoading } = useSearchableAssignees();
   const { data: reporterData, isLoading: reportersLoading } = useReporters();
   const assignees = useMemo(() => (assigneeData?.users ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)), [assigneeData]);
   const reporters = useMemo(() => (reporterData?.users ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)), [reporterData]);
@@ -103,11 +104,11 @@ export function AdvancedSearch() {
               className="w-72"
             >
               <option value="">Anyone</option>
-              {(['developer', 'tester', 'admin'] as const).map((role) => {
+              {(['developer', 'tester', 'admin', 'reporter'] as const).map((role) => {
                 const group = assignees.filter((u) => (u.role ?? 'developer') === role);
                 if (group.length === 0) return null;
                 return (
-                  <optgroup key={role} label={{ developer: 'Developers', tester: 'Testers', admin: 'Admins' }[role]}>
+                  <optgroup key={role} label={{ developer: 'Developers', tester: 'Testers', admin: 'Admins', reporter: 'Reporters' }[role]}>
                     {group.map((u) => (
                       <option key={u.email} value={u.email}>
                         {u.name} ({u.email})

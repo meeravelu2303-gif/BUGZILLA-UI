@@ -180,8 +180,15 @@ export function metaRouter(env: Env): Router {
        * is the one option that changes nothing.
        */
       const me = req.sessionUser!.email.toLowerCase();
+      /*
+       * `scope=all` is for SEARCHING by assignee (Advanced Search), not for
+       * handing work over: there, testers, reporters and the signed-in user can
+       * all hold bugs worth finding, so nobody is left out.
+       */
+      const everyone = req.query.scope === 'all';
       const users = [...(pool?.values() ?? [])]
         .filter((u) => {
+          if (everyone) return true;
           const email = u.email.toLowerCase();
           if (email === me) return false;
           // Engineering only - unless they own a component, in which case

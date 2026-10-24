@@ -150,6 +150,19 @@ export function useAssignableUsers(product?: string | string[]) {
 }
 
 /**
+ * Everyone who can hold a bug, for SEARCHING by assignee (Advanced Search).
+ * Unlike useAssignableUsers it keeps testers, reporters and the signed-in user:
+ * they are left out of "hand this bug to" pickers, but their bugs still need finding.
+ */
+export function useSearchableAssignees() {
+  return useQuery({
+    queryKey: ['meta', 'assignable-users', 'scope:all'],
+    queryFn: () => api.get<{ users: AssignableUser[]; owners?: string[] }>(`/meta/assignable-users${buildQuery({ scope: 'all' })}`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
  * Products for the signed-in user.
  *
  * `forFiling` asks for everything Bugzilla will accept a bug into, rather than
