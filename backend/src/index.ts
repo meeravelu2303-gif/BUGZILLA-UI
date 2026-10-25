@@ -11,6 +11,7 @@ import { createSessionStore } from './lib/sessionStore';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { adminMetaRouter } from './routes/adminMeta';
 import { adminProductsRouter } from './routes/adminProducts';
+import { adminTeamsRouter } from './routes/adminTeams';
 import { adminUsersRouter } from './routes/adminUsers';
 import { authRouter } from './routes/auth';
 import { bugsRouter } from './routes/bugs';
@@ -113,6 +114,7 @@ async function main(): Promise<void> {
   app.use('/api/admin/users', adminUsersRouter(env));
   app.use('/api/admin/products', adminProductsRouter(env));
   app.use('/api/admin/meta', adminMetaRouter(env));
+  app.use('/api/admin/teams', adminTeamsRouter(env));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

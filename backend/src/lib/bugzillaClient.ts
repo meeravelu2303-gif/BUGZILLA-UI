@@ -135,6 +135,8 @@ export function restToRpc(
     if (p === 'flag_type') return { rpcMethod: 'FlagType.get', rpcParams: params };
     // The SubComponents extension (ops/bugzilla/extensions/SubComponents).
     if (p === 'subcomponent') return { rpcMethod: 'SubComponent.list', rpcParams: params };
+    // The Teams extension (ops/bugzilla/extensions/Teams).
+    if (p === 'team') return { rpcMethod: 'Team.list', rpcParams: params };
   }
 
   if (method === 'POST') {
@@ -154,6 +156,9 @@ export function restToRpc(
     if (p === 'subcomponent/component/remove') return { rpcMethod: 'SubComponent.remove_component', rpcParams: params };
     if (p === 'subcomponent/component/update') return { rpcMethod: 'SubComponent.update_component', rpcParams: params };
     if (p === 'subcomponent/product/setup') return { rpcMethod: 'SubComponent.setup_product_access', rpcParams: params };
+    if (p === 'team') return { rpcMethod: 'Team.create', rpcParams: params };
+    if (p === 'team/update') return { rpcMethod: 'Team.update', rpcParams: params };
+    if (p === 'team/remove') return { rpcMethod: 'Team.remove', rpcParams: params };
   }
 
   if (method === 'PUT') {

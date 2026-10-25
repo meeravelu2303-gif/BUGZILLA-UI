@@ -1,0 +1,20 @@
+[%# Error messages for the Teams extension (lib/WebService.pm). %]
+[% IF error == "kp_team_name_required" %]
+  [% title = "Team name required" %]
+  Please give the team a name.
+[% ELSIF error == "kp_team_name_too_long" %]
+  [% title = "Team name too long" %]
+  A team name can be at most [% max FILTER html %] characters.
+[% ELSIF error == "kp_team_name_taken" %]
+  [% title = "Team name already used" %]
+  A team called "[% name FILTER html %]" already exists. Please choose another name.
+[% ELSIF error == "kp_team_leader_required" %]
+  [% title = "Team leader required" %]
+  Please choose the team leader.
+[% ELSIF error == "kp_team_unknown_user" %]
+  [% title = "Unknown person" %]
+  There is no account for "[% login FILTER html %]".
+[% ELSIF error == "kp_team_not_found" %]
+  [% title = "Team not found" %]
+  That team no longer exists. It may have been deleted.
+[% END %]

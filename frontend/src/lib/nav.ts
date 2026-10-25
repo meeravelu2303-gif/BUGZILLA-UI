@@ -11,6 +11,7 @@ import {
   Tags,
   Boxes,
   Stethoscope,
+  UsersRound,
   type LucideIcon,
 } from 'lucide-react';
 import type { Permissions } from '../types';
@@ -69,6 +70,7 @@ export const NAV_SECTIONS: NavSection[] = [
     adminOnly: true,
     items: [
       { to: '/admin/users', label: 'Users', icon: UsersIcon, permission: 'canViewUsers', description: 'Create, search and enable/disable accounts' },
+      { to: '/admin/teams', label: 'Teams', icon: UsersRound, permission: 'canManageUsers', description: 'Teams, their team leaders and members' },
       { to: '/admin/products', label: 'Products', icon: Boxes, permission: 'canViewProducts', description: 'Manage products and their components' },
       { to: '/admin/field-values', label: 'Field Values', icon: Tags, description: 'Allowed values for status, severity, priority and more' },
       { to: '/admin/workflow', label: 'Status Workflow', icon: Workflow, description: 'The allowed status transitions, visualized' },

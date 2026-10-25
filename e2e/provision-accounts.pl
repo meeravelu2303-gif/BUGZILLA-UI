@@ -20,7 +20,7 @@ use Bugzilla::User;
 
 Bugzilla->usage_mode(USAGE_MODE_CMDLINE);
 
-my $ADMIN = $ENV{BZ_ADMIN} || 'meeravelu2303@gmail.com';
+my $ADMIN = $ENV{BZ_ADMIN} || 'meera@kpost.in';
 my $admin = Bugzilla::User->new({name => $ADMIN})
   or die "Admin '$ADMIN' not found. Set BZ_ADMIN to an account with editusers.\n";
 Bugzilla->set_user($admin);

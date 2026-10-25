@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { subcomponentName } from './utils';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
+import { useMe } from '../api/hooks';
 import type { BugFilters, Category, Priority, Severity } from '../types';
 import { describeRange, type DateField } from './dateRange';
 import { rememberListView } from './lastListView';
+import { saveFilters, savedFilters } from './savedFilters';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -125,6 +127,30 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
   useEffect(() => {
     rememberListView(location.pathname, location.search);
   }, [location.pathname, location.search]);
+
+  /*
+   * Keep each list page's filters until the reader changes them (lib/savedFilters.ts).
+   *
+   * Every filter change on these pages REPLACES the URL; arriving at a page (sidebar link,
+   * back button, fresh load) does not. So arriving with no query string means "came back
+   * here", and the saved filters are put back; any other URL - a change made on the page,
+   * a dashboard tile's own filter - becomes the saved one. Clearing everything replaces
+   * the URL with an empty query, which is saved too, so a cleared page stays clear.
+   */
+  const navigate = useNavigate();
+  const navigationType = useNavigationType();
+  const user = useMe().data?.user.email;
+  useEffect(() => {
+    if (!user) return;
+    if (!location.search && navigationType !== 'REPLACE') {
+      const saved = savedFilters(user, location.pathname);
+      if (saved) {
+        navigate({ pathname: location.pathname, search: `?${saved}` }, { replace: true });
+        return;
+      }
+    }
+    saveFilters(user, location.pathname, location.search);
+  }, [user, location.pathname, location.search, navigationType, navigate]);
 
   const filters = useMemo<BugFilters>(
     () => ({

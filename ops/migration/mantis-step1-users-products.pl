@@ -68,7 +68,7 @@ my %MAP = (
   'jksrivatsa@gmail.com'           => 'jitendra@kpost.in',
   'kiruba@mantis.invalid'          => 'kiruba18@kpost.in',
   'priya.dharshini@mantis.invalid' => 'priya@kpost.in',
-  'meera@mantis.invalid'           => 'meeravelu2303@gmail.com',
+  'meera@mantis.invalid'           => 'meera@kpost.in',
   'srirampeter45@gmail.com'        => 'sriram@kpost.in',
 );
 
@@ -94,7 +94,7 @@ my %PLACEHOLDER_NAME = (
 # Test rows that must not count towards anything.
 my %EXCLUDE_BUG = (13201 => 1);
 
-my $FALLBACK_OWNER = 'meeravelu2303@gmail.com';
+my $FALLBACK_OWNER = 'meera@kpost.in';
 my $DISABLED_TEXT  = 'Historical account imported from Mantis - sign-in disabled. '
   . 'An administrator can enable it from Administration > Users.';
 

@@ -459,6 +459,52 @@ function invalidateProductLists(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['admin', 'products'] });
 }
 
+/** A person on a team, as the Teams extension describes them. */
+export interface TeamPerson {
+  id: number;
+  email: string;
+  name: string;
+}
+
+/** A team: one leader and the members who report to them. Not tied to products. */
+export interface Team {
+  id: number;
+  name: string;
+  leader: TeamPerson | null;
+  members: TeamPerson[];
+  created: string;
+}
+
+export interface TeamInput {
+  name: string;
+  leader: string;
+  members: string[];
+}
+
+export function useTeams() {
+  return useQuery({
+    queryKey: ['admin', 'teams'],
+    queryFn: () => api.get<{ teams: Team[] }>('/admin/teams'),
+  });
+}
+
+export function useSaveTeam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: TeamInput & { id?: number }) =>
+      id ? api.patch<{ team: Team }>(`/admin/teams/${id}`, input) : api.post<{ team: Team }>('/admin/teams', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'teams'] }),
+  });
+}
+
+export function useDeleteTeam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/admin/teams/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'teams'] }),
+  });
+}
+
 export function useCreateProduct() {
   const qc = useQueryClient();
   return useMutation({

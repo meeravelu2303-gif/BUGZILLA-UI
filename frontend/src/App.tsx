@@ -29,6 +29,7 @@ const Parameters = page(() => import('./pages/admin/Parameters'), 'Parameters');
 const Products = page(() => import('./pages/admin/Products'), 'Products');
 const SanityCheck = page(() => import('./pages/admin/SanityCheck'), 'SanityCheck');
 const UserDetail = page(() => import('./pages/admin/UserDetail'), 'UserDetail');
+const Teams = page(() => import('./pages/admin/Teams'), 'Teams');
 const Users = page(() => import('./pages/admin/Users'), 'Users');
 const Workflow = page(() => import('./pages/admin/Workflow'), 'Workflow');
 
@@ -102,6 +103,16 @@ export function App() {
           <Protected>
             <PermissionGate permission="canViewProducts">
               <Products />
+            </PermissionGate>
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/teams"
+        element={
+          <Protected>
+            <PermissionGate permission="canManageUsers">
+              <Teams />
             </PermissionGate>
           </Protected>
         }
