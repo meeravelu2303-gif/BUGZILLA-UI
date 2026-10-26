@@ -42,6 +42,10 @@ import { cn } from '../lib/utils';
 /** Each attachment goes up as its own request, as raw bytes; Bugzilla's own cap is 50 MB a file. */
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
+/** "20261026-104512-1": when a screenshot was pasted, numbered so two in one second never collide. */
+let pasteCount = 0;
+const pastedStamp = () => `${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}-${++pasteCount}`;
+
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
@@ -257,13 +261,39 @@ export function CreateBug() {
     setBrowsers((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...BUG_BROWSERS.filter((x) => x === b || prev.includes(x))]));
   }
 
-  function addFiles(list: FileList | null) {
+  function addFiles(list: FileList | File[] | null) {
     if (!list) return;
     const incoming = Array.from(list);
     const tooBig = incoming.filter((f) => f.size > MAX_FILE_BYTES);
     setFileError(tooBig.length ? `${tooBig.map((f) => f.name).join(', ')} exceed${tooBig.length === 1 ? 's' : ''} the 50 MB limit.` : '');
     setFiles((prev) => [...prev, ...incoming.filter((f) => f.size <= MAX_FILE_BYTES && !prev.some((p) => p.name === f.name))]);
   }
+
+  /*
+   * Ctrl+V anywhere on the form attaches what is on the clipboard - a
+   * screenshot from the Snipping Tool, or files copied in Explorer. A plain
+   * text paste (into the title, steps, ...) is left alone. Clipboard images all
+   * arrive as "image.png", so each gets its own numbered name.
+   */
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      const pasted = Array.from(e.clipboardData?.files ?? []);
+      if (!pasted.length) return;
+      e.preventDefault();
+      addFiles(
+        pasted.map((f) => {
+          const image = /^image\.(png|jpe?g|gif|webp)$/i.exec(f.name);
+          return image ? new File([f], `screenshot-${pastedStamp()}.${image[1].toLowerCase()}`, { type: f.type }) : f;
+        })
+      );
+    }
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+    // addFiles only calls state setters, which never change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [dragging, setDragging] = useState(false);
 
   const report: BugReportInput = {
     kind,
@@ -976,12 +1006,29 @@ export function CreateBug() {
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">Evidence</span>
-              <label className="focus-within:ring-brand-600 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line bg-white/50 px-4 py-5 text-center text-sm text-slate-600 transition-colors hover:border-brand-500 hover:bg-white/70">
+              <label
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  addFiles(e.dataTransfer.files);
+                }}
+                className={cn(
+                  'focus-within:ring-brand-600 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-4 py-5 text-center text-sm text-slate-600 transition-colors hover:border-brand-500 hover:bg-white/70',
+                  dragging ? 'border-brand-500 bg-brand-50' : 'border-line bg-white/50'
+                )}
+              >
                 <Paperclip className="h-4 w-4 text-slate-500" aria-hidden />
                 <span>
-                  <span className="font-medium text-brand-700">Choose files</span> - screenshot, video, HAR or log
+                  <span className="font-medium text-brand-700">Choose files</span>, drop them here, or paste with{' '}
+                  <kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">Ctrl</kbd>+
+                  <kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">V</kbd>
                 </span>
-                <span className="text-xs text-slate-500">Up to 50 MB each</span>
+                <span className="text-xs text-slate-500">Screenshot, video, HAR or log - up to 50 MB each</span>
                 <input
                   type="file"
                   multiple

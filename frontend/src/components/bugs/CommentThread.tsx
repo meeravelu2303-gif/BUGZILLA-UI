@@ -8,6 +8,7 @@ import { useToast } from '../../context/ToastContext';
 import type { Comment } from '../../types';
 import { formatDateTime } from '../../lib/utils';
 import { Avatar } from '../ui/Avatar';
+import { Linkify } from '../ui/Linkify';
 
 /**
  * Tags on one comment ("needs-info", "repro", ...). Saved immediately - unlike
@@ -130,7 +131,9 @@ export function CommentThread({ bugId, comments, tagsEnabled = false }: { bugId:
                 {formatDateTime(comment.creationTime)}
               </time>
             </div>
-            <p className="whitespace-pre-wrap px-4 py-3 text-sm text-slate-700">{comment.text}</p>
+            <p className="whitespace-pre-wrap px-4 py-3 text-sm text-slate-700 [overflow-wrap:anywhere]">
+              <Linkify text={comment.text} />
+            </p>
             <CommentTags bugId={bugId} comment={comment} editable={tagsEnabled} />
           </div>
         </li>

@@ -1,6 +1,7 @@
 import { Check, ChevronRight, Copy, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { copyText } from '../../lib/clipboard';
+import { Linkify } from '../ui/Linkify';
 
 /**
  * Renders the bench's structured defect description as clean, labelled sections instead of one
@@ -197,7 +198,7 @@ export function DescriptionReport({ description }: { description: string }) {
     // ordinary sentences keep wrapping at spaces instead of mid-word.
     return (
       <pre className="max-w-full whitespace-pre-wrap rounded-xl bg-slate-50 p-4 font-mono text-[0.8333rem] leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200 [overflow-wrap:anywhere]">
-        {description}
+        <Linkify text={description} />
       </pre>
     );
   }
@@ -262,7 +263,7 @@ export function DescriptionReport({ description }: { description: string }) {
               {/* Monospace + preserved whitespace so the bench's aligned `case → code` diff lines up;
                   fixed height so long values scroll inside instead of swallowing the page. */}
               <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[0.8667rem] leading-relaxed text-emerald-900">
-                {parsed.expected}
+                <Linkify text={parsed.expected} />
               </pre>
             </div>
           )}
@@ -272,7 +273,7 @@ export function DescriptionReport({ description }: { description: string }) {
                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Actual
               </p>
               <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[0.8667rem] leading-relaxed text-rose-900">
-                {parsed.actual}
+                <Linkify text={parsed.actual} />
               </pre>
             </div>
           )}
@@ -293,7 +294,7 @@ export function DescriptionReport({ description }: { description: string }) {
           <div className="flex flex-col gap-2">
             <p className="text-[0.7333rem] font-semibold uppercase tracking-wide text-slate-500">Steps to reproduce</p>
             <pre className="whitespace-pre-wrap break-words rounded-xl bg-white/70 p-4 font-sans text-[0.9333rem] leading-7 text-slate-800 ring-1 ring-inset ring-slate-200">
-              {parsed.steps}
+              <Linkify text={parsed.steps} />
             </pre>
           </div>
         )
@@ -326,7 +327,7 @@ export function DescriptionReport({ description }: { description: string }) {
           Full original description
         </summary>
         <pre className="max-w-full whitespace-pre-wrap border-t border-hairline px-4 py-3.5 font-mono text-[0.8333rem] leading-relaxed text-slate-700 [overflow-wrap:anywhere]">
-          {description}
+          <Linkify text={description} />
         </pre>
       </details>
     </div>
