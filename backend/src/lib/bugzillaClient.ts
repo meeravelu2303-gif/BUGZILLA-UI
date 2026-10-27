@@ -159,6 +159,8 @@ export function restToRpc(
     if (p === 'team') return { rpcMethod: 'Team.create', rpcParams: params };
     if (p === 'team/update') return { rpcMethod: 'Team.update', rpcParams: params };
     if (p === 'team/remove') return { rpcMethod: 'Team.remove', rpcParams: params };
+    // The AttachmentDelete extension (ops/bugzilla/extensions/AttachmentDelete).
+    if (p === 'attachment/remove') return { rpcMethod: 'AttachmentDelete.remove', rpcParams: params };
   }
 
   if (method === 'PUT') {

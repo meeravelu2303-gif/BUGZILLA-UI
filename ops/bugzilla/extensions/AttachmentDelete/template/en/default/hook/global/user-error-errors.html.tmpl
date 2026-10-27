@@ -1,0 +1,8 @@
+[%# Error messages for the AttachmentDelete extension (lib/WebService.pm). %]
+[% IF error == "kp_attachment_not_found" %]
+  [% title = "Attachment not found" %]
+  That attachment no longer exists. It may have been deleted already.
+[% ELSIF error == "kp_attachment_delete_denied" %]
+  [% title = "Not allowed to delete" %]
+  Only the person who uploaded "[% file_name FILTER html %]" or an administrator can delete it.
+[% END %]

@@ -285,6 +285,21 @@ export function useUpdateAttachment(bugId: number) {
   });
 }
 
+/** Deletes one attachment for good. The bug is refetched: its "Created attachment" comment goes too. */
+export function useDeleteAttachment(bugId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (attachmentId: number) =>
+      api.delete<{ removed: { id: number; bugId: number; fileName: string } }>(`/bugs/${bugId}/attachments/${attachmentId}`),
+    onSuccess: (_result, attachmentId) => {
+      qc.setQueryData<BugDetailResponse>(['bugs', bugId], (prev) =>
+        prev ? { ...prev, attachments: prev.attachments.filter((a) => a.id !== attachmentId) } : prev
+      );
+      qc.invalidateQueries({ queryKey: ['bugs', bugId] });
+    },
+  });
+}
+
 /** Adds/removes tags on one comment. Patches the cached comment so the chip appears without a refetch. */
 export function useUpdateCommentTags(bugId: number) {
   const qc = useQueryClient();

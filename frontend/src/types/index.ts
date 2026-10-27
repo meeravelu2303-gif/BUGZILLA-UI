@@ -115,6 +115,8 @@ export interface Attachment {
   isPrivate: boolean;
   creator: string;
   creationTime: string;
+  /** The signed-in person uploaded it, or is a user administrator - may delete it for good. */
+  canDelete?: boolean;
 }
 
 export interface Product {

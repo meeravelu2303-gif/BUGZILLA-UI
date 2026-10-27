@@ -664,6 +664,17 @@ function appOriginOf(origin: string | undefined, referer: string | undefined): s
   return undefined;
 }
 
+/**
+ * Whether the signed-in person may delete an attachment uploaded by `creator`
+ * (a login): their own uploads, or anything for a user administrator. The
+ * AttachmentDelete extension applies the same rule; this decides whether the
+ * page offers the button and refuses early with a clear message.
+ */
+function canDeleteAttachment(req: Request, creator: string): boolean {
+  const user = req.sessionUser!;
+  return user.permissions.canManageUsers || creator.toLowerCase() === user.email.toLowerCase();
+}
+
 export function bugsRouter(env: Env): Router {
   const router = Router();
 
@@ -1645,6 +1656,7 @@ export function bugsRouter(env: Env): Router {
       const attachments = parsedAttachments.map((a) => ({
         ...a,
         creator: displayNameFor(names, a.creator),
+        canDelete: canDeleteAttachment(req, a.creator),
       }));
 
       /*
@@ -1815,7 +1827,9 @@ export function bugsRouter(env: Env): Router {
         });
         const attachment = normalizeAttachment(rawAttachmentSchema.parse(after.attachments[String(attachmentId)]));
         const names = await resolveDisplayNames(client, [attachment.creator]);
-        res.status(201).json({ attachment: { ...attachment, creator: displayNameFor(names, attachment.creator) } });
+        res.status(201).json({
+          attachment: { ...attachment, creator: displayNameFor(names, attachment.creator), canDelete: canDeleteAttachment(req, attachment.creator) },
+        });
       } catch (err) {
         next(err);
       }
@@ -1865,7 +1879,44 @@ export function bugsRouter(env: Env): Router {
       });
       const attachment = normalizeAttachment(rawAttachmentSchema.parse(after.attachments[String(attachmentId)]));
       const names = await resolveDisplayNames(client, [attachment.creator]);
-      res.json({ attachment: { ...attachment, creator: displayNameFor(names, attachment.creator) } });
+      res.json({
+        attachment: { ...attachment, creator: displayNameFor(names, attachment.creator), canDelete: canDeleteAttachment(req, attachment.creator) },
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /*
+   * DELETE /api/bugs/:id/attachments/:attachmentId - removes the file for good
+   * (hard delete in the database, through the AttachmentDelete extension), so a
+   * wrong upload can be replaced with the right one. Sent with the caller's own
+   * key: the extension also allows only the uploader or a user administrator,
+   * and checks the caller can see the bug.
+   */
+  router.delete('/:id/attachments/:attachmentId', auth, async (req, res, next) => {
+    try {
+      const { id, attachmentId } = parseInput(
+        z.object({ id: z.coerce.number().int().positive(), attachmentId: z.coerce.number().int().positive() }),
+        req.params
+      );
+      const client = req.bugzilla!;
+      // Same reasoning as PATCH: the attachment id alone selects the target.
+      const found = await client.get<{ attachments: Record<string, { bug_id: number; creator: string }> }>(
+        `/bug/attachment/${attachmentId}`,
+        { include_fields: 'bug_id,creator' }
+      );
+      const target = found.attachments[String(attachmentId)];
+      if (!target || target.bug_id !== id) {
+        throw new AppError(404, 'NOT_FOUND', 'That attachment is not on this bug.');
+      }
+      if (!canDeleteAttachment(req, target.creator)) {
+        throw new AppError(403, 'FORBIDDEN', 'Only the person who uploaded this file or an administrator can delete it.');
+      }
+      const result = await client.post<{ removed: { id: number; bug_id: number; file_name: string } }>('/attachment/remove', {
+        id: attachmentId,
+      });
+      res.json({ removed: { id: result.removed.id, bugId: result.removed.bug_id, fileName: result.removed.file_name } });
     } catch (err) {
       next(err);
     }

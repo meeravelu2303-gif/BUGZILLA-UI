@@ -1,7 +1,7 @@
-import { Archive, Download, FileText, Image as ImageIcon, Paperclip, Pencil, Video as VideoIcon } from 'lucide-react';
+import { Archive, Download, FileText, Image as ImageIcon, Paperclip, Pencil, Trash2, Video as VideoIcon } from 'lucide-react';
 import { useState } from 'react';
 import { ApiError } from '../../api/client';
-import { useUpdateAttachment } from '../../api/hooks';
+import { useDeleteAttachment, useUpdateAttachment } from '../../api/hooks';
 import { useToast } from '../../context/ToastContext';
 import type { Attachment, UpdateAttachmentInput } from '../../types';
 import { cn, formatBytes, formatDateTime } from '../../lib/utils';
@@ -110,6 +110,43 @@ function AttachmentEditor({
   );
 }
 
+/** "Delete for good?" - shown in the row, so the person sees exactly which file goes. */
+function AttachmentDeleteConfirm({ bugId, attachment, onDone }: { bugId: number; attachment: Attachment; onDone: () => void }) {
+  const remove = useDeleteAttachment(bugId);
+  const { toast } = useToast();
+
+  async function confirm() {
+    try {
+      await remove.mutateAsync(attachment.id);
+      toast({ variant: 'success', title: 'Attachment deleted', description: attachment.fileName });
+      onDone();
+    } catch (err) {
+      toast({ variant: 'error', title: 'Could not delete the attachment', description: err instanceof ApiError ? err.message : 'Please try again.' });
+    }
+  }
+
+  return (
+    <div
+      role="alertdialog"
+      aria-label={`Delete ${attachment.fileName}`}
+      className="ml-12 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3"
+      onKeyDown={(e) => e.key === 'Escape' && onDone()}
+    >
+      <p className="text-sm text-rose-900">
+        Delete <span className="font-semibold">{attachment.fileName}</span> for good? It is removed from the bug and cannot be brought back.
+      </p>
+      <div className="flex gap-2">
+        <Button type="button" size="sm" variant="secondary" onClick={onDone} autoFocus>
+          Cancel
+        </Button>
+        <Button type="button" size="sm" variant="danger" loading={remove.isPending} onClick={() => void confirm()}>
+          <Trash2 className="h-3.5 w-3.5" /> Delete
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function AttachmentList({
   bugId,
   attachments,
@@ -120,6 +157,7 @@ export function AttachmentList({
   privateAllowed?: boolean;
 }) {
   const [editing, setEditing] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const [showObsolete, setShowObsolete] = useState(false);
 
   if (attachments.length === 0) {
@@ -155,7 +193,10 @@ export function AttachmentList({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setEditing(editing === a.id ? null : a.id)}
+                  onClick={() => {
+                    setDeleting(null);
+                    setEditing(editing === a.id ? null : a.id);
+                  }}
                   aria-expanded={editing === a.id}
                   className="focus-ring flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-white/70"
                   aria-label={`Edit ${a.fileName}`}
@@ -170,7 +211,22 @@ export function AttachmentList({
                   <Download className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Download</span>
                 </a>
+                {a.canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(null);
+                      setDeleting(deleting === a.id ? null : a.id);
+                    }}
+                    aria-expanded={deleting === a.id}
+                    className="focus-ring flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                    aria-label={`Delete ${a.fileName}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Delete</span>
+                  </button>
+                )}
               </div>
+              {deleting === a.id && <AttachmentDeleteConfirm bugId={bugId} attachment={a} onDone={() => setDeleting(null)} />}
               {editing === a.id && <AttachmentEditor bugId={bugId} attachment={a} privateAllowed={privateAllowed} onDone={() => setEditing(null)} />}
               {/^image\/(png|jpe?g|gif|webp)$/i.test(a.contentType) && editing !== a.id && (
                 <a href={url} target="_blank" rel="noreferrer" className="ml-12 block w-fit" title={`Open ${a.fileName} full size`}>
