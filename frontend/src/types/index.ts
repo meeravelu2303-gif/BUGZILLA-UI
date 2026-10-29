@@ -218,6 +218,8 @@ export interface Permissions {
    * restrictive behaviour rather than assuming the permission.
    */
   canTriage?: boolean;
+  /** May reassign any open bug (testers, admins and developers). Optional, as above. */
+  canReassignAny?: boolean;
   /** Testers and admins: the Users / Products screens read-only, plus adding components. Optional, as above. */
   canViewUsers?: boolean;
   canViewProducts?: boolean;

@@ -81,6 +81,8 @@ export function BugList() {
    * direct API call). Disabling here just means the refusal never has to happen.
    */
   const canTriage = me?.user.permissions.canTriage ?? false;
+  // Developers too, since 2026-10-28: they may reassign anyone's open bug.
+  const canReassignAny = me?.user.permissions.canReassignAny ?? canTriage;
   const myEmail = (me?.user.email ?? '').toLowerCase();
 
   const selectReason = (bug: Bug): string | undefined => {
@@ -88,7 +90,7 @@ export function BugList() {
     // or restored, and the bar explains when a selection can't be reassigned.
     if (canTriage) return undefined;
     if (!bug.isOpen) return `${bug.status} bugs can't be reassigned — reopen it first.`;
-    if ((bug.assignedTo?.email ?? '').toLowerCase() !== myEmail) {
+    if (!canReassignAny && (bug.assignedTo?.email ?? '').toLowerCase() !== myEmail) {
       return `Assigned to ${bug.assignedTo?.name ?? 'someone else'} — only the assignee or a tester can reassign it.`;
     }
     return undefined;

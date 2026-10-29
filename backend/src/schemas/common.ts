@@ -32,6 +32,13 @@ export interface Permissions {
    */
   canTriage: boolean;
   /**
+   * May reassign any open bug, not only their own - single or in bulk from the
+   * bug list. Testers, admins and developers (`editbugs`), by the user's
+   * decision of 2026-10-28; office reporters without `editbugs` may not.
+   * Reopening, deleting and transferring stay with `canTriage`.
+   */
+  canReassignAny: boolean;
+  /**
    * Read-only access to the admin Users / Products screens, and adding a
    * component to a product. Testers (`canconfirm`) get these without being
    * admins: they may look, and grow a product's module list as they test it,
@@ -62,6 +69,7 @@ export function derivePermissions(groups: { name: string }[]): Permissions {
     // `editusers` implies it: an admin who can create the accounts should not be
     // blocked from routing work between them.
     canTriage: names.has('canconfirm') || names.has('editusers'),
+    canReassignAny: names.has('editbugs') || names.has('canconfirm') || names.has('editusers'),
     canViewUsers: names.has('editusers') || names.has('canconfirm'),
     canViewProducts: names.has('editcomponents') || names.has('canconfirm'),
     canCreateComponents: names.has('editcomponents') || names.has('canconfirm'),

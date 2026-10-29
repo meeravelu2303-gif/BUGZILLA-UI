@@ -3,7 +3,7 @@ import { TransferBugDialog } from '../components/bugs/TransferBugDialog';
 import { AttachmentUploader } from '../components/bugs/AttachmentUploader';
 import { ReportEditor } from '../components/bugs/ReportEditor';
 import { useCallback, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { useBug, useMe, useMeta, useProducts, useRestoreBugs, useUpdateBug } from '../api/hooks';
 import { DeleteBugsDialog } from '../components/bugs/DeleteBugsDialog';
@@ -110,6 +110,13 @@ function BugDetailView({
   const updateBug = useUpdateBug(bug.id);
   const restore = useRestoreBugs();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  /*
+   * After a successful save, return to the list the reader came from (My Bugs,
+   * All Bugs or Advanced Search), filters, sort and page intact - the next bug
+   * to work on is there, not on this page. The success toast stays on screen.
+   */
+  const backToList = useCallback(() => navigate(lastListView()), [navigate]);
   const [conflict, setConflict] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [transferring, setTransferring] = useState(false);
@@ -154,7 +161,7 @@ function BugDetailView({
         title: `${bugDisplayId(bug)} verified and closed`,
         description: 'Re-test recorded as a comment. It has left the re-test queue.',
       });
-      await onReload();
+      backToList();
     } catch (err) {
       toast({
         variant: 'error',
@@ -184,6 +191,7 @@ function BugDetailView({
         title: count ? 'Bug updated' : 'Saved',
         description: count ? describeChanges(changes) : 'Bugzilla already had these values - nothing changed.',
       });
+      backToList();
     } catch (err) {
       if (err instanceof ApiError && err.code === 'CONFLICT' && err.details?.reason === 'MID_AIR_COLLISION') {
         setConflict(true);
@@ -191,7 +199,7 @@ function BugDetailView({
       }
       toast({ variant: 'error', title: 'Update failed', description: err instanceof ApiError ? err.message : 'Please try again.' });
     }
-  }, [editor, updateBug, toast]);
+  }, [editor, updateBug, toast, backToList]);
 
   async function reloadLatest() {
     await onReload();

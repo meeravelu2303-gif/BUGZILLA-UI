@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { BugzillaClient } from '../lib/bugzillaClient';
 import { AppError } from '../lib/errors';
 import { ensureTracked, touchSession } from '../lib/sessionRegistry';
-import type { Permissions } from '../schemas/common';
+import { derivePermissions, userDetailSchema, type Permissions } from '../schemas/common';
 import type { Env } from '../config/env';
 
 /**
@@ -35,6 +35,7 @@ export function requireAuth(env: Env) {
         canManageUsers: false,
         canManageProducts: false,
         canTriage: false,
+        canReassignAny: false,
         canViewUsers: false,
         canViewProducts: false,
         canCreateComponents: false,
@@ -60,8 +61,31 @@ export function requireAuth(env: Env) {
       userAgent: String(req.headers['user-agent'] ?? ''),
     });
     touchSession(req.sessionID);
+
+    /*
+     * A session signed in before a permission was added lacks that flag, and
+     * the default above reads it as "no". Rather than make everyone sign in
+     * again, re-read the person's groups once and store the full set. If the
+     * lookup fails, the safe default stands and the request goes on.
+     */
+    if (session.permissions && session.permissions.canReassignAny === undefined) {
+      void refreshPermissions(req).finally(() => next());
+      return;
+    }
     next();
   };
+}
+
+async function refreshPermissions(req: Request): Promise<void> {
+  try {
+    const resp = await req.bugzilla!.get<{ users: unknown[] }>(`/user/${req.session.bzUserId}`);
+    const permissions = derivePermissions(userDetailSchema.parse(resp.users[0]).groups);
+    req.session.permissions = permissions;
+    req.sessionUser!.permissions = permissions;
+    await new Promise<void>((resolve) => req.session.save(() => resolve()));
+  } catch {
+    // Keep the defaults; the next request tries again.
+  }
 }
 
 /**

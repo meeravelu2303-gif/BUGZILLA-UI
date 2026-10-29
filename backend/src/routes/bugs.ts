@@ -171,8 +171,9 @@ const DUPLICATE = 'DUPLICATE';
  * direct API call would otherwise sail straight through to Bugzilla.
  */
 /**
- * `actor` enables the ownership rule: a caller who cannot triage may only move
- * bugs already assigned to them.
+ * `actor` enables the ownership rule: a caller without `canReassignAny` may
+ * only move bugs already assigned to them. Since 2026-10-28 developers hold
+ * that right too, so in practice this now stops only office reporters.
  *
  * Bugzilla's own `editbugs` says "can edit all bug fields" and draws no line
  * around ownership, so without this any developer could reach across and
@@ -185,7 +186,7 @@ async function assertReassignable(
   client: BugzillaClient,
   ids: number[],
   targetStatus?: string,
-  actor?: { email: string; canTriage: boolean }
+  actor?: { email: string; canReassignAny: boolean }
 ): Promise<void> {
   const resp = await client.get<{
     bugs: {
@@ -200,7 +201,7 @@ async function assertReassignable(
     limit: 0,
   });
 
-  if (actor && !actor.canTriage) {
+  if (actor && !actor.canReassignAny) {
     const me = actor.email.toLowerCase();
     const notMine = resp.bugs.filter((b) => (b.assigned_to ?? '').toLowerCase() !== me);
     if (notMine.length > 0) {
@@ -217,7 +218,7 @@ async function assertReassignable(
         403,
         'FORBIDDEN',
         `Cannot reassign - ${subject} assigned to someone else: ${listed}${rest}. ` +
-          `Only the current assignee, or a tester, can hand a bug on.`
+          `Only the current assignee, a developer or a tester can hand a bug on.`
       );
     }
   }
@@ -2011,7 +2012,7 @@ export function bugsRouter(env: Env): Router {
       // closed bugs is better than silently reassigning some of them.
       await assertReassignable(req.bugzilla!, ids, undefined, {
         email: req.sessionUser!.email,
-        canTriage: req.sessionUser!.permissions.canTriage,
+        canReassignAny: req.sessionUser!.permissions.canReassignAny,
       });
       // Bugzilla requires an id in the URL; the body `ids` array is what selects every bug to
       // change, so all of them are updated by this one request.
@@ -2266,7 +2267,7 @@ export function bugsRouter(env: Env): Router {
       if (input.assignedTo !== undefined || input.resetAssignedTo) {
         await assertReassignable(client, [id], input.status, {
           email: req.sessionUser!.email,
-          canTriage: req.sessionUser!.permissions.canTriage,
+          canReassignAny: req.sessionUser!.permissions.canReassignAny,
         });
       }
 
