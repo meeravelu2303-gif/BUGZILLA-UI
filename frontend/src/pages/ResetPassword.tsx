@@ -46,6 +46,8 @@ function Rule({ met, children }: { met: boolean; children: React.ReactNode }) {
  */
 export function ResetPassword() {
   const [token] = useState<string | null>(readTokenFromUrl);
+  // Opened from the welcome email of a new account: same link, friendlier words.
+  const [welcome] = useState(() => new URLSearchParams(window.location.search).get('welcome') === '1');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
@@ -162,7 +164,10 @@ export function ResetPassword() {
   const busy = mutation.isPending;
 
   return (
-    <AuthShell title="Choose a new password" subtitle="Pick something you do not use anywhere else.">
+    <AuthShell
+      title={welcome ? 'Welcome! Set your password' : 'Choose a new password'}
+      subtitle={welcome ? 'Choose the password you will sign in with. Pick something you do not use anywhere else.' : 'Pick something you do not use anywhere else.'}
+    >
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="reset-password" className="text-sm font-medium text-slate-700">

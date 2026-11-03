@@ -676,6 +676,21 @@ function canDeleteAttachment(req: Request, creator: string): boolean {
   return user.permissions.canManageUsers || creator.toLowerCase() === user.email.toLowerCase();
 }
 
+/**
+ * Whether the signed-in person may edit this comment: their own discussion
+ * comments only - never the description (count 0), a report revision or a
+ * soft-delete record. The CommentEdit extension enforces the same rule; this
+ * decides whether the page offers the button.
+ */
+function canEditComment(req: Request, c: { author: string; count: number; text: string }): boolean {
+  return (
+    c.count > 0 &&
+    c.author.toLowerCase() === req.sessionUser!.email.toLowerCase() &&
+    !isReportRevision(c.text) &&
+    !c.text.includes('[soft-delete]')
+  );
+}
+
 export function bugsRouter(env: Env): Router {
   const router = Router();
 
@@ -1614,10 +1629,15 @@ export function bugsRouter(env: Env): Router {
       const { id } = parseInput(idParamSchema, req.params);
       const client = req.bugzilla!;
 
-      const [bugResp, commentResp, attachmentResp] = await Promise.all([
+      const [bugResp, commentResp, attachmentResp, editResp] = await Promise.all([
         client.get<{ bugs: unknown[] }>(`/bug/${id}`),
         client.get<{ bugs: Record<string, { comments: unknown[] }> }>(`/bug/${id}/comment`),
         client.get<{ bugs: Record<string, unknown[]> }>(`/bug/${id}/attachment`, { exclude_fields: 'data' }),
+        // Which comments were edited (CommentEdit extension). In parallel, so it
+        // costs no extra wait; if it fails the page simply shows no "edited" marks.
+        client
+          .get<{ comments: Record<string, { count: number; last_edit: string }> }>('/comment_edit', { bug_id: id })
+          .catch(() => ({ comments: {} as Record<string, { count: number; last_edit: string }> })),
       ]);
 
       const bug = normalizeBug(rawBugSchema.parse(bugResp.bugs[0]));
@@ -1647,6 +1667,10 @@ export function bugsRouter(env: Env): Router {
       const comments = parsedComments.map((c) => ({
         ...c,
         author: displayNameFor(names, c.author),
+        canEdit: canEditComment(req, c),
+        ...(editResp.comments[String(c.id)]
+          ? { edited: { count: editResp.comments[String(c.id)].count, lastEditedAt: editResp.comments[String(c.id)].last_edit } }
+          : {}),
         // Revisions are shown as "edited the report" entries, with the version they hold.
         isReportRevision: isReportRevision(c.text),
         text: stripRevision(c.text),
@@ -1918,6 +1942,68 @@ export function bugsRouter(env: Env): Router {
         id: attachmentId,
       });
       res.json({ removed: { id: result.removed.id, bugId: result.removed.bug_id, fileName: result.removed.file_name } });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /*
+   * PATCH /api/bugs/:id/comments/:commentId - the author corrects their comment
+   * (CommentEdit extension). The earlier text is kept as a version; no email.
+   * Sent with the caller's own key: Bugzilla re-checks authorship and visibility.
+   */
+  router.patch('/:id/comments/:commentId', auth, async (req, res, next) => {
+    try {
+      const { id, commentId } = parseInput(
+        z.object({ id: z.coerce.number().int().positive(), commentId: z.coerce.number().int().positive() }),
+        req.params
+      );
+      const { text } = parseInput(
+        z.object({ text: z.string().trim().min(1, 'A comment cannot be empty.').max(65535, 'A comment can be at most 65,535 characters.') }),
+        req.body
+      );
+      const client = req.bugzilla!;
+      // Same reasoning as attachments: the comment id alone selects the target.
+      const found = await client.get<{ comments: Record<string, { bug_id: number; creator: string; count: number; text: string }> }>(
+        `/bug/comment/${commentId}`,
+        { include_fields: 'bug_id,creator,count,text' }
+      );
+      const target = found.comments[String(commentId)];
+      if (!target || target.bug_id !== id) throw new AppError(404, 'NOT_FOUND', 'That comment is not on this bug.');
+      if (!canEditComment(req, { author: target.creator, count: target.count, text: target.text })) {
+        throw new AppError(403, 'FORBIDDEN', 'Only the person who wrote a comment can edit it, and the bug report itself is edited with "Edit bug".');
+      }
+      const result = await client.post<{ changed: boolean; count?: number; last_edit?: string }>('/comment_edit/update', {
+        comment_id: commentId,
+        text,
+      });
+      res.json({
+        comment: { id: commentId, text },
+        ...(result.count ? { edited: { count: result.count, lastEditedAt: result.last_edit } } : {}),
+        changed: result.changed,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/bugs/:id/comments/:commentId/history - earlier versions of an edited comment, newest first.
+  router.get('/:id/comments/:commentId/history', auth, async (req, res, next) => {
+    try {
+      const { id, commentId } = parseInput(
+        z.object({ id: z.coerce.number().int().positive(), commentId: z.coerce.number().int().positive() }),
+        req.params
+      );
+      const client = req.bugzilla!;
+      const found = await client.get<{ comments: Record<string, { bug_id: number }> }>(`/bug/comment/${commentId}`, { include_fields: 'bug_id' });
+      if (found.comments[String(commentId)]?.bug_id !== id) throw new AppError(404, 'NOT_FOUND', 'That comment is not on this bug.');
+      const resp = await client.get<{ versions: { replaced_at: string; editor: string; editor_name: string; text: string }[] }>(
+        '/comment_edit/history',
+        { comment_id: commentId }
+      );
+      res.json({
+        versions: resp.versions.map((v) => ({ replacedAt: v.replaced_at, editor: v.editor_name || v.editor, text: v.text })),
+      });
     } catch (err) {
       next(err);
     }

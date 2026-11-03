@@ -101,6 +101,17 @@ export interface Comment {
   tags: string[];
   /** This comment is a saved version of the bug report, not a discussion comment. */
   isReportRevision?: boolean;
+  /** The signed-in person wrote it, so may correct it. */
+  canEdit?: boolean;
+  /** Present once the author has edited it: how often, and when last. */
+  edited?: { count: number; lastEditedAt: string };
+}
+
+/** An earlier version of an edited comment: the text it had until `replacedAt`. */
+export interface CommentVersion {
+  replacedAt: string;
+  editor: string;
+  text: string;
 }
 
 export interface Attachment {
@@ -249,7 +260,10 @@ export interface AdminUser {
 export interface CreateUserInput {
   email: string;
   fullName?: string;
-  password: string;
+  /** Optional when `sendWelcome` is on: the person sets their own from the email. */
+  password?: string;
+  /** Email them their sign-in address and a "Set your password" link. */
+  sendWelcome?: boolean;
   /** Capability bundle; the backend maps it to Bugzilla groups. */
   role?: Role;
   /** Products the account may see - one same-named group each. */

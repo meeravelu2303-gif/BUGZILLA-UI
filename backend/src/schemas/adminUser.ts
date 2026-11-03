@@ -46,7 +46,13 @@ export const listUsersQuerySchema = z.object({
 export const createUserSchema = z.object({
   email: z.string().email('Enter a valid email address'),
   fullName: z.string().optional(),
-  password: z.string().min(6, 'Password must be at least 6 characters long'),
+  /*
+   * Optional only together with `sendWelcome`: the person then sets their own
+   * password from the email, and the account gets an unguessable one meanwhile.
+   */
+  password: z.string().min(6, 'Password must be at least 6 characters long').optional(),
+  /** Email the person their sign-in address and a "Set your password" link (Welcome extension). */
+  sendWelcome: z.boolean().optional(),
   /*
    * Both optional, so an account can still be created bare and have its groups
    * set in Bugzilla afterwards - the behaviour before roles existed, which any

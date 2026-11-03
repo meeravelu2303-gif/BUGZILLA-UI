@@ -1,0 +1,40 @@
+[%# Welcome email, HTML part (Welcome extension, lib/WebService.pm).
+  # Same look as the bug emails. app_url: see welcome.txt.tmpl.
+  #%]
+[% app_url = "http://192.168.0.50:5175" %]
+<html>
+  <body style="margin:0;padding:0;background:#f1f5f9;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:20px 12px;">
+      <tr><td align="center">
+        <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:12px;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+          <tr><td style="padding:20px 22px 4px 22px;">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#2563eb;">Welcome to the Bug Tracker</div>
+            <div style="font-size:20px;font-weight:700;margin-top:6px;">Hello [% user.name || user.login FILTER html %]</div>
+            <div style="font-size:14px;color:#334155;margin-top:4px;">[% invited_by FILTER html %] has created your account.</div>
+          </td></tr>
+
+          <tr><td style="padding:12px 22px 0 22px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="font-size:13px;line-height:1.8;color:#334155;">
+              <tr><td style="color:#64748b;padding-right:14px;vertical-align:top;">Sign-in email</td><td><strong>[% user.login FILTER html %]</strong></td></tr>
+              [% IF role %]<tr><td style="color:#64748b;padding-right:14px;vertical-align:top;">Role</td><td>[% role FILTER html %]</td></tr>[% END %]
+              [% IF products.size %]<tr><td style="color:#64748b;padding-right:14px;vertical-align:top;">Products</td><td>[% products.join(', ') FILTER html %]</td></tr>[% END %]
+            </table>
+          </td></tr>
+
+          <tr><td style="padding:16px 22px 0 22px;font-size:14px;color:#0f172a;">First, set your password:</td></tr>
+          <tr><td style="padding:10px 22px 0 22px;">
+            <a href="[% app_url FILTER html %]/reset-password?welcome=1&amp;t=[% token FILTER uri %]" style="background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 20px;border-radius:999px;display:inline-block;">Set your password</a>
+          </td></tr>
+          <tr><td style="padding:10px 22px 0 22px;font-size:12px;line-height:1.6;color:#64748b;">
+            The link works once and expires in [% days FILTER html %] days (on [% expires FILTER html %]).
+            If it has expired, use <em>Forgot password?</em> on the sign-in page, or ask your administrator to send this email again.
+          </td></tr>
+          <tr><td style="padding:14px 22px 22px 22px;font-size:13px;color:#334155;">
+            Then sign in at <a href="[% app_url FILTER html %]/login" style="color:#2563eb;">[% app_url FILTER html %]</a>.
+            You will get an email whenever a bug assigned to you, or reported by you, changes.
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>

@@ -19,6 +19,9 @@ export function CreateUser() {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
+  // On by default: the person learns they have an account, and chooses their
+  // own password, without the admin passing one around.
+  const [sendWelcome, setSendWelcome] = useState(true);
   // Developer is the safest default: the narrowest capability set, so an
   // unchanged form never quietly creates someone who can manage users.
   const [role, setRole] = useState<Role>('developer');
@@ -29,7 +32,7 @@ export function CreateUser() {
   function validate(): boolean {
     const next: Record<string, string> = {};
     if (!email.trim()) next.email = 'Email is required';
-    if (password.length < 6) next.password = 'Password must be at least 6 characters long';
+    if (password ? password.length < 6 : !sendWelcome) next.password = 'Password must be at least 6 characters long';
     // An account with no product sees an empty bug list and cannot be assigned
     // anything - almost certainly a slip rather than an intention.
     if (products.length === 0) next.products = 'Select at least one product this person works on';
@@ -46,7 +49,8 @@ export function CreateUser() {
       const result = await createUser.mutateAsync({
         email: email.trim(),
         fullName: fullName.trim() || undefined,
-        password,
+        password: password || undefined,
+        sendWelcome,
         role,
         products,
       });
@@ -60,7 +64,18 @@ export function CreateUser() {
           description: `No Bugzilla group exists for: ${result.skippedGroups.join(', ')}`,
         });
       }
-      toast({ variant: 'success', title: 'User created', description: result.user.email });
+      if (result.welcome?.error) {
+        toast({
+          variant: 'error',
+          title: 'Welcome email not sent',
+          description: `${result.welcome.error} Use "Send welcome email" on the user's page to try again.`,
+        });
+      }
+      toast({
+        variant: 'success',
+        title: 'User created',
+        description: result.welcome?.sentTo ? `Welcome email sent to ${result.welcome.sentTo}` : result.user.email,
+      });
       navigate(`/admin/users/${result.user.id}`);
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : 'Could not create the user. Please try again.');
@@ -71,7 +86,7 @@ export function CreateUser() {
     <div className="mx-auto max-w-xl px-8 py-8">
       <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight text-slate-900">New user</h1>
-        <p className="mt-1 text-sm text-slate-600">Creates a Bugzilla account directly via the REST API.</p>
+        <p className="mt-1 text-sm text-slate-600">Creates the account and, if you choose, emails them how to sign in.</p>
       </div>
 
       <form onSubmit={onSubmit}>
@@ -166,13 +181,34 @@ export function CreateUser() {
               {errors.products && <p className="text-xs text-rose-600">{errors.products}</p>}
             </fieldset>
 
+            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-hairline p-3 transition-colors hover:bg-slate-50">
+              <input
+                type="checkbox"
+                checked={sendWelcome}
+                onChange={(e) => setSendWelcome(e.target.checked)}
+                aria-describedby="send-welcome-desc"
+                className="mt-0.5 h-4 w-4 rounded border-line text-brand-600 focus-ring"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-slate-800">Send a welcome email</span>
+                <span id="send-welcome-desc" className="block text-xs leading-relaxed text-slate-500">
+                  Emails them their sign-in address, role and products, with a link to set their own password (valid 3
+                  days).
+                </span>
+              </span>
+            </label>
+
             <PasswordInput
-              label="Password"
+              label={sendWelcome ? 'Password (optional)' : 'Password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               error={errors.password}
-              hint="At least 6 characters. Set explicitly rather than relying on an email invite, which may not be configured on this instance."
-              required
+              hint={
+                sendWelcome
+                  ? 'Leave empty - they will choose their own from the email. If you set one, it works too; it is never put in the email.'
+                  : 'At least 6 characters. Tell them this password yourself.'
+              }
+              required={!sendWelcome}
             />
 
             {submitError && (

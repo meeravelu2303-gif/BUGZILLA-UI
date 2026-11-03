@@ -1,0 +1,8 @@
+[%# Error messages for the Welcome extension (lib/WebService.pm). %]
+[% IF error == "kp_welcome_unknown_user" %]
+  [% title = "Unknown account" %]
+  That account does not exist.
+[% ELSIF error == "kp_welcome_disabled" %]
+  [% title = "Account disabled" %]
+  The account [% login FILTER html %] is disabled, so no welcome email was sent. Enable it first.
+[% END %]

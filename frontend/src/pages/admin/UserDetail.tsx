@@ -1,8 +1,8 @@
-import { AlertCircle, ArrowLeft, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Mail, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
-import { useAdminUser, useMe, useProducts, useUpdateUser } from '../../api/hooks';
+import { useAdminUser, useMe, useProducts, useSendWelcome, useUpdateUser } from '../../api/hooks';
 import { DeleteUserDialog } from '../../components/admin/DeleteUserDialog';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
@@ -31,6 +31,16 @@ export function UserDetail() {
   // Testers open accounts read-only; editing and deleting stay with canManageUsers.
   const { data: me } = useMe();
   const canManage = Boolean(me?.user.permissions.canManageUsers);
+  const sendWelcome = useSendWelcome(userId);
+
+  async function onSendWelcome() {
+    try {
+      const { welcome } = await sendWelcome.mutateAsync();
+      toast({ variant: 'success', title: 'Welcome email sent', description: `${welcome.sentTo} - the set-password link is valid for 3 days.` });
+    } catch (err) {
+      toast({ variant: 'error', title: 'Could not send the welcome email', description: err instanceof ApiError ? err.message : 'Please try again.' });
+    }
+  }
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -160,6 +170,17 @@ export function UserDetail() {
             </Pill>
           )}
           <Pill tone={disabled ? 'rose' : 'emerald'}>{disabled ? 'Disabled' : 'Enabled'}</Pill>
+          {canManage && !disabled && (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={sendWelcome.isPending}
+              onClick={() => void onSendWelcome()}
+              title="Emails their sign-in address and a fresh link to set their password"
+            >
+              <Mail className="h-3.5 w-3.5" /> Send welcome email
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={() => setDeleting(true)} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700">
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </Button>

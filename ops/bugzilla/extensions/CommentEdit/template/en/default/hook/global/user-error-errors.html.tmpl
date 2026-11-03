@@ -1,0 +1,20 @@
+[%# Error messages for the CommentEdit extension (lib/WebService.pm). %]
+[% IF error == "kp_comment_not_found" %]
+  [% title = "Comment not found" %]
+  That comment does not exist, or you cannot see it.
+[% ELSIF error == "kp_comment_not_yours" %]
+  [% title = "Not your comment" %]
+  Only the person who wrote a comment can edit it.
+[% ELSIF error == "kp_comment_locked" %]
+  [% title = "Cannot be edited" %]
+  This entry cannot be edited. Edit the bug report itself with "Edit bug" instead.
+[% ELSIF error == "kp_comment_empty" %]
+  [% title = "Comment is empty" %]
+  A comment cannot be empty.
+[% ELSIF error == "kp_comment_too_long" %]
+  [% title = "Comment too long" %]
+  A comment can be at most [% max FILTER html %] characters.
+[% ELSIF error == "kp_comment_marker" %]
+  [% title = "Not allowed" %]
+  A comment cannot contain the Bug Tracker's internal [report-revision] or [soft-delete] markers.
+[% END %]

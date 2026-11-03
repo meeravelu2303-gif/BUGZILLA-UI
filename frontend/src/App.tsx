@@ -18,6 +18,7 @@ const AdvancedSearch = page(() => import('./pages/AdvancedSearch'), 'AdvancedSea
 const BugDetail = page(() => import('./pages/BugDetail'), 'BugDetail');
 const BugList = page(() => import('./pages/BugList'), 'BugList');
 const CreateBug = page(() => import('./pages/CreateBug'), 'CreateBug');
+const EditBug = page(() => import('./pages/EditBug'), 'EditBug');
 const Dashboard = page(() => import('./pages/Dashboard'), 'Dashboard');
 const MyBugs = page(() => import('./pages/MyBugs'), 'MyBugs');
 const Preferences = page(() => import('./pages/Preferences'), 'Preferences');
@@ -63,6 +64,7 @@ export function App() {
       <Route path="/bugs" element={<Protected><BugList /></Protected>} />
       <Route path="/bugs/new" element={<Protected><CreateBug /></Protected>} />
       <Route path="/bugs/:id" element={<Protected><BugDetail /></Protected>} />
+      <Route path="/bugs/:id/edit" element={<Protected><EditBug /></Protected>} />
       <Route path="/search" element={<Protected><AdvancedSearch /></Protected>} />
       <Route path="/reports" element={<Protected><Reports /></Protected>} />
       <Route path="/preferences" element={<Protected><Preferences /></Protected>} />

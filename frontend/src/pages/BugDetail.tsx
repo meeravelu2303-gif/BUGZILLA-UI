@@ -276,8 +276,16 @@ function BugDetailView({
               <span className="font-medium text-slate-600" title="Sub-component">{bug.subcomponentName}</span>
             </>
           )}
-          {(canTransfer || (canTriage && !isDeleted)) && (
+          {!isDeleted && (
             <span className="ml-auto flex items-center gap-1">
+              {/* The whole bug in one form, laid out like "New bug" (pages/EditBug.tsx). */}
+              <Link
+                to={`/bugs/${bug.id}/edit`}
+                title="Edit everything about this bug on one page"
+                className="focus-ring inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit bug
+              </Link>
               {canTransfer && (
                 <button
                   type="button"

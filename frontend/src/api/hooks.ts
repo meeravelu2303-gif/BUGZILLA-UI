@@ -10,6 +10,8 @@ import type {
   BugChanges,
   BugCounts,
   BugDetailResponse,
+  Comment,
+  CommentVersion,
   BugStats,
   BugListResponse,
   BugMeta,
@@ -300,6 +302,31 @@ export function useDeleteAttachment(bugId: number) {
   });
 }
 
+/** The author corrects their comment. Patches the cached comment at once, then refetches. */
+export function useEditComment(bugId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ commentId, text }: { commentId: number; text: string }) =>
+      api.patch<{ comment: { id: number; text: string }; edited?: Comment['edited']; changed: boolean }>(`/bugs/${bugId}/comments/${commentId}`, { text }),
+    onSuccess: ({ comment, edited }) => {
+      qc.setQueryData<BugDetailResponse>(['bugs', bugId], (prev) =>
+        prev ? { ...prev, comments: prev.comments.map((c) => (c.id === comment.id ? { ...c, text: comment.text, ...(edited ? { edited } : {}) } : c)) } : prev
+      );
+      qc.invalidateQueries({ queryKey: ['bugs', bugId] });
+      qc.invalidateQueries({ queryKey: ['bugs', bugId, 'comment-history', comment.id] });
+    },
+  });
+}
+
+/** Earlier versions of an edited comment, loaded when someone opens them. */
+export function useCommentHistory(bugId: number, commentId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['bugs', bugId, 'comment-history', commentId],
+    queryFn: () => api.get<{ versions: CommentVersion[] }>(`/bugs/${bugId}/comments/${commentId}/history`),
+    enabled,
+  });
+}
+
 /** Adds/removes tags on one comment. Patches the cached comment so the chip appears without a refetch. */
 export function useUpdateCommentTags(bugId: number) {
   const qc = useQueryClient();
@@ -422,10 +449,23 @@ export function useCreateUser() {
     // `skippedGroups` names any product with no matching Bugzilla group, so the
     // form can say what was NOT granted instead of implying full setup.
     mutationFn: (input: CreateUserInput) =>
-      api.post<{ user: AdminUser; skippedGroups?: string[]; groupError?: string }>('/admin/users', input),
+      api.post<{
+        user: AdminUser;
+        skippedGroups?: string[];
+        groupError?: string;
+        /** Present when a welcome email was asked for: where it went, or why it did not. */
+        welcome?: { sentTo?: string; error?: string };
+      }>('/admin/users', input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
+  });
+}
+
+/** (Re)sends an account's welcome email with a fresh "Set your password" link. */
+export function useSendWelcome(id: number) {
+  return useMutation({
+    mutationFn: () => api.post<{ welcome: { sentTo: string } }>(`/admin/users/${id}/welcome`, {}),
   });
 }
 

@@ -1,8 +1,9 @@
-import { FilePenLine, Plus, Tag, X } from 'lucide-react';
+import { FilePenLine, Pencil, Plus, Tag, X } from 'lucide-react';
 import { DescriptionReport } from './DescriptionReport';
 import { useId, useState } from 'react';
 import { ApiError } from '../../api/client';
-import { useCommentTagSuggestions, useUpdateCommentTags } from '../../api/hooks';
+import { useCommentHistory, useCommentTagSuggestions, useEditComment, useUpdateCommentTags } from '../../api/hooks';
+import { Button } from '../ui/Button';
 import { useDebounce } from '../../lib/useDebounce';
 import { useToast } from '../../context/ToastContext';
 import type { Comment } from '../../types';
@@ -119,27 +120,127 @@ export function CommentThread({ bugId, comments, tagsEnabled = false }: { bugId:
         comment.isReportRevision ? (
           <ReportRevisionEntry key={comment.id} comment={comment} />
         ) : (
-        <li key={comment.id} className="flex gap-3">
-          <Avatar name={comment.author} size="md" />
-          <div className="min-w-0 flex-1 rounded-xl border border-white/50 bg-white/50">
-            <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-white/40 bg-white/40 px-4 py-2">
-              <span className="text-sm font-medium text-slate-900">
-                {comment.author}
-                {comment.isPrivate && <span className="ml-2 rounded bg-amber-100 px-1.5 py-px text-[0.6667rem] font-semibold uppercase text-amber-800">Private</span>}
-              </span>
-              <time dateTime={comment.creationTime} className="text-xs text-slate-600">
-                {formatDateTime(comment.creationTime)}
-              </time>
-            </div>
-            <p className="whitespace-pre-wrap px-4 py-3 text-sm text-slate-700 [overflow-wrap:anywhere]">
-              <Linkify text={comment.text} />
-            </p>
-            <CommentTags bugId={bugId} comment={comment} editable={tagsEnabled} />
-          </div>
-        </li>
+          <DiscussionComment key={comment.id} bugId={bugId} comment={comment} tagsEnabled={tagsEnabled} />
         )
       )}
     </ol>
+  );
+}
+
+/**
+ * One discussion comment. Its author can correct it in place (Edit); once
+ * edited it says so, and anyone can open the earlier versions - an edit never
+ * hides what was said before.
+ */
+function DiscussionComment({ bugId, comment, tagsEnabled }: { bugId: number; comment: Comment; tagsEnabled: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(comment.text);
+  const [showVersions, setShowVersions] = useState(false);
+  const edit = useEditComment(bugId);
+  const history = useCommentHistory(bugId, comment.id, showVersions);
+  const { toast } = useToast();
+  const changed = draft.trim() !== comment.text.trim();
+
+  async function save() {
+    if (!draft.trim()) return toast({ variant: 'error', title: 'A comment cannot be empty' });
+    if (!changed) return setEditing(false);
+    try {
+      await edit.mutateAsync({ commentId: comment.id, text: draft.trim() });
+      toast({ variant: 'success', title: 'Comment updated', description: 'The earlier version is kept - anyone can view it.' });
+      setEditing(false);
+    } catch (err) {
+      toast({ variant: 'error', title: 'Could not update the comment', description: err instanceof ApiError ? err.message : 'Please try again.' });
+    }
+  }
+
+  return (
+    <li className="flex gap-3">
+      <Avatar name={comment.author} size="md" />
+      <div className="min-w-0 flex-1 rounded-xl border border-white/50 bg-white/50">
+        <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-white/40 bg-white/40 px-4 py-2">
+          <span className="text-sm font-medium text-slate-900">
+            {comment.author}
+            {comment.isPrivate && <span className="ml-2 rounded bg-amber-100 px-1.5 py-px text-[0.6667rem] font-semibold uppercase text-amber-800">Private</span>}
+          </span>
+          <span className="flex items-center gap-2 text-xs text-slate-600">
+            {comment.edited && (
+              <button
+                type="button"
+                onClick={() => setShowVersions((v) => !v)}
+                aria-expanded={showVersions}
+                title={`Edited ${comment.edited.count} time${comment.edited.count === 1 ? '' : 's'}, last on ${formatDateTime(comment.edited.lastEditedAt)}`}
+                className="focus-ring rounded italic text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+              >
+                edited
+              </button>
+            )}
+            <time dateTime={comment.creationTime}>{formatDateTime(comment.creationTime)}</time>
+            {comment.canEdit && !editing && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(comment.text);
+                  setEditing(true);
+                }}
+                aria-label="Edit your comment"
+                className="focus-ring inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-slate-500 hover:bg-white/80 hover:text-brand-700"
+              >
+                <Pencil className="h-3 w-3" aria-hidden /> Edit
+              </button>
+            )}
+          </span>
+        </div>
+        {editing ? (
+          <div className="flex flex-col gap-2 px-4 py-3">
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  void save();
+                } else if (e.key === 'Escape') {
+                  setEditing(false);
+                }
+              }}
+              rows={Math.min(14, Math.max(3, draft.split('\n').length + 1))}
+              aria-label="Edit comment"
+              className="focus-ring w-full resize-y rounded-xl border border-hairline bg-white px-3 py-2 text-sm leading-6 text-slate-900"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <span className="mr-auto text-xs text-slate-500">The earlier version stays visible under "edited". No email is sent.</span>
+              <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(false)} disabled={edit.isPending}>
+                Cancel
+              </Button>
+              <Button type="button" size="sm" onClick={() => void save()} loading={edit.isPending} disabled={!changed || !draft.trim()}>
+                Save comment
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="whitespace-pre-wrap px-4 py-3 text-sm text-slate-700 [overflow-wrap:anywhere]">
+            <Linkify text={comment.text} />
+          </p>
+        )}
+        {showVersions && comment.edited && (
+          <div className="mx-4 mb-3 flex flex-col gap-2 rounded-lg border border-hairline bg-slate-50/80 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Earlier versions</p>
+            {history.isLoading && <p className="text-xs text-slate-500">Loading…</p>}
+            {history.isError && <p className="text-xs text-rose-600">Could not load the earlier versions.</p>}
+            {history.data?.versions.map((v, i) => (
+              <div key={i} className="border-t border-hairline pt-2 first:border-t-0 first:pt-0">
+                <p className="text-xs text-slate-500">Until {formatDateTime(v.replacedAt)} (changed by {v.editor})</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600 [overflow-wrap:anywhere]">
+                  <Linkify text={v.text} />
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        <CommentTags bugId={bugId} comment={comment} editable={tagsEnabled} />
+      </div>
+    </li>
   );
 }
 

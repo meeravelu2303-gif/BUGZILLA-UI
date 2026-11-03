@@ -1,0 +1,31 @@
+[%# Welcome email, plain-text part (Welcome extension, lib/WebService.pm).
+  # app_url: where the Bug Tracker app lives - the same address as in the bug
+  # emails (template/en/custom/email/bugmail*.tmpl); update both together.
+  #%]
+[% app_url = "http://192.168.0.50:5175" %]
+Hello [% user.name || user.login %],
+
+[%+ invited_by %] has created your account on the Bug Tracker.
+
+  Sign-in email: [% user.login %]
+[% IF role %]
+  Role:          [% role %]
+[% END %]
+[% IF products.size %]
+  Products:      [% products.join(', ') %]
+[% END %]
+
+First, set your password with this link:
+
+[%+ app_url %]/reset-password?welcome=1&t=[% token FILTER uri %]
+
+The link works once and expires in [% days %] days (on [% expires %]).
+If it has expired, use "Forgot password?" on the sign-in page, or ask your
+administrator to send this email again.
+
+After that, sign in here:
+
+[%+ app_url %]/login
+
+You will get an email whenever a bug assigned to you, or reported by you,
+changes.

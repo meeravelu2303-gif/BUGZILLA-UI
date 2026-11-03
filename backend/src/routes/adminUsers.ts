@@ -7,12 +7,24 @@ import { z } from 'zod';
 import type { Env } from '../config/env';
 import { clearAccessScope } from '../lib/access';
 import { clearMemo } from '../lib/memo';
-import { groupsForRole, managedGroups } from '../lib/roles';
+import { groupsForRole, managedGroups, roleFromGroups, ROLE_LABELS } from '../lib/roles';
+import type { BugzillaClient } from '../lib/bugzillaClient';
+import { randomBytes } from 'node:crypto';
 import { requireAuth, requirePermission } from '../middleware/auth';
 import { parseInput } from '../lib/validate';
 import { createUserSchema, listUsersQuerySchema, normalizeAdminUser, rawAdminUserSchema, updateUserSchema } from '../schemas/adminUser';
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+/**
+ * The welcome email (Bugzilla Welcome extension): sign-in address, role,
+ * products and a one-time "Set your password" link. Sent with the admin's own
+ * key, through Bugzilla's mailer and queue like every bug email.
+ */
+async function sendWelcome(client: BugzillaClient, userId: number, role: string, products: string[]): Promise<{ sentTo: string }> {
+  const result = await client.post<{ sent_to: string }>('/welcome', { user_id: userId, role, products });
+  return { sentTo: result.sent_to };
+}
 
 export function adminUsersRouter(env: Env): Router {
   const router = Router();
@@ -113,11 +125,15 @@ export function adminUsersRouter(env: Env): Router {
     try {
       const input = parseInput(createUserSchema, req.body);
       const client = req.bugzilla!;
+      if (!input.password && !input.sendWelcome) {
+        throw new AppError(400, 'VALIDATION', 'Set a password, or send the welcome email so they can set their own.');
+      }
 
       const created = await client.post<{ id: number }>('/user', {
         email: input.email,
         full_name: input.fullName ?? '',
-        password: input.password,
+        // Never shown to anyone: replaced the moment they use the email's link.
+        password: input.password ?? randomBytes(24).toString('base64url'),
       });
 
       /*
@@ -160,6 +176,17 @@ export function adminUsersRouter(env: Env): Router {
       clearAccessScope();
       clearMemo('directory');
 
+      /*
+       * Like groups, not fatal: the account exists either way. A failed email
+       * is reported so the admin can use "Send welcome email" on the user page.
+       */
+      let welcome: { sentTo: string } | { error: string } | undefined;
+      if (input.sendWelcome) {
+        welcome = await sendWelcome(client, created.id, input.role ? ROLE_LABELS[input.role] : '', input.products ?? []).catch(
+          (err: unknown) => ({ error: err instanceof Error ? err.message : 'The welcome email could not be sent.' })
+        );
+      }
+
       const resp = await client.get<{ users: unknown[] }>(`/user/${created.id}`);
       const user = normalizeAdminUser(rawAdminUserSchema.parse(resp.users[0]));
       res.status(201).json({
@@ -167,7 +194,29 @@ export function adminUsersRouter(env: Env): Router {
         // Present only when something needs saying, so a clean create stays clean.
         ...(skippedGroups.length > 0 ? { skippedGroups } : {}),
         ...(groupError ? { groupError } : {}),
+        ...(welcome ? { welcome } : {}),
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /*
+   * POST /api/admin/users/:id/welcome - (re)send the welcome email: sign-in
+   * address plus a fresh "Set your password" link. For an account whose first
+   * email was lost or whose link expired. Earlier links keep working until
+   * they expire or the password is set.
+   */
+  router.post('/:id/welcome', ...gate, async (req, res, next) => {
+    try {
+      const { id } = parseInput(idParamSchema, req.params);
+      const client = req.bugzilla!;
+      const resp = await client.get<{ users: unknown[] }>(`/user/${id}`);
+      const user = normalizeAdminUser(rawAdminUserSchema.parse(resp.users[0]));
+      if (isServiceAccount(user.email)) {
+        throw new AppError(400, 'VALIDATION', 'This is a system account; it does not sign in, so it gets no welcome email.');
+      }
+      res.json({ welcome: await sendWelcome(client, id, ROLE_LABELS[roleFromGroups(user.groups)], []) });
     } catch (err) {
       next(err);
     }

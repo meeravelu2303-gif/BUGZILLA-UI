@@ -36,6 +36,8 @@ const BLOCK_NAMES: Array<[string, boolean]> = [
   ['What this means', false],
   ['Why it matters', false],
   ['Browsers affected', false],
+  // "Platform: Web app." / "Platform: Mobile app - Android, iOS." (lib/bugTemplate.ts buildDescription).
+  ['Platform', false],
   ['Evidence attached', false],
   ['Correlation ID', true],
   ['Response body', true],

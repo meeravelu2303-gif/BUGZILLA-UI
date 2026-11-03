@@ -137,6 +137,9 @@ export function restToRpc(
     if (p === 'subcomponent') return { rpcMethod: 'SubComponent.list', rpcParams: params };
     // The Teams extension (ops/bugzilla/extensions/Teams).
     if (p === 'team') return { rpcMethod: 'Team.list', rpcParams: params };
+    // The CommentEdit extension (ops/bugzilla/extensions/CommentEdit).
+    if (p === 'comment_edit') return { rpcMethod: 'CommentEdit.list', rpcParams: params };
+    if (p === 'comment_edit/history') return { rpcMethod: 'CommentEdit.history', rpcParams: params };
   }
 
   if (method === 'POST') {
@@ -161,6 +164,10 @@ export function restToRpc(
     if (p === 'team/remove') return { rpcMethod: 'Team.remove', rpcParams: params };
     // The AttachmentDelete extension (ops/bugzilla/extensions/AttachmentDelete).
     if (p === 'attachment/remove') return { rpcMethod: 'AttachmentDelete.remove', rpcParams: params };
+    // The Welcome extension (ops/bugzilla/extensions/Welcome).
+    if (p === 'welcome') return { rpcMethod: 'Welcome.send_welcome', rpcParams: params };
+    // The CommentEdit extension (ops/bugzilla/extensions/CommentEdit).
+    if (p === 'comment_edit/update') return { rpcMethod: 'CommentEdit.update', rpcParams: params };
   }
 
   if (method === 'PUT') {

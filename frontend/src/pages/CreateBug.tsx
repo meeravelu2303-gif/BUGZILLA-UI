@@ -1,6 +1,6 @@
-import { Check, Eye, FilePlus2, FileText, Globe, MonitorSmartphone, Paperclip, Plus, Server, Smartphone, Sparkles, X } from 'lucide-react';
+import { Eye, FilePlus2, FileText, Paperclip, Plus, X } from 'lucide-react';
 import { assigneeLabel } from '../lib/roles';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { useAssignableUsers, useCreateBug, useMe, useProducts } from '../api/hooks';
@@ -8,6 +8,7 @@ import { ClassificationPicker } from '../components/bugs/ClassificationPicker';
 import { DescriptionReport } from '../components/bugs/DescriptionReport';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { BugKindPicker, CurlField, LEVEL_DOT, MONO, Section, Segmented, TickGroup, UiPlatformPicker } from '../components/bugs/BugFormParts';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Input, RequiredMark, Select, Textarea } from '../components/ui/Field';
 import { useToast } from '../context/ToastContext';
@@ -51,84 +52,6 @@ function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
-
-/** A small one-of-N toggle; a select would hide the options this form wants people to compare. */
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  hint,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: string; dot?: string }[];
-  onChange: (v: T) => void;
-  hint?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
-      <div role="radiogroup" aria-label={label} className="grid auto-cols-fr grid-flow-col gap-1 rounded-xl bg-slate-900/[0.06] p-1">
-        {options.map((o) => {
-          const active = value === o.value;
-          return (
-            <button
-              key={o.value}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onChange(o.value)}
-              className={cn(
-                'focus-ring flex items-center justify-center gap-1.5 rounded-lg px-3 py-[7px] text-sm transition-all',
-                active ? 'bg-white font-semibold text-brand-800 shadow-sm ring-1 ring-slate-900/5' : 'font-medium text-slate-600 hover:bg-white/50 hover:text-slate-900',
-              )}
-            >
-              {o.dot && <span className={cn('h-2 w-2 rounded-full', o.dot)} aria-hidden />}
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
-      {hint && <p className="text-xs leading-5 text-slate-600">{hint}</p>}
-    </div>
-  );
-}
-
-/*
- * Own header rather than CardHeader: that one is `justify-between`, and `cn` is plain clsx, so a
- * `justify-start` override does not win - it pushed the title to the far right of the card.
- */
-function Section({ step, title, subtitle, children }: { step: number; title: string; subtitle: string; children: ReactNode }) {
-  return (
-    <Card>
-      <div className="flex items-center gap-3 border-b border-hairline px-6 py-4">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-semibold text-white shadow-sm ring-1 ring-inset ring-white/30">
-          {step}
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-[1rem] font-semibold leading-5 text-slate-900">{title}</h2>
-          <p className="text-xs leading-5 text-slate-600">{subtitle}</p>
-        </div>
-      </div>
-      <div className="flex flex-col gap-5 px-6 py-5">{children}</div>
-    </Card>
-  );
-}
-
-const BUG_KIND_OPTIONS: { value: BugKind; title: string; detail: string; icon: typeof Server }[] = [
-  { value: 'api', title: 'API bug', detail: 'A backend endpoint misbehaves - asks for endpoint, curl and response.', icon: Server },
-  { value: 'ui', title: 'UI bug', detail: 'Something on a screen is wrong - asks for page and browsers.', icon: MonitorSmartphone },
-];
-
-const LEVEL_DOT: Record<SeverityLevel, string> = {
-  CRITICAL: 'bg-rose-500',
-  HIGH: 'bg-orange-500',
-  MEDIUM: 'bg-amber-400',
-  LOW: 'bg-slate-400',
-};
-
-const MONO = 'font-mono text-[0.8667rem] leading-relaxed';
 
 /**
  * What each validated field is called on screen - used in the error toast and
@@ -537,56 +460,7 @@ export function CreateBug() {
                 </Select>
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <span id="bug-type-label" className="text-sm font-medium text-slate-700">
-                Bug type
-              </span>
-              <div role="radiogroup" aria-labelledby="bug-type-label" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {BUG_KIND_OPTIONS.map((o) => {
-                  const active = kind === o.value;
-                  const Icon = o.icon;
-                  return (
-                    <button
-                      key={o.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => changeKind(o.value)}
-                      className={cn(
-                        'focus-ring group relative flex items-start gap-3 rounded-xl p-3.5 text-left transition-all',
-                        active
-                          ? 'bg-white shadow-sm ring-2 ring-brand-600'
-                          : 'bg-white/50 ring-1 ring-inset ring-slate-900/10 hover:bg-white/80 hover:ring-slate-900/20',
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors',
-                          active ? 'bg-brand-600 text-white' : 'bg-slate-900/[0.06] text-slate-500 group-hover:text-slate-700',
-                        )}
-                        aria-hidden
-                      >
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className={cn('block text-sm font-semibold', active ? 'text-slate-900' : 'text-slate-700')}>{o.title}</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-slate-600">{o.detail}</span>
-                      </span>
-                      <span
-                        className={cn(
-                          'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-colors',
-                          active ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-white',
-                        )}
-                        aria-hidden
-                      >
-                        {active && <Check className="h-3 w-3" strokeWidth={3} />}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-xs text-slate-600">Set from the product - change it if this bug is the other kind.</p>
-            </div>
+            <BugKindPicker value={kind} onChange={changeKind} hint="Set from the product - change it if this bug is the other kind." />
             <div className="grid grid-cols-1 empty:hidden gap-4 sm:grid-cols-2">
               {/*
                 Bugzilla requires a version on every bug, but each product here has exactly one
@@ -627,40 +501,7 @@ export function CreateBug() {
               </div>
             ) : (
               <>
-              {/* Web app or mobile app: decides whether browsers or devices are asked for. */}
-              <div className="flex flex-col gap-1.5">
-                <span id="ui-platform-label" className="text-sm font-medium text-slate-700">
-                  Where is it?
-                  <RequiredMark />
-                </span>
-                <div role="radiogroup" aria-labelledby="ui-platform-label" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-900/[0.06] p-1 sm:max-w-sm">
-                  {([
-                    ['web', 'Web', Globe, 'In a browser'],
-                    ['mobile', 'Mobile', Smartphone, 'In the mobile app'],
-                  ] as const).map(([value, label, Icon, hint]) => {
-                    const on = uiPlatform === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        role="radio"
-                        aria-checked={on}
-                        onClick={() => setUiPlatform(value)}
-                        className={cn(
-                          'focus-ring flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-all',
-                          on ? 'bg-white font-semibold text-brand-800 shadow-sm ring-1 ring-slate-900/5' : 'font-medium text-slate-600 hover:bg-white/50'
-                        )}
-                      >
-                        <Icon className={cn('h-4 w-4 shrink-0', on ? 'text-brand-600' : 'text-slate-400')} aria-hidden />
-                        <span className="flex flex-col leading-tight">
-                          {label}
-                          <span className="text-2xs font-normal text-slate-500">{hint}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <UiPlatformPicker value={uiPlatform} onChange={setUiPlatform} />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input
                   id="new-bug-page"
@@ -672,85 +513,25 @@ export function CreateBug() {
                   hint="Where in the app it happens."
                 />
                 {uiPlatform === 'mobile' ? (
-                  <div className="flex flex-col gap-1.5" data-field="devices" data-invalid={invalid('devices')}>
-                    <span id="devices-label" className="text-sm font-medium text-slate-700">
-                      Devices affected
-                      <RequiredMark />
-                    </span>
-                    <div role="group" aria-labelledby="devices-label" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-900/[0.06] p-1">
-                      {BUG_DEVICES.map((d) => {
-                        const on = devices.includes(d);
-                        return (
-                          <button
-                            key={d}
-                            type="button"
-                            aria-pressed={on}
-                            onClick={() => toggleDevice(d)}
-                            className={cn(
-                              'focus-ring flex items-center gap-2 rounded-lg px-2.5 py-[7px] text-sm transition-all',
-                              on ? 'bg-white font-semibold text-brand-800 shadow-sm ring-1 ring-slate-900/5' : 'font-medium text-slate-600 hover:bg-white/50'
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                                on ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-white'
-                              )}
-                              aria-hidden
-                            >
-                              {on && <Check className="h-3 w-3" strokeWidth={3} />}
-                            </span>
-                            {DEVICE_LABELS[d]}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {errors.devices ? (
-                      <p role="alert" className="text-xs font-medium text-rose-600">{errors.devices}</p>
-                    ) : (
-                      <p className="text-xs text-slate-600">Tick every device platform it happens on.</p>
-                    )}
-                  </div>
+                  <TickGroup
+                    id="devices"
+                    label="Devices affected"
+                    options={BUG_DEVICES.map((d) => ({ value: d, label: DEVICE_LABELS[d] }))}
+                    selected={devices}
+                    onToggle={toggleDevice}
+                    error={errors.devices}
+                    hint="Tick every device platform it happens on."
+                  />
                 ) : (
-                <div className="flex flex-col gap-1.5" data-field="browsers" data-invalid={invalid('browsers')}>
-                  <span id="browsers-label" className="text-sm font-medium text-slate-700">
-                    Browsers affected
-                    <RequiredMark />
-                  </span>
-                  <div role="group" aria-labelledby="browsers-label" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-900/[0.06] p-1">
-                    {BUG_BROWSERS.map((b) => {
-                      const on = browsers.includes(b);
-                      return (
-                        <button
-                          key={b}
-                          type="button"
-                          aria-pressed={on}
-                          onClick={() => toggleBrowser(b)}
-                          className={cn(
-                            'focus-ring flex items-center gap-2 rounded-lg px-2.5 py-[7px] text-sm transition-all',
-                            on ? 'bg-white font-semibold text-brand-800 shadow-sm ring-1 ring-slate-900/5' : 'font-medium text-slate-600 hover:bg-white/50',
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                              on ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-white',
-                            )}
-                            aria-hidden
-                          >
-                            {on && <Check className="h-3 w-3" strokeWidth={3} />}
-                          </span>
-                          {b}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {errors.browsers ? (
-                    <p role="alert" className="text-xs font-medium text-rose-600">{errors.browsers}</p>
-                  ) : (
-                    <p className="text-xs text-slate-600">Tick every browser it happens in.</p>
-                  )}
-                </div>
+                  <TickGroup
+                    id="browsers"
+                    label="Browsers affected"
+                    options={BUG_BROWSERS.map((b) => ({ value: b, label: b }))}
+                    selected={browsers}
+                    onToggle={toggleBrowser}
+                    error={errors.browsers}
+                    hint="Tick every browser it happens in."
+                  />
                 )}
               </div>
               </>
@@ -937,43 +718,7 @@ export function CreateBug() {
 
           {kind === 'api' && (
             <Section step={4} title="Reproduce" subtitle="A runnable command and the response it returned.">
-              <div data-field="curl" data-invalid={invalid('curl')} className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-700">
-                    curl
-                    <RequiredMark />
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setCurl(curlTemplate(method, path))}
-                    className="focus-ring inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-600/10"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden /> Generate from endpoint
-                  </button>
-                </div>
-                {/* A raw textarea, not <Textarea>: its bg-white/80 would fight the dark terminal styling. */}
-                <textarea
-                  aria-label="curl"
-                  aria-required="true"
-                  aria-invalid={errors.curl ? true : undefined}
-                  value={curl}
-                  onChange={(e) => setCurl(e.target.value)}
-                  rows={5}
-                  spellCheck={false}
-                  wrap="off"
-                  className={cn(
-                    MONO,
-                    'focus-ring w-full resize-y rounded-xl bg-slate-900 px-4 py-3 text-slate-100 placeholder:text-slate-500 ring-1 ring-inset',
-                    errors.curl ? 'ring-rose-400' : 'ring-slate-900/60',
-                  )}
-                  placeholder={"curl -X POST 'https://testingapi.kpostindia.com/v2/…' \\\n  -H 'Authorization: Bearer $KPOST_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  --data '{…}'"}
-                />
-                {errors.curl ? (
-                  <p role="alert" className="text-xs font-medium text-rose-600">{errors.curl}</p>
-                ) : (
-                  <p className="text-xs text-slate-600">Keep the token as $KPOST_TOKEN - never paste a live one.</p>
-                )}
-              </div>
+              <CurlField value={curl} onChange={setCurl} onGenerate={() => setCurl(curlTemplate(method, path))} error={errors.curl} />
               <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
                 <div data-field="responseStatus" data-invalid={invalid('responseStatus')}>
                   <Input
