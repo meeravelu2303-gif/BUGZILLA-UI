@@ -9,7 +9,7 @@
 # Who may delete: the person who uploaded the file, or a user administrator
 # (editusers / admin). The caller must also be able to see the bug.
 #
-# Source of truth: ops/bugzilla/extensions/AttachmentDelete in the BUGZILLA-UI repo.
+# Source of truth: bugzilla/extensions/AttachmentDelete in the BUGZILLA-UI repo.
 # Install: copy the folder to C:\Bugzilla\extensions\AttachmentDelete. No tables.
 package Bugzilla::Extension::AttachmentDelete;
 

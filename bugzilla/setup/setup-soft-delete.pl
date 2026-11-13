@@ -2,7 +2,7 @@
 # One-time (idempotent) Bugzilla configuration for the UI's soft delete.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-soft-delete.pl admin@example.com
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-soft-delete.pl admin@example.com
 #
 # Bugzilla has no delete API, so "delete" in the UI is:
 #   * status RESOLVED + resolution DELETED   - closed, with the reason in a comment

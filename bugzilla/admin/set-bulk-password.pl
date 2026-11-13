@@ -2,8 +2,8 @@
 # Set ONE password on every tester, developer and reporter account.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\set-bulk-password.pl <admin login>            (dry run: lists accounts)
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\set-bulk-password.pl <admin login> --execute  (writes)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\admin\set-bulk-password.pl <admin login>            (dry run: lists accounts)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\admin\set-bulk-password.pl <admin login> --execute  (writes)
 #
 # The password comes from the BULK_PASSWORD environment variable, never from
 # the command line (which would land in shell history). Skipped: admins

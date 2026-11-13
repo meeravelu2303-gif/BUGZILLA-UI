@@ -2,8 +2,8 @@
 # Rename a bug status everywhere, e.g. VERIFIED -> CLOSED.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\rename-status.pl VERIFIED CLOSED            (dry run)
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\rename-status.pl VERIFIED CLOSED --execute  (writes)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\rename-status.pl VERIFIED CLOSED            (dry run)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\rename-status.pl VERIFIED CLOSED --execute  (writes)
 #
 # Through Bugzilla's own object (what editvalues.cgi does): renaming the status
 # value rewrites every bug that has it. The workflow is stored by status id, so

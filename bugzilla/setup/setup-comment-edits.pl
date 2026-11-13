@@ -1,9 +1,9 @@
 #!/usr/bin/perl -T
 # One-time (idempotent) Bugzilla configuration: the CommentEdit extension's table.
 #
-#   1. copy ops/bugzilla/extensions/CommentEdit to C:\Bugzilla\extensions\CommentEdit
+#   1. copy bugzilla/extensions/CommentEdit to C:\Bugzilla\extensions\CommentEdit
 #   2. cd C:\Bugzilla
-#      perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-comment-edits.pl
+#      perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-comment-edits.pl
 #
 # Creates kp_comment_edits from the extension's own schema (Extension.pm,
 # db_schema_abstract_schema) through Bugzilla's bz_add_table, so Bugzilla's

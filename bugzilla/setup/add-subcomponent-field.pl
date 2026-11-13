@@ -3,12 +3,12 @@
 # controlled by Component (each value belongs to exactly one component).
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\add-subcomponent-field.pl            (dry run)
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\add-subcomponent-field.pl --execute  (writes)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\add-subcomponent-field.pl            (dry run)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\add-subcomponent-field.pl --execute  (writes)
 #
 # Created through Bugzilla::Field so fielddefs, the cf_subcomponent value table
 # and the bugs column all agree. Existing bugs get the empty value '---'.
-# Values are managed by the SubComponents extension (ops/bugzilla/extensions),
+# Values are managed by the SubComponents extension (bugzilla/extensions),
 # which must be copied to C:\Bugzilla\extensions\SubComponents. Re-running is safe.
 
 use 5.14.0;

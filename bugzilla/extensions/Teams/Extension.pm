@@ -2,7 +2,7 @@
 # sent their team's activity. Teams are independent of products - a member may
 # work on any product.
 #
-# Tables (created by ops/bugzilla/setup-teams.pl, or by checksetup.pl):
+# Tables (created by bugzilla/setup/setup-teams.pl, or by checksetup.pl):
 #   kp_teams         id, name (unique), leader_id -> profiles, created_ts
 #   kp_team_members  team_id -> kp_teams (cascade), user_id -> profiles (cascade)
 #
@@ -12,7 +12,7 @@
 #   POST /rest/team/update   update  {id, name?, leader?, members?}  (members replaces the list)
 #   POST /rest/team/remove   delete  {id}
 #
-# Source of truth: ops/bugzilla/extensions/Teams in the BUGZILLA-UI repo.
+# Source of truth: bugzilla/extensions/Teams in the BUGZILLA-UI repo.
 # Install: copy the folder to C:\Bugzilla\extensions\Teams.
 package Bugzilla::Extension::Teams;
 

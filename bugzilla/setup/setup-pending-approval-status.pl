@@ -2,7 +2,7 @@
 # One-time (idempotent) Bugzilla configuration: the PENDING_APPROVAL status.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-pending-approval-status.pl <admin login>
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-pending-approval-status.pl <admin login>
 #
 # A tester files a bug; the developer says it is not in the requirements, so the
 # project manager has to decide whether it is wanted. Until then the bug is

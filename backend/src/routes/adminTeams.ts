@@ -6,7 +6,7 @@ import { parseInput } from '../lib/validate';
 import { requireAuth, requirePermission } from '../middleware/auth';
 
 /**
- * Teams: a name, one team leader and the members (ops/bugzilla/extensions/Teams).
+ * Teams: a name, one team leader and the members (bugzilla/extensions/Teams).
  * A team says nothing about products - members may work on any of them; it is
  * who reports to whom, so each leader can be sent their team's activity.
  *

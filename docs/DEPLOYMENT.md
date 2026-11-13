@@ -20,7 +20,7 @@ Browser (React)  ──►  BFF (Node/Express)  ──►  Bugzilla 5.2 REST API
 | Component | Notes |
 |---|---|
 | A running Bugzilla 5.2 | e.g. via XAMPP at `http://localhost/bugzilla` |
-| Node.js 18+ | `node -v` (project verified on 18/20) |
+| Node.js 18+ | `node -v` (verified on 18/20; the production server runs 24 - see `.nvmrc`) |
 | An admin Bugzilla account | member of `editusers` and `editcomponents` groups |
 | Git | to pull the branch / apply changes |
 
@@ -60,7 +60,7 @@ Bugzilla's REST API cannot write, so they're set up once in Bugzilla's own admin
 7. **Soft delete** — run once, and again after creating a product:
    ```
    cd C:\Bugzilla
-   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-soft-delete.pl <admin login>
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-soft-delete.pl <admin login>
    ```
    Creates the `DELETED` resolution and the "Deleted bugs" group (members: everyone
    in `canconfirm`, i.e. testers and admins), and enables that group on every
@@ -69,7 +69,7 @@ Bugzilla's REST API cannot write, so they're set up once in Bugzilla's own admin
 8. **REOPENED status** — run once:
    ```
    cd C:\Bugzilla
-   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-reopened-status.pl <admin login>
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-reopened-status.pl <admin login>
    ```
    Adds the open status `REOPENED` with RESOLVED/VERIFIED → REOPENED (comment
    required) and REOPENED → CONFIRMED / IN_PROGRESS / RESOLVED. The app lets only
@@ -80,7 +80,7 @@ Bugzilla's REST API cannot write, so they're set up once in Bugzilla's own admin
    ```
    cd C:\Bugzilla
    set BZ_SMTP_PASSWORD=<app password>
-   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-smtp.pl --server smtp.gmail.com:465 --ssl ssl --user you@gmail.com --from "Bug Tracker <you@gmail.com>" --test you@example.com
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-smtp.pl --server smtp.gmail.com:465 --ssl ssl --user you@gmail.com --from "Bug Tracker <you@gmail.com>" --test you@example.com
    ```
    `--ssl ssl` is SMTPS (port 465); `--ssl starttls` for port 587; `--ssl none` for an
    internal relay. `--test <address>` sends a real message through the saved settings,
@@ -90,7 +90,7 @@ Bugzilla's REST API cannot write, so they're set up once in Bugzilla's own admin
 10. **Password reset link → this app** — run once (and again if the app's address changes):
    ```
    cd C:\Bugzilla
-   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-password-reset.pl --app-url http://192.168.0.50:5175
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-password-reset.pl --app-url http://192.168.0.50:5175
    ```
    Installs `template/en/custom/account/password/forgotten-password.txt.tmpl`, so the
    email Bugzilla sends opens the app's **/reset-password** page instead of Bugzilla's own.
@@ -99,7 +99,7 @@ Bugzilla's REST API cannot write, so they're set up once in Bugzilla's own admin
 11. **Cross-product transfer account** — run once, and again after adding a product:
    ```
    cd C:\Bugzilla
-   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-transfer-account.pl <admin login>
+   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-transfer-account.pl <admin login>
    ```
    Creates `bugtracker-transfer@kpost.in` (no mail, no usable password) in `editbugs`,
    `canconfirm` and every product's same-named group - never `admin`/`editusers`/
@@ -148,7 +148,7 @@ TRANSFER_API_KEY=<key from setup-transfer-account.pl>                         # 
 > body. Bugzilla 5.2's REST transport only accepts credentials as query
 > parameters, which the web server writes to its access log; that is why REST
 > is not used on the wire even though every call site is written against REST
-> paths. Run `ops\apache\harden-access-log.ps1` once so Apache stops logging
+> paths. Run `ops\server\harden-access-log.ps1` once so Apache stops logging
 > query strings at all.
 
 Then:
@@ -254,15 +254,15 @@ Everything else (bugs, comments, user create/enable-disable, product/component
 ## Operations
 
 - **Nightly database backup** — register once from an elevated PowerShell:
-  `powershell -ExecutionPolicy Bypass -File ops\windows\register-backup-task.ps1`
+  `powershell -ExecutionPolicy Bypass -File ops\server\register-backup-task.ps1`
   (daily 02:00 as SYSTEM; `-At 23:30` to change the time; `-Unregister` to remove).
   Test a restore into a scratch database at least once.
-- **Health check** — `powershell -ExecutionPolicy Bypass -File ops\health-check.ps1`
+- **Health check** — `powershell -ExecutionPolicy Bypass -File ops\checks\health-check.ps1`
   checks the BFF, the BFF→Bugzilla path, Bugzilla's REST API, the database port, the
   Apache/MariaDB services, backup freshness and the session store; exit code 1 on any
   failure. For an external monitor, poll `GET /api/health?deep=1` (200 healthy, 503 not).
   Quick manual check: `curl -s http://localhost:4000/api/health?deep=1`
-- **Access-log hardening** — `ops\apache\harden-access-log.ps1` (see Phase 2 note).
+- **Access-log hardening** — `ops\server\harden-access-log.ps1` (see Phase 2 note).
 - **Cross-product transfer** — a bug's assignee (or any tester) can move it to another
   team's product from the bug page (**Transfer**), without being given access to that
   product. The BFF checks on the user's own token that they can see the bug and may hand it
@@ -270,7 +270,7 @@ Everything else (bugs, comments, user create/enable-disable, product/component
   `TRANSFER_API_KEY`, along `PRODUCT_TRANSFER_ROUTES` only. The user is CC'd so they keep
   seeing that one bug; Bugzilla swaps the product groups itself. The reason is posted as a
   comment under the user's name, and each transfer is logged (`[transfer] bug N: A -> B`).
-  Verify end to end with `ops\verify-transfer.ps1` (dry run by default; `-Execute` moves the bug).
+  Verify end to end with `ops\checks\verify-transfer.ps1` (dry run by default; `-Execute` moves the bug).
 - **Password resets** — the app's `/forgot-password` and `/reset-password` pages drive
   Bugzilla's own `token.cgi` flow from the BFF (no WebService exists for it). Requests are
   capped at **3 emails per address per 24 hours** (the policy users are told), plus 3 per
@@ -279,6 +279,6 @@ Everything else (bugs, comments, user create/enable-disable, product/component
   BFF always answers "accepted" so the page cannot be used to discover accounts; the real
   outcome (sent / too soon / disabled) is in the BFF log. A reset also ends every Bugzilla
   session of that account, so devices still signed in are sent back to the sign-in page.
-  If a user reports no email: `perl -T ops\bugzilla\setup-smtp.pl --status`, then `--test`.
+  If a user reports no email: `perl -T bugzilla\setup\setup-smtp.pl --status`, then `--test`.
 - **Sessions** — with `SESSION_STORE=file` a restart keeps users signed in; the files
   live in `backend\.sessions` (git-ignored, 0600). Delete the folder to sign everyone out.

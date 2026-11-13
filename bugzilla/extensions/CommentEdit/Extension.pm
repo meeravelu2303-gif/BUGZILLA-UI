@@ -2,7 +2,7 @@
 # never changes a comment once posted; this keeps every earlier version in its
 # own table, so an edit is visible ("edited") and nothing is lost.
 #
-# Table (created by ops/bugzilla/setup-comment-edits.pl, or by checksetup.pl):
+# Table (created by bugzilla/setup/setup-comment-edits.pl, or by checksetup.pl):
 #   kp_comment_edits  id, comment_id -> longdescs (cascade), editor_id -> profiles,
 #                     edit_ts, old_text (the text BEFORE that edit)
 #
@@ -11,7 +11,7 @@
 #   GET  /rest/comment_edit?bug_id=N  which comments of a bug were edited
 #   GET  /rest/comment_edit/history?comment_id=N   earlier versions, newest first
 #
-# Source of truth: ops/bugzilla/extensions/CommentEdit in the BUGZILLA-UI repo.
+# Source of truth: bugzilla/extensions/CommentEdit in the BUGZILLA-UI repo.
 # Install: copy the folder to C:\Bugzilla\extensions\CommentEdit.
 package Bugzilla::Extension::CommentEdit;
 

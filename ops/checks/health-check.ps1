@@ -17,8 +17,8 @@
   that only needs the single URL: <BffUrl>/api/health?deep=1 returns 200 when healthy, 503 otherwise.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File ops\health-check.ps1
-  powershell -ExecutionPolicy Bypass -File ops\health-check.ps1 -BffUrl http://192.168.0.50:4000 -MaxBackupAgeHours 26
+  powershell -ExecutionPolicy Bypass -File ops\checks\health-check.ps1
+  powershell -ExecutionPolicy Bypass -File ops\checks\health-check.ps1 -BffUrl http://192.168.0.50:4000 -MaxBackupAgeHours 26
 #>
 [CmdletBinding()]
 param(
@@ -79,7 +79,7 @@ if ($newest) {
 }
 
 $task = Get-ScheduledTask -TaskName 'Bugzilla DB backup' -ErrorAction SilentlyContinue
-Report 'Backup task' ($null -ne $task) $(if ($task) { "state $($task.State), next $((Get-ScheduledTaskInfo -TaskName 'Bugzilla DB backup').NextRunTime)" } else { 'not registered (ops\windows\register-backup-task.ps1)' })
+Report 'Backup task' ($null -ne $task) $(if ($task) { "state $($task.State), next $((Get-ScheduledTaskInfo -TaskName 'Bugzilla DB backup').NextRunTime)" } else { 'not registered (ops\server\register-backup-task.ps1)' })
 
 if ($live.body) {
   $store = [string]$live.body.sessionStore
@@ -91,7 +91,7 @@ if (Test-Path $paramsFile) {
   try {
     $bzParams = Get-Content $paramsFile -Raw | ConvertFrom-Json
     $method = [string]$bzParams.mail_delivery_method
-    Report 'Outbound mail' ($method -ne 'None') $(if ($method -eq 'None') { 'mail_delivery_method None - no reset emails (ops\bugzilla\setup-smtp.pl)' } else { "$method via $($bzParams.smtpserver)" })
+    Report 'Outbound mail' ($method -ne 'None') $(if ($method -eq 'None') { 'mail_delivery_method None - no reset emails (bugzilla\setup\setup-smtp.pl)' } else { "$method via $($bzParams.smtpserver)" })
   } catch {
     Report 'Outbound mail' $false "cannot read $paramsFile"
   }

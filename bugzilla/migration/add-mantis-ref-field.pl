@@ -3,8 +3,8 @@
 # already imported from Mantis.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\migration\add-mantis-ref-field.pl            (dry run)
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\migration\add-mantis-ref-field.pl --execute  (writes)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\migration\add-mantis-ref-field.pl            (dry run)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\migration\add-mantis-ref-field.pl --execute  (writes)
 #
 # The column is a Bugzilla custom field (cf_mantis_ref, free text), created
 # through Bugzilla::Field so fielddefs, the bugs column and search all agree -

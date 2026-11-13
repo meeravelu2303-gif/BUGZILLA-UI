@@ -1,0 +1,29 @@
+# Normalise line endings in the repository to LF, whatever each developer's
+# core.autocrlf setting is. The index is already all-LF, so this changes nothing
+# that is committed today - it stops CRLF from creeping in from Windows editors.
+* text=auto eol=lf
+
+# Windows-only scripts are checked out with CRLF (cmd.exe misreads LF batch files;
+# PowerShell is happy either way, but CRLF keeps diffs clean for Windows editors).
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binary - never diff or convert.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.pdf   binary
+*.docx  binary
+*.xlsx  binary
+*.zip   binary
+
+# Generated files: collapse in diffs and keep out of language statistics.
+package-lock.json       linguist-generated=true -diff
+docs/guides/*.html      linguist-generated=true
+docs/reports/*.html     linguist-generated=true

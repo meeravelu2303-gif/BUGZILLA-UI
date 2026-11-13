@@ -25,8 +25,8 @@
             8. a KPost API search returns exactly the transferred bug and nothing else
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File ops\verify-transfer.ps1 -UiUser jmkmani55@kpostindia.com -BugId 1234 -ForeignBugId 900
-  powershell -ExecutionPolicy Bypass -File ops\verify-transfer.ps1 -UiUser jmkmani55@kpostindia.com -BugId 1234 -ForeignBugId 900 -Execute
+  powershell -ExecutionPolicy Bypass -File ops\checks\verify-transfer.ps1 -UiUser jmkmani55@kpostindia.com -BugId 1234 -ForeignBugId 900
+  powershell -ExecutionPolicy Bypass -File ops\checks\verify-transfer.ps1 -UiUser jmkmani55@kpostindia.com -BugId 1234 -ForeignBugId 900 -Execute
 #>
 [CmdletBinding()]
 param(

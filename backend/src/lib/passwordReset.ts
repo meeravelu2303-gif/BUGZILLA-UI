@@ -17,7 +17,7 @@ import { AppError } from './errors';
  * against them.
  *
  * The email Bugzilla sends links to its own token.cgi unless the custom mail
- * template from ops/bugzilla/setup-password-reset.pl is installed, which points
+ * template from bugzilla/setup/setup-password-reset.pl is installed, which points
  * it at this app's /reset-password page instead.
  */
 

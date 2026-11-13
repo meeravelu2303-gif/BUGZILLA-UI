@@ -4,7 +4,7 @@
 # max_login_attempts); the Bug Tracker app's own 5-minute lock expires by itself.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\unlock-account.pl user@example.com
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\admin\unlock-account.pl user@example.com
 #   $env:NEW_PASSWORD = 'Something2026'; perl -T ...\unlock-account.pl user@example.com --set-password
 #
 # The password comes from the NEW_PASSWORD environment variable, never the

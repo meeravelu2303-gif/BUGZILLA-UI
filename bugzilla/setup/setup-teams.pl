@@ -1,9 +1,9 @@
 #!/usr/bin/perl -T
 # One-time (idempotent) Bugzilla configuration: the Teams extension's tables.
 #
-#   1. copy ops/bugzilla/extensions/Teams to C:\Bugzilla\extensions\Teams
+#   1. copy bugzilla/extensions/Teams to C:\Bugzilla\extensions\Teams
 #   2. cd C:\Bugzilla
-#      perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-teams.pl
+#      perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-teams.pl
 #
 # Creates kp_teams and kp_team_members from the extension's own schema
 # (Extension.pm, db_schema_abstract_schema) through Bugzilla's bz_add_table, so

@@ -133,11 +133,11 @@ export function restToRpc(
     if (seg[0] === 'group' && seg.length === 2) return { rpcMethod: 'Group.get', rpcParams: ids(seg[1]) };
     if (p === 'classification') return { rpcMethod: 'Classification.get', rpcParams: params };
     if (p === 'flag_type') return { rpcMethod: 'FlagType.get', rpcParams: params };
-    // The SubComponents extension (ops/bugzilla/extensions/SubComponents).
+    // The SubComponents extension (bugzilla/extensions/SubComponents).
     if (p === 'subcomponent') return { rpcMethod: 'SubComponent.list', rpcParams: params };
-    // The Teams extension (ops/bugzilla/extensions/Teams).
+    // The Teams extension (bugzilla/extensions/Teams).
     if (p === 'team') return { rpcMethod: 'Team.list', rpcParams: params };
-    // The CommentEdit extension (ops/bugzilla/extensions/CommentEdit).
+    // The CommentEdit extension (bugzilla/extensions/CommentEdit).
     if (p === 'comment_edit') return { rpcMethod: 'CommentEdit.list', rpcParams: params };
     if (p === 'comment_edit/history') return { rpcMethod: 'CommentEdit.history', rpcParams: params };
   }
@@ -162,11 +162,11 @@ export function restToRpc(
     if (p === 'team') return { rpcMethod: 'Team.create', rpcParams: params };
     if (p === 'team/update') return { rpcMethod: 'Team.update', rpcParams: params };
     if (p === 'team/remove') return { rpcMethod: 'Team.remove', rpcParams: params };
-    // The AttachmentDelete extension (ops/bugzilla/extensions/AttachmentDelete).
+    // The AttachmentDelete extension (bugzilla/extensions/AttachmentDelete).
     if (p === 'attachment/remove') return { rpcMethod: 'AttachmentDelete.remove', rpcParams: params };
-    // The Welcome extension (ops/bugzilla/extensions/Welcome).
+    // The Welcome extension (bugzilla/extensions/Welcome).
     if (p === 'welcome') return { rpcMethod: 'Welcome.send_welcome', rpcParams: params };
-    // The CommentEdit extension (ops/bugzilla/extensions/CommentEdit).
+    // The CommentEdit extension (bugzilla/extensions/CommentEdit).
     if (p === 'comment_edit/update') return { rpcMethod: 'CommentEdit.update', rpcParams: params };
   }
 

@@ -8,7 +8,7 @@
 # same SMTP server, sender, SPF/DKIM and mail queue as every bug email.
 # Templates: template/en/default/kp/welcome.{txt,html}.tmpl (app address in them).
 #
-# Source of truth: ops/bugzilla/extensions/Welcome in the BUGZILLA-UI repo.
+# Source of truth: bugzilla/extensions/Welcome in the BUGZILLA-UI repo.
 # Install: copy the folder to C:\Bugzilla\extensions\Welcome. No tables.
 package Bugzilla::Extension::Welcome;
 

@@ -2,7 +2,7 @@
 # One-time Bugzilla configuration for Forgot Password in the Bug Tracker UI.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-password-reset.pl --app-url http://192.168.0.50:5175
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-password-reset.pl --app-url http://192.168.0.50:5175
 #   perl -T ...\setup-password-reset.pl --uninstall      go back to Bugzilla's own reset page
 #
 # The UI drives Bugzilla's native reset flow (token.cgi). Bugzilla writes the
@@ -59,7 +59,7 @@ my $reset_url = "$app_url/reset-password?t=";
 # pointed at the app and the wording made plain. The cancel link stays on Bugzilla:
 # cancelling a token needs no UI of its own.
 my $template = <<"TMPL";
-[%# Installed by BUGZILLA-UI/ops/bugzilla/setup-password-reset.pl.
+[%# Installed by BUGZILLA-UI/bugzilla/setup/setup-password-reset.pl.
   # Overrides template/en/default/account/password/forgotten-password.txt.tmpl so the
   # reset link opens the Bug Tracker UI. Re-run that script to change the app URL.
   #%]

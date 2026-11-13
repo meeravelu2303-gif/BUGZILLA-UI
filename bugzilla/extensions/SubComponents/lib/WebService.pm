@@ -168,7 +168,7 @@ sub update_component {
 }
 
 # Give a product the access setup every other product on this instance has
-# (same as ops/migration/mantis-step1-users-products.pl):
+# (same as bugzilla/migration/mantis-step1-users-products.pl):
 #   - a same-named bug group, required to file (Entry) and set on every bug
 #     (Mandatory/Mandatory) - this is how the Bug Tracker scopes product access;
 #   - the "Deleted bugs" control (Shown/NA), without which soft delete fails;

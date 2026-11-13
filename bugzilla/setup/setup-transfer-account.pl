@@ -2,7 +2,7 @@
 # One-time (idempotent): the service account that carries out cross-product transfers.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-transfer-account.pl <admin login>
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-transfer-account.pl <admin login>
 #   perl -T ...\setup-transfer-account.pl <admin login> --rotate     revoke the old key, issue a new one
 #
 # Then put the printed key in backend\.env as TRANSFER_API_KEY=... and restart the backend.

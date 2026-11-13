@@ -2,7 +2,7 @@
 # Create the "reporter" role group and put accounts in it.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\add-reporter-role.pl <admin login> \
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\add-reporter-role.pl <admin login> \
 #        --user vijayakumarg@kpostindia.com --user sumithra@kpostindia.com            (dry run)
 #   ... same, plus --execute                                                          (writes)
 #

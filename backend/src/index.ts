@@ -140,7 +140,7 @@ async function main(): Promise<void> {
     if (env.PRODUCT_TRANSFER_ROUTES.trim() && !env.TRANSFER_API_KEY) {
       console.warn(
         '[transfer] TRANSFER_API_KEY is not set: cross-product transfers run on BUGZILLA_API_KEY, so Bugzilla history ' +
-          'will show that account as the one who moved each bug. Create a dedicated account (ops/bugzilla/setup-transfer-account.pl).'
+          'will show that account as the one who moved each bug. Create a dedicated account (bugzilla/setup/setup-transfer-account.pl).'
       );
     }
   });

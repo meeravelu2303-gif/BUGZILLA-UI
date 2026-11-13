@@ -3,7 +3,7 @@
 # password, groups, bugs, comments and history all stay with the account.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\change-login.pl <old login> <new login>
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\admin\change-login.pl <old login> <new login>
 #
 # Goes through Bugzilla::User (set_login + update), so the new address is
 # validated like editusers.cgi would, the change is recorded in the account's

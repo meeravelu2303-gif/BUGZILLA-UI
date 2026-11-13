@@ -7,8 +7,8 @@
 # IRREVERSIBLE inside Bugzilla. Take a full backup first.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\hard-delete-product.pl "Product name"            (dry run)
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\hard-delete-product.pl "Product name" --execute  (deletes)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\admin\hard-delete-product.pl "Product name"            (dry run)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\admin\hard-delete-product.pl "Product name" --execute  (deletes)
 #
 # Uses Bugzilla's own Product->remove_from_db, which deletes each bug through
 # Bug->remove_from_db - so every table that references a bug is cleaned the way

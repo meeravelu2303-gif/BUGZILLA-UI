@@ -9,7 +9,7 @@
 #   POST /rest/subcomponent/component/update  edit a component {id, name?, description?, default_assignee?, is_active?}
 #   POST /rest/subcomponent/product/setup     give a product its access group + controls {product_id}
 #
-# Source of truth: ops/bugzilla/extensions/SubComponents in the BUGZILLA-UI repo.
+# Source of truth: bugzilla/extensions/SubComponents in the BUGZILLA-UI repo.
 # Install: copy the folder to C:\Bugzilla\extensions\SubComponents.
 package Bugzilla::Extension::SubComponents;
 

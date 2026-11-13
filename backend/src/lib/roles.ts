@@ -39,7 +39,7 @@ export type Role = (typeof ROLES)[number];
  */
 export const ROLE_GROUPS: Record<Role, string[]> = {
   /*
-   * `reporter` is a plain marker group (ops/bugzilla/add-reporter-role.pl):
+   * `reporter` is a plain marker group (bugzilla/setup/add-reporter-role.pl):
    * office staff who file and follow bugs but neither develop nor test. It
    * carries no Bugzilla privilege of its own - its only effect is in this app,
    * which keeps reporters out of every assignee list and shows them their own

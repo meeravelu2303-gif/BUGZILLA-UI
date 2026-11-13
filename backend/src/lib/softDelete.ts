@@ -3,7 +3,7 @@ import { AppError } from './errors';
 
 /**
  * Soft delete, built from Bugzilla's own pieces (configured once by
- * ops/bugzilla/setup-soft-delete.pl):
+ * bugzilla/setup/setup-soft-delete.pl):
  *
  *   - resolution DELETED closes the bug, with the reason in a comment;
  *   - the "Deleted bugs" group hides it. A bug in several groups is visible only

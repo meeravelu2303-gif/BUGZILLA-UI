@@ -15,7 +15,7 @@ import { subcomponentName } from './subcomponents';
  *     its resolution - so "fixed, reopened by QA, fixed again" reads at a glance.
  *
  * Bugs imported from Mantis carry their Mantis history in the same table
- * (ops/migration/mantis-import-history.pl), so they read the same way.
+ * (bugzilla/migration/mantis-import-history.pl), so they read the same way.
  */
 
 export type ChangeKind = 'status' | 'resolution' | 'assignee' | 'placement' | 'priority' | 'people' | 'text' | 'link' | 'visibility' | 'other';

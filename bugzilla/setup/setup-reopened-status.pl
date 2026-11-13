@@ -2,7 +2,7 @@
 # One-time (idempotent) Bugzilla configuration: the REOPENED status.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-reopened-status.pl admin@example.com
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-reopened-status.pl admin@example.com
 #
 # A developer marks a bug RESOLVED, the tester re-tests and it is still broken.
 # Moving it back to CONFIRMED loses that story; REOPENED keeps it visible as its

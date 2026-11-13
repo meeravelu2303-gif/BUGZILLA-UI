@@ -79,11 +79,11 @@ export function isTransferAllowed(from: string, to: string, routes: Map<string, 
  * Accounts that exist to run the BFF, not to work bugs. They are members of
  * every product group (that is how they can move bugs), so without this they
  * would be offered as assignees in every people list. Keep in step with
- * LOGIN in ops/bugzilla/setup-transfer-account.pl.
+ * LOGIN in bugzilla/setup/setup-transfer-account.pl.
  */
 export const SERVICE_ACCOUNTS = new Set([
   'bugtracker-transfer@kpost.in',
-  // Mantis placeholders (ops/migration): kept so old bugs can be credited to them,
+  // Mantis placeholders (bugzilla/migration): kept so old bugs can be credited to them,
   // never a person anyone should assign work to or pick on a dashboard.
   'admin@example.com',
   'mantis-unknown@mantis.invalid',

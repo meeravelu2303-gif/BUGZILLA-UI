@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # Daily team report - step 1 of 3: gathers ONE day's activity for every team
-# (ops/bugzilla/extensions/Teams) and writes it as JSON. Read-only.
+# (bugzilla/extensions/Teams) and writes it as JSON. Read-only.
 #
 #   cd C:\Bugzilla
 #   perl D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\reports\team-report-data.pl --date 2026-10-24 --out C:\path\data.json

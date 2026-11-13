@@ -18,9 +18,9 @@
   Remove the task instead of creating it.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File ops\windows\register-backup-task.ps1
-  powershell -ExecutionPolicy Bypass -File ops\windows\register-backup-task.ps1 -At 23:30
-  powershell -ExecutionPolicy Bypass -File ops\windows\register-backup-task.ps1 -Unregister
+  powershell -ExecutionPolicy Bypass -File ops\server\register-backup-task.ps1
+  powershell -ExecutionPolicy Bypass -File ops\server\register-backup-task.ps1 -At 23:30
+  powershell -ExecutionPolicy Bypass -File ops\server\register-backup-task.ps1 -Unregister
 
 .NOTES
   Run from an elevated (Administrator) PowerShell. Verify afterwards with:

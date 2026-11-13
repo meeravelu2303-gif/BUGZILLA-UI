@@ -3,7 +3,7 @@
 # and make sure that owner can access the product.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\migration\set-component-owners.pl <admin login> \
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\migration\set-component-owners.pl <admin login> \
 #        --set "API and SERVER Issue=jitendra@kpost.in" --set "APK FILE ISSUES=manohar@kpost.in"            (dry run)
 #   ... same, plus --execute                                                                                 (writes)
 #

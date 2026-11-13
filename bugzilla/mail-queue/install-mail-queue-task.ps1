@@ -2,7 +2,7 @@
 # queues them instead; a background worker sends them within a few seconds.
 #
 # Run once, in PowerShell as Administrator:
-#   powershell -ExecutionPolicy Bypass -File D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\install-mail-queue-task.ps1
+#   powershell -ExecutionPolicy Bypass -File D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\mail-queue\install-mail-queue-task.ps1
 #
 # What it does:
 #   1. Copies mail-queue-worker.pl to C:\Bugzilla.
@@ -28,7 +28,7 @@ $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -Execution
   -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 Register-ScheduledTask -TaskName 'Bugzilla mail queue' -Force `
-  -Description 'Sends Bugzilla queued emails in the background (repo ops/bugzilla/mail-queue-worker.pl).' `
+  -Description 'Sends Bugzilla queued emails in the background (repo bugzilla/mail-queue/mail-queue-worker.pl).' `
   -Action $action -Trigger $atStartup, $everyMinute -Settings $settings -Principal $principal | Out-Null
 Start-ScheduledTask -TaskName 'Bugzilla mail queue'
 

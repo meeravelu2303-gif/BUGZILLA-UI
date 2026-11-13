@@ -2,8 +2,8 @@
 # Narrow DEVELOPER access on the products imported from Mantis.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\migration\trim-developer-access.pl <admin login> --report <file>             (dry run)
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\migration\trim-developer-access.pl <admin login> --report <file> --execute   (writes)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\migration\trim-developer-access.pl <admin login> --report <file>             (dry run)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\migration\trim-developer-access.pl <admin login> --report <file> --execute   (writes)
 #
 # Step 1 granted a product's access group to anyone who appeared ANYWHERE on
 # its Mantis bugs - a single comment or CC was enough - so every product's

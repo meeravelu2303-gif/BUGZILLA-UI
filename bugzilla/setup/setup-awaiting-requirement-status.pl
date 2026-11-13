@@ -2,7 +2,7 @@
 # One-time (idempotent) Bugzilla configuration: the AWAITING_REQUIREMENT status.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-awaiting-requirement-status.pl <admin login>
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-awaiting-requirement-status.pl <admin login>
 #
 # The behaviour the tester filed is not covered by any requirement yet. The
 # requirement has to be RAISED first (by the project manager / analyst); only

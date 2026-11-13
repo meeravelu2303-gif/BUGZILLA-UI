@@ -8,9 +8,9 @@ import { directoryClient } from './productTransfer';
  *
  * Bugzilla has no such level, so it is a custom single-select field,
  * `cf_subcomponent`, whose value list is controlled by Component - each value
- * belongs to exactly one component (ops/bugzilla/add-subcomponent-field.pl).
+ * belongs to exactly one component (bugzilla/setup/add-subcomponent-field.pl).
  * Values are created, renamed and removed through the SubComponents Bugzilla
- * extension (ops/bugzilla/extensions/SubComponents), because Bugzilla's REST
+ * extension (bugzilla/extensions/SubComponents), because Bugzilla's REST
  * API has no call for adding field values.
  *
  * STORED VALUE. Bugzilla keeps one value list per field, unique across it, but

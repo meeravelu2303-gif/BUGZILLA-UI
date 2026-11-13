@@ -35,7 +35,7 @@ my (@to, $roles, $send, $resend);
 GetOptions('to=s' => \@to, 'roles=s' => \$roles, 'send' => \$send, 'resend' => \$resend) or die "Bad arguments\n";
 
 # --roles tester,developer : every enabled account in those roles, by the same rules as
-# the app and ops/bugzilla/set-bulk-password.pl. Admins are never included (their
+# the app and bugzilla/admin/set-bulk-password.pl. Admins are never included (their
 # password was not reset to the temporary one), nor service / placeholder accounts.
 my %SERVICE = map { $_ => 1 } qw(bugtracker-transfer@kpost.in admin@example.com mantis-unknown@mantis.invalid);
 if ($roles) {

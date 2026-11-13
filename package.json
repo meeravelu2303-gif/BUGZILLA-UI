@@ -10,5 +10,8 @@
   },
   "devDependencies": {
     "concurrently": "^10.0.6"
+  },
+  "dependencies": {
+    "claude": "^0.1.1"
   }
 }

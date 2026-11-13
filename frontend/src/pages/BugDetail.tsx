@@ -141,7 +141,7 @@ function BugDetailView({
    * is Bugzilla's own `status_workflow` for this bug's stored status, so this
    * button can never lead to a refusal on save. That same check is why there is
    * the final step: QA re-tested the fix, it passed, and the bug becomes CLOSED
-   * (renamed from VERIFIED on 2026-10-23 - ops/bugzilla/rename-status.pl).
+   * (renamed from VERIFIED on 2026-10-23 - bugzilla/setup/rename-status.pl).
    */
   const canVerify = !isDeleted && canTriage && bug.status === 'RESOLVED' && editor.allowedStatuses.includes('CLOSED');
 

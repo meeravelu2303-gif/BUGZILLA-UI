@@ -3,7 +3,7 @@
 # Bugzilla's own validators, and prints each old -> new value.
 #
 #   cd C:\Bugzilla
-#   perl D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\set-params.pl requirelogin=1 createemailregexp=
+#   perl D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\set-params.pl requirelogin=1 createemailregexp=
 #
 # An empty value after "=" clears the parameter. Back up data\params.json first.
 use 5.14.0;

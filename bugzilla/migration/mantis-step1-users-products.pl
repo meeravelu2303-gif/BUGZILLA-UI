@@ -3,7 +3,7 @@
 #
 #   cd C:\Bugzilla
 #   set MANTIS_DB_PASSWORD=<password of the bugs_mantis MariaDB user>
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\migration\mantis-step1-users-products.pl <admin login>            (dry run)
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\migration\mantis-step1-users-products.pl <admin login>            (dry run)
 #   perl -T ...\mantis-step1-users-products.pl <admin login> --execute                                                  (writes)
 #
 # Source: database `bugs_mantis` (the converted Mantis preview, already in Bugzilla
@@ -389,4 +389,4 @@ close $fh;
 
 say "DONE    users created $n_users, products $n_products, groups $n_groups, components $n_components, memberships $n_members";
 say "        state written to $state_file";
-say "NEXT    re-run ops/bugzilla/setup-transfer-account.pl so the transfer account gets the new product groups.";
+say "NEXT    re-run bugzilla/setup/setup-transfer-account.pl so the transfer account gets the new product groups.";

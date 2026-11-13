@@ -85,7 +85,7 @@ const envSchema = z
     /**
      * API key of the account that carries out transfers. Should be a dedicated,
      * NON-admin account in every product group plus editbugs/canconfirm
-     * (ops/bugzilla/setup-transfer-account.pl), so the history names it rather
+     * (bugzilla/setup/setup-transfer-account.pl), so the history names it rather
      * than a person. Falls back to BUGZILLA_API_KEY, with a startup warning.
      */
     TRANSFER_API_KEY: z.string().min(1).optional(),

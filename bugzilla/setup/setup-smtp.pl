@@ -3,7 +3,7 @@
 #
 #   cd C:\Bugzilla
 #   set BZ_SMTP_PASSWORD=<app password>
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-smtp.pl ^
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-smtp.pl ^
 #        --server smtp.gmail.com:465 --ssl ssl --user you@gmail.com ^
 #        --from "Bug Tracker <you@gmail.com>" --test you@example.com
 #

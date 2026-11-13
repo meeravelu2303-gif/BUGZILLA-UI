@@ -2,7 +2,7 @@
 # One-time (idempotent) Bugzilla configuration: the IN_REVIEW status.
 #
 #   cd C:\Bugzilla
-#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\ops\bugzilla\setup-in-review-status.pl <admin login>
+#   perl -T D:\TEST-BENCH-AUTOMATIONS\BUGZILLA-UI\bugzilla\setup\setup-in-review-status.pl <admin login>
 #
 # The developer has fixed the bug, but the change must be reviewed by the team
 # lead before it goes live. Until then the bug is IN_REVIEW: still open, and NOT

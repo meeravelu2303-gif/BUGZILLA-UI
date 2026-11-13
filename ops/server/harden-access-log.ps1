@@ -20,8 +20,8 @@
   exposed the old ones.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File ops\apache\harden-access-log.ps1
-  powershell -ExecutionPolicy Bypass -File ops\apache\harden-access-log.ps1 -PurgeExistingLog
+  powershell -ExecutionPolicy Bypass -File ops\server\harden-access-log.ps1
+  powershell -ExecutionPolicy Bypass -File ops\server\harden-access-log.ps1 -PurgeExistingLog
 #>
 [CmdletBinding()]
 param(

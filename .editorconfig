@@ -1,0 +1,24 @@
+# https://editorconfig.org - shared editor settings, honoured by VS Code, JetBrains, etc.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{ts,tsx,js,cjs,mjs,jsx,json,css,html,yml,yaml,ps1}]
+indent_style = space
+indent_size = 2
+
+# Bugzilla-side Perl and Template Toolkit: indentation is left to the file
+# (existing scripts mix 2 and 4 spaces; Bugzilla upstream uses 2).
+[*.{pl,pm,tmpl}]
+indent_style = space
+
+[*.md]
+# Two trailing spaces are a Markdown line break.
+trim_trailing_whitespace = false
+
+[*.{bat,cmd,ps1}]
+end_of_line = crlf

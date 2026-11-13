@@ -13,7 +13,7 @@
 # database connection or a leak never lasts.
 #
 # Log: C:\Bugzilla\data\mail-queue-worker.log
-# Copy of record: BUGZILLA-UI repo ops/bugzilla/mail-queue-worker.pl
+# Copy of record: BUGZILLA-UI repo bugzilla/mail-queue/mail-queue-worker.pl
 use 5.14.0;
 use strict;
 use warnings;
