@@ -8,7 +8,6 @@ import { Button } from '../ui/Button';
 import { Card, CardBody, CardHeader, CardTitle } from '../ui/Card';
 import { PasswordInput } from '../ui/Field';
 
-/** Bugzilla's USER_PASSWORD_MIN_LENGTH; its complexity rule is applied server-side. */
 const MIN_LENGTH = 6;
 
 function Rule({ met, children }: { met: boolean; children: React.ReactNode }) {
@@ -25,17 +24,7 @@ function Rule({ met, children }: { met: boolean; children: React.ReactNode }) {
   );
 }
 
-/**
- * Change password while signed in.
- *
- * Asks for the current password even though the user is already signed in:
- * a session left open on a shared machine must not be enough to take over the
- * account. Bugzilla checks it (see backend/src/services/changePassword.service.ts).
- *
- * This device stays signed in afterwards; every other one is signed out,
- * which the success message says, so a colleague's "why was I logged out?"
- * has an answer.
- */
+/** Change password while signed in. */
 export function ChangePasswordCard() {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -51,8 +40,8 @@ export function ChangePasswordCard() {
   const matches = confirm.length > 0 && confirm === next;
   const differs = next.length > 0 && next !== current;
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     setDoneNote(null);
 
     const found: typeof errors = {};
@@ -65,7 +54,11 @@ export function ChangePasswordCard() {
     if (found.next || found.confirm) return nextRef.current?.focus();
 
     try {
-      const result = await mutation.mutateAsync({ currentPassword: current, newPassword: next, confirmPassword: confirm });
+      const result = await mutation.mutateAsync({
+        currentPassword: current,
+        newPassword: next,
+        confirmPassword: confirm,
+      });
       setCurrent('');
       setNext('');
       setConfirm('');
@@ -85,7 +78,6 @@ export function ChangePasswordCard() {
         return;
       }
       if (err instanceof ApiError && err.status === 401) {
-        // Session expired mid-form: the sign-in page is the only way forward.
         window.location.href = '/login';
         return;
       }
@@ -114,9 +106,9 @@ export function ChangePasswordCard() {
               label="Current password"
               autoComplete="current-password"
               value={current}
-              onChange={(e) => {
-                setCurrent(e.target.value);
-                if (errors.current) setErrors((s) => ({ ...s, current: undefined }));
+              onChange={(event) => {
+                setCurrent(event.target.value);
+                if (errors.current) setErrors((currentErrors) => ({ ...currentErrors, current: undefined }));
               }}
               error={errors.current}
             />
@@ -126,9 +118,9 @@ export function ChangePasswordCard() {
                 label="New password"
                 autoComplete="new-password"
                 value={next}
-                onChange={(e) => {
-                  setNext(e.target.value);
-                  if (errors.next) setErrors((s) => ({ ...s, next: undefined }));
+                onChange={(event) => {
+                  setNext(event.target.value);
+                  if (errors.next) setErrors((currentErrors) => ({ ...currentErrors, next: undefined }));
                 }}
                 error={errors.next}
                 aria-describedby="change-password-rules"
@@ -137,9 +129,9 @@ export function ChangePasswordCard() {
                 label="Confirm new password"
                 autoComplete="new-password"
                 value={confirm}
-                onChange={(e) => {
-                  setConfirm(e.target.value);
-                  if (errors.confirm) setErrors((s) => ({ ...s, confirm: undefined }));
+                onChange={(event) => {
+                  setConfirm(event.target.value);
+                  if (errors.confirm) setErrors((currentErrors) => ({ ...currentErrors, confirm: undefined }));
                 }}
                 error={errors.confirm}
               />
@@ -151,7 +143,10 @@ export function ChangePasswordCard() {
               </p>
             )}
             {doneNote && (
-              <p role="status" className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              <p
+                role="status"
+                className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+              >
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                 <span>Password changed. {doneNote}</span>
               </p>
@@ -172,8 +167,8 @@ export function ChangePasswordCard() {
               <Rule met={matches}>Both new passwords match</Rule>
             </ul>
             <p className="mt-3 text-xs leading-relaxed text-slate-500">
-              Changing it signs you out on every other device. Forgot your current password? Sign out and use
-              “Forgot password?”.
+              Changing it signs you out on every other device. Forgot your current password? Sign out and use “Forgot
+              password?”.
             </p>
           </aside>
         </form>

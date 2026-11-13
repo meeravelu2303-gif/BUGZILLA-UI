@@ -1,4 +1,17 @@
-import { AlertOctagon, ArrowUpRight, Boxes, CheckCircle2, Clock, FileText, Inbox, ListTodo, Loader2, Package, RotateCcw, UserRound } from 'lucide-react';
+import {
+  AlertOctagon,
+  ArrowUpRight,
+  Boxes,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Inbox,
+  ListTodo,
+  Loader2,
+  Package,
+  RotateCcw,
+  UserRound,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,31 +31,11 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from '../ui/primitives/dropdown-menu';
+} from '../ui/primitives/DropdownMenu';
 import { SEVERITIES, type Bug, type Severity } from '../../types';
-
-/**
- * The developer's board: what is on me, and what is on fire.
- *
- * Deliberately NOT a copy of the shared dashboard with a filter applied. The
- * question a developer opens this to answer is "what do I work on next", so the
- * backlog is the page, and everything else is context around it.
- */
 
 const BACKLOG_LIMIT = 50;
 
-/*
- * Grouped by the app's OWN severity vocabulary (`bug.triage.severity`), not
- * Bugzilla's raw `bug.severity`.
- *
- * The two are not the same axis: the backend folds Bugzilla's six raw values
- * into four bands paired with a priority, and SeverityPill is typed to those
- * bands. Grouping on the raw string would produce headings the pill cannot
- * render and buckets that disagree with every other screen.
- *
- * SEVERITIES is already declared worst-first, so its own order is the order
- * work should be picked in.
- */
 function bandRank(severity: Severity): number {
   const i = SEVERITIES.indexOf(severity);
   return i === -1 ? SEVERITIES.length : i;
@@ -50,25 +43,14 @@ function bandRank(severity: Severity): number {
 
 const severityOf = (bug: Bug): Severity => bug.triage?.severity ?? 'Unclassified';
 
-/**
- * One developer's board. `name` is set when someone else's board is being
- * viewed (an admin or tester picking a developer on the Dashboard); unset, it
- * is the signed-in user's own, and the wording stays first-person.
- */
-/**
- * `all` = the team-wide board: every developer's assigned work in one view
- * (what admins and testers open by default). Then `email` is ignored and no
- * query carries an assignee.
- */
+/** One developer's board. */
 export function DeveloperDashboard({ email, name, all = false }: { email: string; name?: string; all?: boolean }) {
-  // The assignee scope every query below carries: one person, or nobody (everyone).
   const who = all ? {} : { assignedTo: email };
-  const whoQs = all ? '' : `&assignedTo=${encodeURIComponent(email)}`;
+  const whoQueryString = all ? '' : `&assignedTo=${encodeURIComponent(email)}`;
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const isSelf = !name && !all;
   const first = name?.trim().split(/\s+/)[0] ?? '';
-  // Wording that follows whose board this is: mine, one developer's, or everyone's.
-  const t = all
+  const labels = all
     ? {
         openBacklog: 'Open backlog',
         highSeverity: 'Top priority',
@@ -81,24 +63,22 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
         highSeverity: isSelf ? 'My top priority' : 'Top priority',
         resolved: isSelf ? 'Resolved by me' : `Resolved by ${first}`,
         backlog: isSelf ? 'My backlog' : `${first}'s backlog`,
-        empty: isSelf ? 'No open bugs are assigned to you right now.' : `No open bugs are assigned to ${name} right now.`,
+        empty: isSelf
+          ? 'No open bugs are assigned to you right now.'
+          : `No open bugs are assigned to ${name} right now.`,
       };
-  // "My Bugs" is the SIGNED-IN user's page; anyone else's full list is a search.
   const fullListHref = isSelf ? '/my-bugs' : all ? '/bugs' : `/bugs?assignedTo=${encodeURIComponent(email)}`;
 
   const { data: meta } = useMeta();
-  const openStatusList = (meta?.workflow ?? []).filter((w) => w.isOpen).map((w) => w.status);
+  const openStatusList = (meta?.workflow ?? [])
+    .filter((workflow) => workflow.isOpen)
+    .map((workflowTransition) => workflowTransition.status);
 
-  /*
-   * `assignedTo` AND the open statuses are server-side filters, so this is the
-   * real backlog rather than a page filtered in the browser. Filtering only by
-   * assignee used to fill the page with the developer's RESOLVED bugs first -
-   * someone with more closed than BACKLOG_LIMIT bugs saw an empty backlog while
-   * the "My open bugs" card counted dozens.
-   *
-   * Waits for the status list: without `status` the API returns every status.
-   */
-  const { data, isLoading: backlogQueryLoading, isError } = useBugs(
+  const {
+    data,
+    isLoading: backlogQueryLoading,
+    isError,
+  } = useBugs(
     {
       ...who,
       status: openStatusList,
@@ -107,84 +87,49 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
       sortBy: 'importance',
       sortDir: 'asc',
     },
-    { enabled: (all || email !== '') && openStatusList.length > 0 }
+    { enabled: (all || email !== '') && openStatusList.length > 0 },
   );
   const isLoading = backlogQueryLoading || openStatusList.length === 0;
 
-  /*
-   * EVERY card on this board is scoped to the signed-in developer - each query
-   * carries `assignedTo: email`, and none of them is enabled before the email
-   * is known, so a half-loaded session cannot briefly render instance-wide
-   * totals as if they were personal ones.
-   */
   const scoped = all || email !== '';
 
-  /*
-   * Open statuses come from the live workflow rather than a hard-coded list.
-   * Spelling them out (NEW/CONFIRMED/IN_PROGRESS/ASSIGNED) would be wrong here
-   * twice over: this instance has no NEW or ASSIGNED, and a status an admin
-   * adds later would silently stop being counted.
-   */
-  const openStatuses = (meta?.workflow ?? []).filter((w) => w.isOpen).map((w) => w.status);
-  const closedStatuses = (meta?.workflow ?? []).filter((w) => !w.isOpen).map((w) => w.status);
+  const openStatuses = (meta?.workflow ?? [])
+    .filter((workflow) => workflow.isOpen)
+    .map((workflowTransition) => workflowTransition.status);
+  const closedStatuses = (meta?.workflow ?? [])
+    .filter((workflow) => !workflow.isOpen)
+    .map((workflowTransition) => workflowTransition.status);
 
-  /** Cards 1 and 2: my open work, and how much of it is severe. */
   const { data: myOpen } = useBugCounts(
     { ...who, status: openStatuses },
-    { enabled: scoped && openStatuses.length > 0 }
+    { enabled: scoped && openStatuses.length > 0 },
   );
 
-
-  /*
-   * Card 3 - handed back by QA. Gated on the status existing: Bugzilla drops an
-   * unrecognised `bug_status` rather than matching nothing, which would turn
-   * this into "every bug assigned to me".
-   */
   const hasReopened = (meta?.statuses ?? []).includes('REOPENED');
-  const { data: reopenedCounts } = useBugCounts(
-    { ...who, status: ['REOPENED'] },
-    { enabled: scoped && hasReopened }
-  );
+  const { data: reopenedCounts } = useBugCounts({ ...who, status: ['REOPENED'] }, { enabled: scoped && hasReopened });
 
-  /*
-   * Card 4 - lifetime fixes. Every closed status the workflow defines, so
-   * CLOSED counts alongside RESOLVED, and any other closed status is picked up
-   * without a code change.
-   */
   const { data: myResolved } = useBugCounts(
     { ...who, status: closedStatuses },
-    { enabled: scoped && closedStatuses.length > 0 }
+    { enabled: scoped && closedStatuses.length > 0 },
   );
 
-  /*
-   * Blocker + critical, counted from the raw Bugzilla severities of my
-   * OPEN bugs.
-   *
-   * Read from `bySeverity` rather than by applying a severity filter, because
-   * `toBugzillaQuery` pins a paired PRIORITY alongside each severity band - so
-   * filtering would quietly drop a `critical` bug sitting at P2. Tallying the
-   * raw values asks the question the card actually poses.
-   */
-  // Blocker + critical only - the same rule as the QA board's "Blocker / critical" tile. Major
-  // was counted too, and since most open bugs are major the card read close to the whole backlog.
   const HIGH = ['blocker', 'critical'];
-  // Urgent = Critical severity OR P0 priority (from the BFF); the raw-severity tally is the fallback for an older backend.
-  const myHighSeverity = myOpen?.counts.urgent ?? HIGH.reduce((n, key) => n + (myOpen?.counts.bySeverity?.[key] ?? 0), 0);
+  const myHighSeverity =
+    myOpen?.counts.urgent ?? HIGH.reduce((total, key) => total + (myOpen?.counts.bySeverity?.[key] ?? 0), 0);
 
-  const bugs = useMemo(() => (data?.bugs ?? []).filter((b) => b.isOpen), [data]);
+  const bugs = useMemo(() => (data?.bugs ?? []).filter((bug) => bug.isOpen), [data]);
 
-  // Keep a selection in the pane as the list loads or changes underneath it.
   useEffect(() => {
     if (bugs.length === 0) {
       setSelectedId(null);
       return;
     }
-    setSelectedId((current) => (current && bugs.some((b) => b.id === current) ? current : bugs[0].id));
+    setSelectedId((current) => (current && bugs.some((bug) => bug.id === current) ? current : bugs[0].id));
   }, [bugs]);
 
   const grouped = useMemo(() => {
     const out = new Map<Severity, Bug[]>();
-    for (const bug of [...bugs].sort((a, b) => bandRank(severityOf(a)) - bandRank(severityOf(b)))) {
+    for (const bug of [...bugs].sort((left, right) => bandRank(severityOf(left)) - bandRank(severityOf(right)))) {
       const key = severityOf(bug);
       const list = out.get(key);
       if (list) list.push(bug);
@@ -195,8 +140,6 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
 
   return (
     <div className="space-y-6">
-      {/* The tiles settle in sequence rather than all at once - 35ms apart, so
-          the row reads as arriving without feeling dealt out. */}
       <motion.div
         variants={listVariants}
         initial="hidden"
@@ -205,22 +148,21 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
       >
         <motion.div variants={pageVariants}>
           <StatCard
-            label={t.openBacklog}
+            label={labels.openBacklog}
             value={myOpen?.counts.total ?? 0}
             icon={Inbox}
             tone="brand"
-            // Open statuses in the link too, so the list matches the count rather than showing everything ever assigned.
-            to={`/bugs?${openStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}${whoQs}`}
+            to={`/bugs?${openStatuses.map((openStatus) => `status=${encodeURIComponent(openStatus)}`).join('&')}${whoQueryString}`}
             hint="Active bugs to fix"
           />
         </motion.div>
         <motion.div variants={pageVariants}>
           <StatCard
-            label={t.highSeverity}
+            label={labels.highSeverity}
             value={myHighSeverity}
             icon={AlertOctagon}
             tone="rose"
-            to={`/bugs?${openStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}&urgent=1${whoQs}`}
+            to={`/bugs?${openStatuses.map((openStatus) => `status=${encodeURIComponent(openStatus)}`).join('&')}&urgent=1${whoQueryString}`}
             hint="Open bugs, Critical or P0"
           />
         </motion.div>
@@ -230,11 +172,7 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
             value={hasReopened ? (reopenedCounts?.counts.total ?? 0) : 0}
             icon={RotateCcw}
             tone="amber"
-            to={
-              (reopenedCounts?.counts.total ?? 0) > 0
-                ? `/bugs?status=REOPENED${whoQs}`
-                : undefined
-            }
+            to={(reopenedCounts?.counts.total ?? 0) > 0 ? `/bugs?status=REOPENED${whoQueryString}` : undefined}
             hint={
               hasReopened
                 ? (reopenedCounts?.counts.total ?? 0) > 0
@@ -246,21 +184,16 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
         </motion.div>
         <motion.div variants={pageVariants}>
           <StatCard
-            label={t.resolved}
+            label={labels.resolved}
             value={myResolved?.counts.total ?? 0}
             icon={CheckCircle2}
             tone="emerald"
-            to={`/bugs?${closedStatuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}${whoQs}&sortBy=last_change_time&sortDir=desc`}
+            to={`/bugs?${closedStatuses.map((closedStatus) => `status=${encodeURIComponent(closedStatus)}`).join('&')}${whoQueryString}&sortBy=last_change_time&sortDir=desc`}
             hint="All-time total"
           />
         </motion.div>
       </motion.div>
 
-      {/*
-        Split pane: the backlog stays visible while a bug is read, so triaging a
-        queue does not mean a navigate-and-back for every row. Collapses to a
-        single column below lg, where there is no room for two.
-      */}
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <section className={PANEL_SHELL}>
           <span aria-hidden className="h-1 shrink-0 bg-gradient-to-r from-brand-500 via-brand-400 to-ueducate-accent" />
@@ -269,7 +202,7 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-600/15">
                 <ListTodo className="h-4 w-4" aria-hidden />
               </span>
-              <h2 className="font-display text-sm font-semibold text-slate-900">{t.backlog}</h2>
+              <h2 className="font-display text-sm font-semibold text-slate-900">{labels.backlog}</h2>
               {!isLoading && bugs.length > 0 && (
                 <span className="rounded-full bg-slate-900/[0.05] px-2 py-0.5 text-2xs font-semibold tabular-nums text-slate-600 ring-1 ring-inset ring-slate-900/10">
                   {bugs.length}
@@ -298,11 +231,7 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
             )}
 
             {!isLoading && !isError && bugs.length === 0 && (
-              <EmptyState
-                icon={CheckCircle2}
-                title="Nothing assigned"
-                description={t.empty}
-              />
+              <EmptyState icon={CheckCircle2} title="Nothing assigned" description={labels.empty} />
             )}
 
             {grouped.map(([severity, list]) => (
@@ -310,7 +239,7 @@ export function DeveloperDashboard({ email, name, all = false }: { email: string
                 <div
                   className={cn(
                     'sticky top-0 z-10 flex items-center gap-2 border-b border-l-4 border-hairline px-5 py-2 backdrop-blur',
-                    SEVERITY_GROUP[severity]
+                    SEVERITY_GROUP[severity],
                   )}
                 >
                   <SeverityPill severity={severity} />
@@ -347,26 +276,16 @@ function BacklogRow({ bug, selected, onSelect }: { bug: Bug; selected: boolean; 
         onClick={onSelect}
         aria-current={selected ? 'true' : undefined}
         className={cn(
-          /*
-           * py-3.5 rather than py-2.5: a 56px row is comfortably past the 44px
-           * touch-target floor and, more to the point, gives the two-line
-           * summary-plus-meta stack room to breathe instead of stacking tight.
-           *
-           * The selected row carries an accent RULE as well as a fill - with a
-           * tint alone, "selected" and "hovered" look alike, and on a list you
-           * arrow through that ambiguity is constant.
-           */
           'focus-ring relative flex w-full flex-col gap-2 border-b border-hairline py-3.5 pl-6 pr-5 text-left transition-all duration-200',
-          selected ? 'bg-white shadow-[inset_0_0_0_1px_rgb(37_99_235_/_0.18)]' : 'hover:bg-slate-50/80'
+          selected ? 'bg-white shadow-[inset_0_0_0_1px_rgb(37_99_235_/_0.18)]' : 'hover:bg-slate-50/80',
         )}
       >
-        {/* Severity accent, the same colour as the reading pane's top band; full strength when selected. */}
         <span
           aria-hidden
           className={cn(
             'absolute inset-y-0 left-0 w-1 bg-gradient-to-b',
             SEVERITY_BAND[severityOf(bug)],
-            selected ? 'opacity-100' : 'opacity-40'
+            selected ? 'opacity-100' : 'opacity-40',
           )}
         />
         <span className="flex items-center gap-2">
@@ -375,7 +294,12 @@ function BacklogRow({ bug, selected, onSelect }: { bug: Bug; selected: boolean; 
           </span>
           <StatusPill status={bug.status} />
         </span>
-        <span className={cn('line-clamp-2 text-sm font-medium leading-snug', selected ? 'text-brand-900' : 'text-slate-900')}>
+        <span
+          className={cn(
+            'line-clamp-2 text-sm font-medium leading-snug',
+            selected ? 'text-brand-900' : 'text-slate-900',
+          )}
+        >
           {bug.summary}
         </span>
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-slate-500">
@@ -396,26 +320,12 @@ function BacklogRow({ bug, selected, onSelect }: { bug: Bug; selected: boolean; 
   );
 }
 
-/**
- * The right half: the selected bug, with the two edits a developer makes most.
- *
- * Status and severity are changed inline because walking to the detail page to
- * flip one field is the friction this board exists to remove. Everything else
- * stays on the detail page - this is a shortcut for the common case, not a
- * second editor competing with the real one.
- */
 function DetailPane({ bugId }: { bugId: number | null }) {
   const { data, isLoading } = useBug(bugId ?? 0);
   const { data: meta } = useMeta();
   const update = useUpdateBug(bugId ?? 0);
   const { toast } = useToast();
 
-  /*
-   * Decoupled from the list: the pane sticks to the viewport and owns its own
-   * height rather than stretching to match the backlog beside it. Scrolling a
-   * long queue now leaves the bug you are reading in place, and a one-line
-   * summary no longer forces a half-empty column the height of fifty rows.
-   */
   const shell = PANEL_SHELL;
 
   if (bugId === null) {
@@ -438,19 +348,16 @@ function DetailPane({ bugId }: { bugId: number | null }) {
 
   const bug = data.bug;
 
-  /*
-   * The workflow decides which statuses are reachable from here - Bugzilla
-   * rejects an arbitrary transition, so offering every status would produce
-   * buttons that fail. `meta.workflow` is the same graph editworkflow.cgi uses.
-   */
-  const transitions = meta?.workflow?.find((w) => w.status === bug.status)?.canChangeTo ?? [];
+  const transitions = meta?.workflow?.find((workflow) => workflow.status === bug.status)?.canChangeTo ?? [];
 
   const applyStatus = (status: string) => {
-    // Bugzilla refuses some transitions without a comment (REOPENED, by
-    // configuration). Those are sent to the detail page rather than failing here.
-    const needsComment = meta?.workflow?.find((w) => w.status === bug.status)?.commentRequiredTo ?? [];
+    const needsComment = meta?.workflow?.find((workflow) => workflow.status === bug.status)?.commentRequiredTo ?? [];
     if (needsComment.includes(status)) {
-      toast({ title: `${status} needs a comment`, description: 'Open the bug to explain why it is being reopened.', variant: 'info' });
+      toast({
+        title: `${status} needs a comment`,
+        description: 'Open the bug to explain why it is being reopened.',
+        variant: 'info',
+      });
       return;
     }
     update.mutate(
@@ -458,8 +365,12 @@ function DetailPane({ bugId }: { bugId: number | null }) {
       {
         onSuccess: () => toast({ title: `${bugDisplayId(bug)} is now ${status}.`, variant: 'success' }),
         onError: (err) =>
-          toast({ title: 'That change was refused.', description: err instanceof Error ? err.message : undefined, variant: 'error' }),
-      }
+          toast({
+            title: 'That change was refused.',
+            description: err instanceof Error ? err.message : undefined,
+            variant: 'error',
+          }),
+      },
     );
   };
 
@@ -469,23 +380,17 @@ function DetailPane({ bugId }: { bugId: number | null }) {
       {
         onSuccess: () => toast({ title: `${bugDisplayId(bug)} set to ${severity}.`, variant: 'success' }),
         onError: (err) =>
-          toast({ title: 'That change was refused.', description: err instanceof Error ? err.message : undefined, variant: 'error' }),
-      }
+          toast({
+            title: 'That change was refused.',
+            description: err instanceof Error ? err.message : undefined,
+            variant: 'error',
+          }),
+      },
     );
   };
 
   return (
-    <motion.section
-      // `key` on the bug id restarts the animation whenever the selection
-      // changes, so picking a different row slides the new one in rather than
-      // swapping the text underneath a static panel.
-      key={bug.id}
-      variants={drawerVariants}
-      initial="hidden"
-      animate="visible"
-      className={shell}
-    >
-      {/* Severity reads before a word does: a thin band in the bug's own colour. */}
+    <motion.section key={bug.id} variants={drawerVariants} initial="hidden" animate="visible" className={shell}>
       <span aria-hidden className={cn('h-1 shrink-0 bg-gradient-to-r', SEVERITY_BAND[severityOf(bug)])} />
 
       <header className="border-b border-hairline px-7 pb-5 pt-5">
@@ -506,9 +411,9 @@ function DetailPane({ bugId }: { bugId: number | null }) {
           </Button>
         </div>
 
-        {/* Display face and a generous measure: this is the one block on the
-            dashboard someone actually reads rather than scans. */}
-        <h2 className="mt-3 font-display text-lg font-semibold leading-snug tracking-tight text-slate-900">{bug.summary}</h2>
+        <h2 className="mt-3 font-display text-lg font-semibold leading-snug tracking-tight text-slate-900">
+          {bug.summary}
+        </h2>
 
         <dl className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
           <div className="flex items-center gap-1.5">
@@ -562,8 +467,6 @@ function DetailPane({ bugId }: { bugId: number | null }) {
         {update.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
       </div>
 
-      {/* The report in the same sectioned layout as the bug page - Summary,
-          Steps, Expected / Actual, curl - rather than one grey wall of text. */}
       <div className="flex-1 overflow-y-auto px-7 py-6">
         <p className="mb-3 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider text-slate-400">
           <FileText className="h-3.5 w-3.5" aria-hidden /> Report
@@ -578,15 +481,9 @@ function DetailPane({ bugId }: { bugId: number | null }) {
   );
 }
 
-/**
- * Both columns of the split pane share one shell - same surface, same height on
- * desktop - so the list and the bug being read line up as one board instead of
- * two unrelated cards.
- */
 const PANEL_SHELL =
   'surface-raised flex flex-col overflow-hidden min-h-[26rem] max-h-[44rem] xl:sticky xl:top-[5rem] xl:h-[calc(100dvh-6rem)] xl:max-h-none';
 
-/** Severity group header tints in the backlog list - same hues as the bands. */
 const SEVERITY_GROUP: Record<Severity, string> = {
   Critical: 'border-l-rose-500 bg-rose-50/90',
   Major: 'border-l-orange-500 bg-orange-50/90',
@@ -595,7 +492,6 @@ const SEVERITY_GROUP: Record<Severity, string> = {
   Unclassified: 'border-l-brand-500 bg-brand-50/80',
 };
 
-/** The top band of the reading pane, by severity - matched to SeverityPill's tones. */
 const SEVERITY_BAND: Record<Severity, string> = {
   Critical: 'from-rose-500 via-rose-400 to-orange-400',
   Major: 'from-orange-500 via-amber-400 to-amber-300',
@@ -604,7 +500,6 @@ const SEVERITY_BAND: Record<Severity, string> = {
   Unclassified: 'from-brand-500 via-brand-400 to-ueducate-accent',
 };
 
-/** Colour dots for the quick-change buttons, so the current value reads at a glance. */
 const STATUS_DOT: Record<string, string> = {
   UNCONFIRMED: 'bg-slate-400',
   CONFIRMED: 'bg-amber-500',
@@ -637,7 +532,6 @@ function QuickMenu({
 }: {
   label: string;
   current: string;
-  /** Tailwind bg-* class for the dot beside the current value. */
   dot: string;
   options: string[];
   onPick: (value: string) => void;

@@ -7,15 +7,18 @@ import { bugDisplayId } from '../../lib/utils';
 import { Button } from '../ui/Button';
 import { RequiredMark, Select } from '../ui/Field';
 
-/**
- * Hand a bug to another team's product - for someone who cannot open that
- * product themselves (backend/src/services/productTransfer.service.ts does the move).
- *
- * Says up front what will happen to visibility, because it is the surprising
- * part: the bug leaves this product, and the person keeps seeing it only
- * because they are added to its CC list.
- */
-export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { open: boolean; bugId: number; onClose: () => void; onTransferred: () => void }) {
+/** Hand a bug to another team's product. */
+export function TransferBugDialog({
+  open,
+  bugId,
+  onClose,
+  onTransferred,
+}: {
+  open: boolean;
+  bugId: number;
+  onClose: () => void;
+  onTransferred: () => void;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   const options = useTransferOptions(bugId, open);
   const transfer = useTransferBug(bugId);
@@ -26,7 +29,13 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
   const [version, setVersion] = useState('');
   const [assignee, setAssignee] = useState('');
   const [reason, setReason] = useState('');
-  const [errors, setErrors] = useState<{ product?: string; component?: string; version?: string; reason?: string; form?: string }>({});
+  const [errors, setErrors] = useState<{
+    product?: string;
+    component?: string;
+    version?: string;
+    reason?: string;
+    form?: string;
+  }>({});
 
   useEffect(() => {
     const dialog = ref.current;
@@ -38,21 +47,23 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
   }, [open]);
 
   const targets = options.data?.targets ?? [];
-  // One target (the usual case) is preselected - there is nothing to choose.
   useEffect(() => {
     if (targets.length === 1 && !product) setProduct(targets[0].product);
   }, [targets, product]);
 
-  const target = useMemo(() => targets.find((t) => t.product === product), [targets, product]);
-  const chosenComponent = target?.components.find((c) => c.name === component);
+  const target = useMemo(
+    () => targets.find((transferTarget) => transferTarget.product === product),
+    [targets, product],
+  );
+  const chosenComponent = target?.components.find((componentItem) => componentItem.name === component);
 
   function pickProduct(name: string) {
     setProduct(name);
-    setErrors((s) => ({ ...s, product: undefined, form: undefined }));
+    setErrors((currentErrors) => ({ ...currentErrors, product: undefined, form: undefined }));
     setComponent('');
     setAssignee('');
-    const t = targets.find((x) => x.product === name);
-    setVersion(t && t.versions.length === 1 ? t.versions[0] : '');
+    const transferTarget = targets.find((x) => x.product === name);
+    setVersion(transferTarget && transferTarget.versions.length === 1 ? transferTarget.versions[0] : '');
   }
   useEffect(() => {
     if (target && target.versions.length === 1) setVersion(target.versions[0]);
@@ -75,7 +86,7 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
         assignee: assignee || undefined,
         reason: reason.trim(),
       });
-      const who = target?.people.find((p) => p.email === res.assignee)?.name ?? res.assignee;
+      const who = target?.people.find((person) => person.email === res.assignee)?.name ?? res.assignee;
       toast({
         variant: 'success',
         title: `${bugDisplayId({ id: bugId })} transferred to ${res.product}`,
@@ -93,15 +104,15 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
     <dialog
       ref={ref}
       onClose={onClose}
-      onClick={(e) => e.target === ref.current && !transfer.isPending && onClose()}
+      onClick={(event) => event.target === ref.current && !transfer.isPending && onClose()}
       aria-labelledby="transfer-title"
       className="w-[min(36rem,calc(100vw-2rem))] rounded-2xl border border-hairline bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 backdrop:backdrop-blur-[2px]"
     >
       <form
         method="dialog"
         noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
+        onSubmit={(event) => {
+          event.preventDefault();
           void submit();
         }}
         className="flex flex-col gap-4 p-6"
@@ -115,9 +126,9 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
               Transfer {bugDisplayId({ id: bugId })} to another team
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              For a bug filed in the wrong product - e.g. a UI report whose cause is in the API. It moves to the other team's product
-              and their developer is assigned. You are added to CC so you can still follow it; nothing else in their product becomes
-              visible to you.
+              For a bug filed in the wrong product - e.g. a UI report whose cause is in the API. It moves to the other
+              team's product and their developer is assigned. You are added to CC so you can still follow it; nothing
+              else in their product becomes visible to you.
             </p>
           </div>
         </div>
@@ -141,10 +152,17 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
         {targets.length > 0 && (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Select label="Send to" required value={product} onChange={(e) => pickProduct(e.target.value)} error={errors.product} placeholder={targets.length > 1 ? 'Choose a team' : undefined}>
-                {targets.map((t) => (
-                  <option key={t.product} value={t.product}>
-                    {t.product}
+              <Select
+                label="Send to"
+                required
+                value={product}
+                onChange={(event) => pickProduct(event.target.value)}
+                error={errors.product}
+                placeholder={targets.length > 1 ? 'Choose a team' : undefined}
+              >
+                {targets.map((transferTarget) => (
+                  <option key={transferTarget.product} value={transferTarget.product}>
+                    {transferTarget.product}
                   </option>
                 ))}
               </Select>
@@ -152,19 +170,19 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
                 label="Component"
                 required
                 value={component}
-                onChange={(e) => {
-                  setComponent(e.target.value);
+                onChange={(event) => {
+                  setComponent(event.target.value);
                   setAssignee('');
-                  setErrors((s) => ({ ...s, component: undefined, form: undefined }));
+                  setErrors((currentErrors) => ({ ...currentErrors, component: undefined, form: undefined }));
                 }}
                 error={errors.component}
                 disabled={!target}
                 placeholder={target ? 'Choose a component' : 'Choose a team first'}
                 hint={chosenComponent ? `Owner: ${chosenComponent.defaultAssigneeName}` : undefined}
               >
-                {target?.components.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name}
+                {target?.components.map((componentItem) => (
+                  <option key={componentItem.name} value={componentItem.name}>
+                    {componentItem.name}
                   </option>
                 ))}
               </Select>
@@ -174,14 +192,16 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
               <Select
                 label="Assign to"
                 value={assignee}
-                onChange={(e) => setAssignee(e.target.value)}
+                onChange={(event) => setAssignee(event.target.value)}
                 disabled={!target}
                 hint="Leave as the component owner unless you know who should take it."
               >
-                <option value="">{chosenComponent ? `Component owner (${chosenComponent.defaultAssigneeName})` : 'Component owner'}</option>
-                {target?.people.map((p) => (
-                  <option key={p.email} value={p.email}>
-                    {p.name}
+                <option value="">
+                  {chosenComponent ? `Component owner (${chosenComponent.defaultAssigneeName})` : 'Component owner'}
+                </option>
+                {target?.people.map((person) => (
+                  <option key={person.email} value={person.email}>
+                    {person.name}
                   </option>
                 ))}
               </Select>
@@ -190,16 +210,16 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
                   label="Version"
                   required
                   value={version}
-                  onChange={(e) => {
-                    setVersion(e.target.value);
-                    setErrors((s) => ({ ...s, version: undefined }));
+                  onChange={(event) => {
+                    setVersion(event.target.value);
+                    setErrors((currentErrors) => ({ ...currentErrors, version: undefined }));
                   }}
                   error={errors.version}
                   placeholder="Choose a version"
                 >
-                  {target.versions.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
+                  {target.versions.map((versionItem) => (
+                    <option key={versionItem} value={versionItem}>
+                      {versionItem}
                     </option>
                   ))}
                 </Select>
@@ -214,9 +234,9 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
               <textarea
                 id="transfer-reason"
                 value={reason}
-                onChange={(e) => {
-                  setReason(e.target.value);
-                  if (errors.reason) setErrors((s) => ({ ...s, reason: undefined }));
+                onChange={(event) => {
+                  setReason(event.target.value);
+                  if (errors.reason) setErrors((currentErrors) => ({ ...currentErrors, reason: undefined }));
                 }}
                 rows={3}
                 maxLength={2000}
@@ -230,7 +250,9 @@ export function TransferBugDialog({ open, bugId, onClose, onTransferred }: { ope
                   {errors.reason}
                 </p>
               ) : (
-                <p className="text-xs text-slate-500">Posted as a comment under your name, so the receiving team knows why.</p>
+                <p className="text-xs text-slate-500">
+                  Posted as a comment under your name, so the receiving team knows why.
+                </p>
               )}
             </div>
           </>

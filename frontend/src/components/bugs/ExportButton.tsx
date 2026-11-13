@@ -5,18 +5,6 @@ import { useToast } from '../../context/ToastContext';
 import type { BugQueryParams } from '../../lib/useBugFilters';
 import { Button } from '../ui/Button';
 
-/**
- * "Export to Excel" and "Evidence pack (.zip)" for any bug list.
- *
- * `params` must be the SAME filters and sort the table is showing - scope
- * included (My Bugs' tab, Advanced Search's assignee) - minus pagination. The
- * server then exports every matching bug, not just the page on screen.
- *
- * Both are built on the server as background jobs: this polls the job, shows a
- * real progress bar (phase, count, overall %), and Cancel stops the build on the
- * server before its next Bugzilla call. When the file is ready the browser
- * downloads it with its size known, so its own download bar shows the transfer.
- */
 type Kind = 'xlsx' | 'zip';
 
 interface JobStatus {
@@ -44,8 +32,8 @@ const POLL_MS: Record<Kind, number> = { xlsx: 700, zip: 1500 };
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function elapsed(since: number): string {
-  const s = Math.max(0, Math.round((Date.now() - since) / 1000));
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+  const seconds = Math.max(0, Math.round((Date.now() - since) / 1000));
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`;
 }
 
 function useExportJob(kind: Kind, params: BugQueryParams) {
@@ -55,19 +43,17 @@ function useExportJob(kind: Kind, params: BugQueryParams) {
   const active = useRef<string | null>(null);
   const [, forceTick] = useState(0);
 
-  // Re-render once a second so "elapsed" keeps counting between polls.
   useEffect(() => {
     if (!run) return;
-    const t = setInterval(() => forceTick((n) => n + 1), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => forceTick((value) => value + 1), 1000);
+    return () => clearInterval(timer);
   }, [run]);
 
-  // Leaving the page mid-build cancels it on the server instead of finishing a file nobody collects.
   useEffect(
     () => () => {
       if (active.current) void api.delete(`/bugs/export-pack/jobs/${active.current}`).catch(() => undefined);
     },
-    []
+    [],
   );
 
   const start = useCallback(async () => {
@@ -87,7 +73,8 @@ function useExportJob(kind: Kind, params: BugQueryParams) {
         setRun({ jobId, status: job, startedAt });
 
         if (job.status === 'cancelled') return;
-        if (job.status === 'failed') throw new Error(job.error ?? `The ${LABEL[kind].toLowerCase()} could not be built.`);
+        if (job.status === 'failed')
+          throw new Error(job.error ?? `The ${LABEL[kind].toLowerCase()} could not be built.`);
         if (job.status !== 'ready') continue;
 
         active.current = null;
@@ -97,10 +84,15 @@ function useExportJob(kind: Kind, params: BugQueryParams) {
         document.body.appendChild(link);
         link.click();
         link.remove();
-        const size = job.sizeBytes ? `${(job.sizeBytes / 1024 / 1024).toFixed(job.sizeBytes > 10 * 1024 * 1024 ? 0 : 1)} MB` : '';
+        const size = job.sizeBytes
+          ? `${(job.sizeBytes / 1024 / 1024).toFixed(job.sizeBytes > 10 * 1024 * 1024 ? 0 : 1)} MB`
+          : '';
         toast({
           variant: 'success',
-          title: kind === 'xlsx' ? `Exported ${job.rows ?? job.total} bug${(job.rows ?? job.total) === 1 ? '' : 's'}` : 'Evidence pack ready - downloading',
+          title:
+            kind === 'xlsx'
+              ? `Exported ${job.rows ?? job.total} bug${(job.rows ?? job.total) === 1 ? '' : 's'}`
+              : 'Evidence pack ready - downloading',
           description: [size, `built in ${elapsed(startedAt)}`].filter(Boolean).join(' · '),
         });
         return;
@@ -132,9 +124,9 @@ function useExportJob(kind: Kind, params: BugQueryParams) {
 }
 
 function ProgressPanel({ kind, run, onCancel }: { kind: Kind; run: RunState; onCancel: () => void }) {
-  const s = run.status;
-  const percent = s?.percent ?? 0;
-  const indeterminate = !s || (s.percent === 0 && s.total === 0);
+  const jobStatus = run.status;
+  const percent = jobStatus?.percent ?? 0;
+  const indeterminate = !jobStatus || (jobStatus.percent === 0 && jobStatus.total === 0);
   const tone = kind === 'xlsx' ? 'bg-emerald-600' : 'bg-sky-600';
 
   return (
@@ -149,14 +141,19 @@ function ProgressPanel({ kind, run, onCancel }: { kind: Kind; run: RunState; onC
             <Loader2 className="h-4 w-4 animate-spin text-slate-500" aria-hidden />
             {kind === 'xlsx' ? 'Exporting to Excel' : 'Building evidence pack'}
           </p>
-          <p className="mt-1 truncate text-xs text-slate-600" title={s?.phase}>
-            {s?.phase ?? 'Starting…'}
-            {s && s.total > 0 && s.status === 'preparing' && (
-              <span className="tabular-nums"> · {s.done.toLocaleString()} of {s.total.toLocaleString()}</span>
+          <p className="mt-1 truncate text-xs text-slate-600" title={jobStatus?.phase}>
+            {jobStatus?.phase ?? 'Starting…'}
+            {jobStatus && jobStatus.total > 0 && jobStatus.status === 'preparing' && (
+              <span className="tabular-nums">
+                {' '}
+                · {jobStatus.done.toLocaleString()} of {jobStatus.total.toLocaleString()}
+              </span>
             )}
           </p>
         </div>
-        <span className="shrink-0 text-lg font-semibold tabular-nums text-slate-900">{indeterminate ? '' : `${percent}%`}</span>
+        <span className="shrink-0 text-lg font-semibold tabular-nums text-slate-900">
+          {indeterminate ? '' : `${percent}%`}
+        </span>
       </div>
 
       <div
@@ -170,7 +167,10 @@ function ProgressPanel({ kind, run, onCancel }: { kind: Kind; run: RunState; onC
         {indeterminate ? (
           <div className={`h-full w-1/3 animate-indeterminate rounded-full ${tone} opacity-70`} />
         ) : (
-          <div className={`h-full rounded-full ${tone} transition-[width] duration-500 ease-out`} style={{ width: `${Math.max(2, percent)}%` }} />
+          <div
+            className={`h-full rounded-full ${tone} transition-[width] duration-500 ease-out`}
+            style={{ width: `${Math.max(2, percent)}%` }}
+          />
         )}
       </div>
 
@@ -191,19 +191,18 @@ export function ExportButton({ params, count }: { params: BugQueryParams; count?
   const running = sheet.run ?? pack.run;
   const runningKind: Kind | null = sheet.run ? 'xlsx' : pack.run ? 'zip' : null;
 
-  // Escape cancels whichever export is running.
   useEffect(() => {
     if (!runningKind) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') void (runningKind === 'xlsx' ? sheet.cancel() : pack.cancel());
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') void (runningKind === 'xlsx' ? sheet.cancel() : pack.cancel());
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [runningKind, sheet, pack]);
 
-  const pct = (k: Kind) => {
-    const r = k === 'xlsx' ? sheet.run : pack.run;
-    return r?.status && r.status.percent > 0 ? ` ${r.status.percent}%` : '…';
+  const percent = (k: Kind) => {
+    const runState = k === 'xlsx' ? sheet.run : pack.run;
+    return runState?.status && runState.status.percent > 0 ? ` ${runState.status.percent}%` : '…';
   };
 
   return (
@@ -211,25 +210,40 @@ export function ExportButton({ params, count }: { params: BugQueryParams; count?
       <Button
         variant="secondary"
         onClick={sheet.start}
-        // Nothing to export is a disabled control, not a download of an empty sheet.
         disabled={empty || running !== null}
         title={empty ? 'No bugs match these filters' : 'Download every bug matching these filters as an Excel file'}
       >
-        {sheet.run ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <FileSpreadsheet className="h-4 w-4 text-emerald-600" aria-hidden />}
-        {sheet.run ? `Exporting${pct('xlsx')}` : 'Export to Excel'}
+        {sheet.run ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <FileSpreadsheet className="h-4 w-4 text-emerald-600" aria-hidden />
+        )}
+        {sheet.run ? `Exporting${percent('xlsx')}` : 'Export to Excel'}
       </Button>
       <Button
         variant="secondary"
         onClick={pack.start}
         disabled={empty || running !== null}
-        title={empty ? 'No bugs match these filters' : 'Download a .zip: the Excel plus every screenshot, video and evidence file, one folder per bug'}
+        title={
+          empty
+            ? 'No bugs match these filters'
+            : 'Download a .zip: the Excel plus every screenshot, video and evidence file, one folder per bug'
+        }
       >
-        {pack.run ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <FileArchive className="h-4 w-4 text-sky-600" aria-hidden />}
-        {pack.run ? `Packing${pct('zip')}` : 'Evidence pack (.zip)'}
+        {pack.run ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <FileArchive className="h-4 w-4 text-sky-600" aria-hidden />
+        )}
+        {pack.run ? `Packing${percent('zip')}` : 'Evidence pack (.zip)'}
       </Button>
 
       {running && runningKind && (
-        <ProgressPanel kind={runningKind} run={running} onCancel={() => void (runningKind === 'xlsx' ? sheet.cancel() : pack.cancel())} />
+        <ProgressPanel
+          kind={runningKind}
+          run={running}
+          onCancel={() => void (runningKind === 'xlsx' ? sheet.cancel() : pack.cancel())}
+        />
       )}
     </div>
   );

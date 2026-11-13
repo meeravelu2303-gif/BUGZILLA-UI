@@ -6,17 +6,10 @@ export interface UserRef {
 
 export interface Bug {
   id: number;
-  /**
-   * The two-axis classification, computed by the backend on both list and
-   * detail responses. Named `triage` rather than `classification` because
-   * `classification` below is Bugzilla's own product-classification string.
-   */
   triage?: Classification;
-  /** Detail responses only - the list deliberately does not carry grouping. */
   grouping?: Grouping;
   facts?: DescriptionFacts;
   alias: string[];
-  /** Original Mantis issue number for imported bugs, '' otherwise. A reference only - the bug is still KPA-<id>. */
   mantisRef?: string;
   summary: string;
   status: string;
@@ -25,9 +18,7 @@ export interface Bug {
   isConfirmed: boolean;
   product: string;
   component: string;
-  /** Stored sub-component value (`<name> [<component id>]`), `---` for none. Optional: an older backend does not send it. */
   subcomponent?: string;
-  /** Its display name; '' for none. */
   subcomponentName?: string;
   version: string;
   priority: string;
@@ -40,7 +31,6 @@ export interface Bug {
   creator: UserRef | null;
   qaContact: UserRef | null;
   cc: string[];
-  /** The CC list with display names, in the same order as `cc`. */
   ccDetail: UserRef[];
   keywords: string[];
   groups: string[];
@@ -52,17 +42,13 @@ export interface Bug {
   creationTime: string;
   lastChangeTime: string;
   dupeOf: number | null;
-  /** `null` when the viewer is outside Bugzilla's time-tracking group. */
   timeTracking: TimeTracking | null;
   isCcAccessible: boolean;
   isCreatorAccessible: boolean;
   flags: BugFlag[];
   description?: string;
-  /** Detail responses only: visibility groups the editor may offer for this bug. */
   availableGroups?: string[];
-  /** Detail responses only: how the report got to its current text (it is edited as revisions). */
   reportHistory?: { revisions: number; lastEditedBy: string | null; lastEditedAt: string | null };
-  /** Detail responses only: soft-deleted (resolution DELETED). */
   isDeleted?: boolean;
   deleted?: DeletedInfo | null;
 }
@@ -99,15 +85,12 @@ export interface Comment {
   isPrivate: boolean;
   attachmentId: number | null;
   tags: string[];
-  /** This comment is a saved version of the bug report, not a discussion comment. */
   isReportRevision?: boolean;
-  /** The signed-in person wrote it, so may correct it. */
   canEdit?: boolean;
-  /** Present once the author has edited it: how often, and when last. */
   edited?: { count: number; lastEditedAt: string };
 }
 
-/** An earlier version of an edited comment: the text it had until `replacedAt`. */
+/** An earlier version of an edited comment: the text it had until replacedAt. */
 export interface CommentVersion {
   replacedAt: string;
   editor: string;
@@ -126,7 +109,6 @@ export interface Attachment {
   isPrivate: boolean;
   creator: string;
   creationTime: string;
-  /** The signed-in person uploaded it, or is a user administrator - may delete it for good. */
   canDelete?: boolean;
 }
 
@@ -134,7 +116,6 @@ export interface Product {
   id: number;
   name: string;
   description?: string;
-  /** Admin product list only: every bug in the product. Delete is possible only at 0. */
   bugCount?: number;
   isActive: boolean;
   components: ProductComponent[];
@@ -146,7 +127,6 @@ export interface WorkflowTransition {
   status: string;
   isOpen: boolean;
   canChangeTo: string[];
-  /** Targets that need a comment (Bugzilla's per-transition "comment required"). */
   commentRequiredTo?: string[];
 }
 
@@ -162,7 +142,6 @@ export interface BugMeta {
   features: BugFeatures;
   currentUser: string;
   bugzillaWebUrl: string;
-  /** Lower-cased source product -> products its bugs may be transferred to. */
   transferRoutes?: Record<string, string[]>;
 }
 
@@ -222,20 +201,11 @@ export interface BugDetailResponse {
 export interface Permissions {
   canManageUsers: boolean;
   canManageProducts: boolean;
-  /**
-   * May hand a bug to someone else even when it is not theirs - testers and
-   * admins. A developer can move their own bugs on, but not a colleague's.
-   * Optional so a client running against an older backend degrades to the
-   * restrictive behaviour rather than assuming the permission.
-   */
   canTriage?: boolean;
-  /** May reassign any open bug (testers, admins and developers). Optional, as above. */
   canReassignAny?: boolean;
-  /** Testers and admins: the Users / Products screens read-only, plus adding components. Optional, as above. */
   canViewUsers?: boolean;
   canViewProducts?: boolean;
   canCreateComponents?: boolean;
-  /** Office staff who file bugs (the `reporter` group): sees their own reports, never a developer backlog. */
   isReporter?: boolean;
 }
 
@@ -252,7 +222,6 @@ export interface AdminUser {
   fullName: string;
   isEnabled: boolean;
   disabledReason: string;
-  /** Bug mail on/off. Optional for an older backend. */
   emailEnabled?: boolean;
   groups: string[];
 }
@@ -260,25 +229,19 @@ export interface AdminUser {
 export interface CreateUserInput {
   email: string;
   fullName?: string;
-  /** Optional when `sendWelcome` is on: the person sets their own from the email. */
   password?: string;
-  /** Email them their sign-in address and a "Set your password" link. */
   sendWelcome?: boolean;
-  /** Capability bundle; the backend maps it to Bugzilla groups. */
   role?: Role;
-  /** Products the account may see - one same-named group each. */
   products?: string[];
 }
 
 export interface UpdateUserInput {
   fullName?: string;
-  /** The login. */
   email?: string;
   emailEnabled?: boolean;
   password?: string;
   disabled?: boolean;
   disabledReason?: string;
-  /** Sent together: role decides capability, products decide access. */
   role?: Role;
   products?: string[];
 }
@@ -287,7 +250,6 @@ export interface CreateProductInput {
   name: string;
   description: string;
   version: string;
-  /** The first component, created with the product - a product cannot take bugs without one. */
   component: { name: string; description: string; defaultAssignee: string };
 }
 
@@ -300,26 +262,19 @@ export interface UpdateProductInput {
 /** A second level under a component (backend/src/services/subcomponents.service.ts). */
 export interface Subcomponent {
   id: number;
-  /** Stored value, `<name> [<component id>]` - what bugs and filters carry. */
   value: string;
   name: string;
-  /** Inactive ones stay on existing bugs but are no longer offered. */
   isActive: boolean;
-  /** Admin product list only. Delete is possible only at 0. */
   bugCount?: number;
 }
 
 export interface ProductComponent {
   id?: number;
   name: string;
-  /** Optional: an older backend does not send it. */
   description?: string;
-  /** Inactive components keep their bugs but are closed for new ones. */
   isActive?: boolean;
   defaultAssignee: string;
-  /** Admin product list only. Delete is possible only at 0. */
   bugCount?: number;
-  /** Optional: an older backend does not send it. */
   subcomponents?: Subcomponent[];
 }
 
@@ -364,64 +319,30 @@ export interface ApiErrorBody {
   code: ErrorCode;
   message: string;
   upstream?: { code: number; message: string };
-  /**
-   * Machine-readable specifics the UI can act on rather than only print.
-   * RATE_LIMITED carries the cooldown shape, which is what lets the sign-in
-   * form say "try again in 4 minutes" instead of repeating a server sentence.
-   */
   details?: RateLimitDetails & Record<string, unknown>;
 }
 
-/** The `details` block on a RATE_LIMITED error. Every field is optional: two
- *  different limiters emit this shape - the BFF's own (which knows the exact
- *  window) and Bugzilla's account lockout (which only knows a display time). */
+/** The details block on a RATE_LIMITED error. */
 export interface RateLimitDetails {
   retryAfterSeconds?: number;
-  /** ISO instant the cooldown ends. Absent for Bugzilla-side lockouts. */
   retryAt?: string;
   limit?: number;
   remaining?: number;
   windowSeconds?: number;
-  /** Bugzilla's own unlock time, already rendered in the server's locale. */
   unlockAtText?: string;
   scope?: string;
 }
 
-/**
- * Real totals from GET /api/bugs/count - not derived from a capped page, so
- * these stay correct past the list endpoint's 200-item limit.
- */
+/** Real totals from GET /api/bugs/count. */
 export interface BugCounts {
   total: number;
-  /**
-   * Open bugs parked with their component's default assignee - in that
-   * component's queue, not yet routed to a person.
-   *
-   * NOT "unassigned": Bugzilla's `assigned_to` is NOT NULL, so no bug is ever
-   * without an owner. The real question is whether that owner was CHOSEN.
-   */
   queued: number;
-  /**
-   * Open bugs whose assignee differs from the component default.
-   *
-   * Weak on its own - it cannot tell a bug that was reassigned from one that
-   * was simply filed to that person. Prefer `reassigned`.
-   */
   picked: number;
-  /**
-   * Open bugs genuinely handed off: assignee differs from the component
-   * default AND the bug's history records an `assigned_to` change.
-   *
-   * A subset of `picked`, and the only one of the two safe to show, because it
-   * cannot be inflated by a bench run that sets an assignee at creation.
-   */
   reassigned: number;
   open: number;
   resolved: number;
   blockerCritical: number;
-  /** Critical severity OR P0 priority. Optional: an older backend does not send it. */
   urgent?: number;
-  /** Full-population chart data - keyed by Bugzilla's own status/severity values. */
   byStatus: Record<string, number>;
   bySeverity: Record<string, number>;
 }
@@ -441,7 +362,6 @@ export interface ListBugsParams {
   creator?: string;
   cc?: string;
   search?: string;
-  /** Substring match on the Status Whiteboard, e.g. "cat:Security". */
   whiteboard?: string;
   sortBy?: string;
   sortDir?: 'asc' | 'desc';
@@ -450,7 +370,6 @@ export interface ListBugsParams {
 export interface CreateBugInput {
   product: string;
   component: string;
-  /** Stored value of one of the component's sub-components; omit for none. */
   subcomponent?: string;
   summary: string;
   description?: string;
@@ -459,12 +378,7 @@ export interface CreateBugInput {
   platform?: string;
   severity?: string;
   priority?: string;
-  /** `[cat:Xxx]` (+ `[browser:…]`), the tags the test bench writes. */
   whiteboard?: string;
-  /**
-   * Who to hand the bug to. Omit to let Bugzilla apply the component's default
-   * owner - which is what the automated bench relies on.
-   */
   assignedTo?: string;
 }
 
@@ -475,7 +389,6 @@ export interface ListChange<T> {
 }
 
 export interface UpdateBugInput {
-  /** The `lastChangeTime` the editor loaded - lets the backend refuse a save that would overwrite someone else's. */
   lastChangeTime?: string;
   summary?: string;
   status?: string;
@@ -485,7 +398,6 @@ export interface UpdateBugInput {
   severity?: string;
   product?: string;
   component?: string;
-  /** Stored sub-component value, or '' to clear. Changing component without it clears it. */
   subcomponent?: string;
   version?: string;
   targetMilestone?: string;
@@ -527,15 +439,21 @@ export interface UpdateAttachmentInput {
   comment?: string;
 }
 
-// ---- Two-axis classification (mirrors backend/src/services/classification.service.ts) ----
-
+/** ---- Two-axis classification (mirrors backend/src/services/classification.service.ts) ----. */
 export const SEVERITIES = ['Critical', 'Major', 'Minor', 'Trivial', 'Unclassified'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 
 export const PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'Unclassified'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
-export const CATEGORIES = ['Functional', 'Performance', 'Security', 'Compatibility', 'Accessibility', 'Unclassified'] as const;
+export const CATEGORIES = [
+  'Functional',
+  'Performance',
+  'Security',
+  'Compatibility',
+  'Accessibility',
+  'Unclassified',
+] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 /** Severity paired with its priority, per the classification model. */
@@ -568,26 +486,15 @@ export interface Classification {
   severity: Severity;
   priority: Priority;
   category: Category;
-  /** The bench's finer-grained flaw label, e.g. "Security/Access Control". */
   classification: string | null;
-  /**
-   * Every browser the bug was observed on, from the `[browser:a,b]` whiteboard
-   * tag the UI bench writes. Empty for bugs that carry no tag — every API-bench
-   * bug, and any UI bug filed before browser tagging existed. Render empty as
-   * absent; never guess a browser onto a bug.
-   */
   browsers: string[];
-  /** UI bugs: Web or Mobile, from the `[platform:…]` tag. Optional: older backends and older bugs lack it. */
   uiPlatform?: 'Web' | 'Mobile' | null;
-  /** Mobile UI bugs: the device platforms (android, ios), from `[device:…]`. */
   devices?: string[];
-  /** Filed by a bench ("Automation") or by a person ("Manual"). Optional: an older backend does not send it. */
   source?: Source;
-  /** API or UI, decided by the product. Optional, as above. */
   testType?: TestType;
 }
 
-/** How a bug was filed - the `[source:…]` whiteboard tag. */
+/** How a bug was filed - the [source:…] whiteboard tag. */
 export const SOURCES = ['Automation', 'Manual'] as const;
 export type Source = (typeof SOURCES)[number];
 export type TestType = 'UI' | 'API';
@@ -621,87 +528,48 @@ export interface BugStats {
   total: number;
   open: number;
   resolved: number;
-  /** Every matching bug, resolved ones included. Belongs beside a filter option. */
   bySeverity: Record<Severity, number>;
   byCategory: Record<Category, number>;
   byComponent: Record<string, number>;
-  /** Bugs per stored sub-component value (`---` = none). Optional: an older backend does not send it. */
   bySubcomponent?: Record<string, number>;
-  /** Per-value counts for the remaining filter facets. Optional: an older backend does not send them. */
   byProduct?: Record<string, number>;
   byStatus?: Record<string, number>;
-  /** Keyed by the filter's spelling - 'Unresolved' for an open bug. */
   byResolution?: Record<string, number>;
   byPriority?: Record<string, number>;
-  /**
-   * Bugs per Playwright project. A key is present only when some bug in scope
-   * carries that browser, so an empty object means "this scope has no
-   * browser-tagged bugs" — which is what gates the Browser filter control.
-   * Optional: an older backend does not send it.
-   *
-   * A bug naming several browsers counts once per browser, so these sum higher
-   * than the bug total. They size a filter option, not the result set.
-   */
   byBrowser?: Record<string, number>;
   matrix: Record<Severity, Record<Category, number>>;
-  /**
-   * Still-open bugs only — the current defect load, and what the dashboard shows.
-   * Optional so a frontend running against an older backend falls back to the
-   * lifetime figures rather than rendering zeroes.
-   */
   openBySeverity?: Record<Severity, number>;
   openByCategory?: Record<Category, number>;
   openByComponent?: Record<string, number>;
   openBySubcomponent?: Record<string, number>;
   openByBrowser?: Record<string, number>;
   openMatrix?: Record<Severity, Record<Category, number>>;
-  /** Automation vs Manual, every bug / open bugs. Optional: an older backend does not send them. */
   bySource?: Record<Source, number>;
   openBySource?: Record<Source, number>;
-  /** Bugs per assignee, keyed by lower-cased login. Optional: an older backend does not send them. */
   byAssignee?: Record<string, number>;
   openByAssignee?: Record<string, number>;
   cachedAt: string;
 }
 
-/** The URL/query contract shared by every list view. Arrays are repeated params. */
+/** The URL/query contract shared by every list view. */
 export interface BugFilters {
   severity: Severity[];
   priority: Priority[];
   category: Category[];
-  /**
-   * Playwright project names, from the `[browser:…]` whiteboard tag. UI-bench
-   * only — API-bench bugs carry no tag, so this facet narrows an API-only scope
-   * to nothing. The filter bar hides the control in that case rather than
-   * offering options that all return zero.
-   */
   browser: string[];
-  /** Automation / Manual - who filed it. */
   source: string[];
   product: string[];
   component: string[];
-  /** Stored sub-component values (`Login [42]`); `---` = bugs with none. */
   subcomponent: string[];
   status: string[];
-  /** Bugzilla resolutions. `Unresolved` is translated to Bugzilla's `---` server-side. */
   resolution: string[];
   search: string;
-  /** Inclusive local-day range (`YYYY-MM-DD`; '' = open end) on the filed or last-changed date. */
   dateField: 'created' | 'updated';
   from: string;
   to: string;
 }
 
-/* ------------------------------------------------------------------ roles */
-
-/**
- * Account roles, mirroring backend/src/services/roles.service.ts.
- *
- * Duplicated rather than imported because the two builds are separate TypeScript
- * projects with no shared package; the backend is the authority and validates
- * whatever arrives, so a drift here is caught as a 400 rather than silently
- * granting the wrong groups.
- */
+/** Account roles, mirroring backend/src/services/roles.service.ts. */
 export const ROLES = ['reporter', 'developer', 'tester', 'admin'] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -719,24 +587,18 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   admin: 'Everything a tester can do, plus managing users and products.',
 };
 
-/**
- * Best-fit role for an account, read back from the groups it holds.
- * Mirrors roleFromGroups in backend/src/services/roles.service.ts.
- */
+/** Best-fit role for an account, read back from the groups it holds. */
 export function roleFromGroups(groups: string[]): Role {
   const held = new Set(groups);
-  // Widest first: an admin also holds `canconfirm`, so testing that first would
-  // report every admin as a tester.
   if (held.has('editusers') || held.has('editcomponents')) return 'admin';
   if (held.has('canconfirm')) return 'tester';
   if (held.has('reporter')) return 'reporter';
   return 'developer';
 }
 
-/* ------------------------------------------------------------------ activity */
-
 /** One recorded change (backend/src/services/bugActivity.service.ts). */
-export type ActivityChangeKind = 'status' | 'resolution' | 'assignee' | 'placement' | 'priority' | 'people' | 'text' | 'link' | 'visibility' | 'other';
+export type ActivityChangeKind =
+  'status' | 'resolution' | 'assignee' | 'placement' | 'priority' | 'people' | 'text' | 'link' | 'visibility' | 'other';
 
 export interface ActivityChange {
   field: string;
@@ -755,7 +617,6 @@ export interface ActivityEntry {
 
 export interface JourneyStep {
   status: string;
-  /** The resolution in force at this step ('' while open). */
   resolution: string;
   when: string;
   who: string;
@@ -764,8 +625,6 @@ export interface JourneyStep {
 
 export interface BugActivity {
   created: { when: string; who: string; whoName: string };
-  /** The status story, oldest first: filed, then every status change. */
   journey: JourneyStep[];
-  /** Every save, newest first. */
   entries: ActivityEntry[];
 }

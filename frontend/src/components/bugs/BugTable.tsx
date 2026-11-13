@@ -5,7 +5,16 @@ import { bugDisplayId, cn, timeAgo } from '../../lib/utils';
 import type { Bug } from '../../types';
 import { Avatar } from '../ui/Avatar';
 import { EmptyState } from '../ui/EmptyState';
-import { BrowserPills, CategoryPill, MobilePill, NoBrowserPill, PriorityPill, SeverityPill, StatusPill, TestTypePill } from '../ui/Pill';
+import {
+  BrowserPills,
+  CategoryPill,
+  MobilePill,
+  NoBrowserPill,
+  PriorityPill,
+  SeverityPill,
+  StatusPill,
+  TestTypePill,
+} from '../ui/Pill';
 import { TableSkeleton } from '../ui/Skeleton';
 
 interface Column {
@@ -13,35 +22,15 @@ interface Column {
   label: string;
   sortable?: boolean;
   className?: string;
-  /** Right-aligned, so digits line up down the column. */
   numeric?: boolean;
 }
 
-/*
- * `severity` sorts on Bugzilla's bug_severity sortkey, which ranks
- * blocker->trivial rather than sorting the words alphabetically. `importance`
- * (the default) is the composite triage order: severity, then priority.
- */
-/*
- * Component and test type are not columns: they sit on a second line under the
- * summary, as "API Automation · Authentication & Gateway". Eleven columns did
- * not fit beside the sidebar at 1440px, and the two that lost out to the scroll
- * were Assignee and Changed - the ones a triager reads most. Folding the two
- * descriptive fields into the summary cell leaves every remaining column
- * visible without a horizontal scroll, and gives the summary itself more room.
- * Both are still filterable from the bar above the table.
- */
 const COLUMNS: Column[] = [
   { key: 'id', label: 'ID', sortable: true, className: 'w-[5.25rem] whitespace-nowrap' },
   { key: 'summary', label: 'Summary', sortable: true, className: 'min-w-[18rem]' },
   { key: 'severity', label: 'Severity', sortable: true, className: 'w-[5.75rem]' },
   { key: 'priority', label: 'Priority', sortable: true, className: 'w-[4.25rem]' },
   { key: 'category', label: 'Category', className: 'w-[6.5rem]' },
-  // Not sortable: browser comes from a whiteboard tag, and Bugzilla cannot
-  // order by a substring of one. Shown so a triager can scan for their browser.
-  //
-  // The only OPTIONAL column: it is dropped entirely for an API-only scope,
-  // where every cell in it would read "—". See `showBrowser` below.
   { key: 'browser', label: 'Browser', className: 'w-24' },
   { key: 'status', label: 'Status', sortable: true, className: 'w-[6.75rem]' },
   { key: 'assigned_to', label: 'Assignee', sortable: true, className: 'w-32' },
@@ -62,57 +51,29 @@ export function BugTable({
   sortBy: string;
   sortDir: 'asc' | 'desc';
   onSort: (key: string) => void;
-  /** When provided, renders a selection checkbox column for bulk actions. */
   selection?: {
     selectedIds: Set<number>;
     onToggle: (id: number) => void;
     onToggleAll: () => void;
     allOnPageSelected: boolean;
-    /** Whether this row may take part in a bulk action at all. */
     canSelect: (bug: Bug) => boolean;
-    /** Why not, for the tooltip and the accessible name. `undefined` when it can. */
     selectReason: (bug: Bug) => string | undefined;
   };
-  /**
-   * Whether the Browser column is meaningful here — normally from
-   * `useBrowserScope`, which answers it for the whole filtered scope rather
-   * than for the page on screen.
-   *
-   * Left undefined, it falls back to whether any row on this page carries a
-   * browser. That keeps the component usable on its own, but it is the weaker
-   * signal: the column can then appear and disappear between pages of the same
-   * list. Callers that have the filters should pass the prop.
-   */
   showBrowserColumn?: boolean;
 }) {
   const [expanded, setExpanded] = useState<number | null>(null);
 
   const showBrowser =
-    showBrowserColumn ?? bugs.some((bug) => (bug.triage?.browsers?.length ?? 0) > 0 || bug.triage?.uiPlatform === 'Mobile');
+    showBrowserColumn ??
+    bugs.some((bug) => (bug.triage?.browsers?.length ?? 0) > 0 || bug.triage?.uiPlatform === 'Mobile');
 
-  /*
-   * One filtered list drives the header, the body and every colSpan below, so a
-   * hidden column cannot leave a stray header cell or a misaligned empty-state
-   * row behind it.
-   */
-  const columns = showBrowser ? COLUMNS : COLUMNS.filter((col) => col.key !== 'browser');
-  /** Data columns + the expander, plus the checkbox when bulk actions are on. */
+  const columns = showBrowser ? COLUMNS : COLUMNS.filter((column) => column.key !== 'browser');
   const totalColumnCount = columns.length + 1 + (selection ? 1 : 0);
 
   return (
-    /*
-     * The table owns its own overflow so the page body never scrolls sideways,
-     * and the header stays put while the rows scroll under it.
-     */
     <div className="max-h-[70vh] overflow-auto">
       <table className="w-full border-collapse text-left text-sm">
         <thead className="sticky top-0 z-10">
-          {/*
-            Opaque slate-50, not slate-50/50: this header is `sticky`, so any
-            alpha lets the rows scrolling underneath show straight through the
-            column labels. Over the white card the flat tint lands in the same
-            place visually, without that cost.
-          */}
           <tr className="border-b border-hairline bg-slate-50 text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-slate-500">
             {selection && (
               <th scope="col" className="w-9 px-2.5 py-3">
@@ -128,18 +89,22 @@ export function BugTable({
             <th scope="col" className="w-7 px-1.5 py-3">
               <span className="sr-only">Expand row</span>
             </th>
-            {columns.map((col) => (
-              <th key={col.key} scope="col" className={cn('px-3 py-3 font-semibold', col.numeric && 'text-right', col.className)}>
-                {col.sortable ? (
+            {columns.map((column) => (
+              <th
+                key={column.key}
+                scope="col"
+                className={cn('px-3 py-3 font-semibold', column.numeric && 'text-right', column.className)}
+              >
+                {column.sortable ? (
                   <button
-                    onClick={() => onSort(col.key)}
+                    onClick={() => onSort(column.key)}
                     className={cn(
                       'focus-ring -mx-1 flex items-center gap-1 rounded px-1 transition-colors hover:text-slate-900',
-                      col.numeric && 'ml-auto flex-row-reverse'
+                      column.numeric && 'ml-auto flex-row-reverse',
                     )}
                   >
-                    {col.label}
-                    {sortBy === col.key ? (
+                    {column.label}
+                    {sortBy === column.key ? (
                       sortDir === 'asc' ? (
                         <ArrowUp className="h-3 w-3" />
                       ) : (
@@ -150,7 +115,7 @@ export function BugTable({
                     )}
                   </button>
                 ) : (
-                  col.label
+                  column.label
                 )}
               </th>
             ))}
@@ -160,7 +125,11 @@ export function BugTable({
           {isLoading ? null : bugs.length === 0 ? (
             <tr>
               <td colSpan={totalColumnCount}>
-                <EmptyState icon={BugIcon} title="No bugs match these filters" description="Try removing a filter, or clear them all." />
+                <EmptyState
+                  icon={BugIcon}
+                  title="No bugs match these filters"
+                  description="Try removing a filter, or clear them all."
+                />
               </td>
             </tr>
           ) : (
@@ -175,21 +144,6 @@ export function BugTable({
                   <tr className="group/row border-b border-hairline align-middle transition-colors last:border-0 hover:bg-brand-50/50">
                     {selection && (
                       <td className="px-2.5 py-3">
-                        {/*
-                          Closed bugs are not selectable: the only bulk action is
-                          reassignment, and reassigning finished work is refused by
-                          the backend. Disabling here means the refusal never has to
-                          happen - the reason is on the control instead of arriving
-                          as an error after the fact.
-                        */}
-                        {/*
-                          Second reason a row may be unselectable: it belongs to
-                          someone else. Only the current assignee - or a tester,
-                          who triages - may hand a bug on, so a developer sees
-                          their own rows selectable and everyone else's greyed.
-                          The backend enforces the same rule; this just means the
-                          refusal never has to happen.
-                        */}
                         <input
                           type="checkbox"
                           className="h-4 w-4 rounded border-line text-brand-600 focus-ring enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
@@ -231,11 +185,18 @@ export function BugTable({
                         {bug.summary}
                       </Link>
                       <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                        <TestTypePill product={bug.product} source={bug.triage?.source} testType={bug.triage?.testType} />
+                        <TestTypePill
+                          product={bug.product}
+                          source={bug.triage?.source}
+                          testType={bug.triage?.testType}
+                        />
                         <span className="text-slate-300" aria-hidden>
                           ·
                         </span>
-                        <span className="truncate text-xs text-slate-500" title={bug.subcomponentName ? `${bug.component} / ${bug.subcomponentName}` : bug.component}>
+                        <span
+                          className="truncate text-xs text-slate-500"
+                          title={bug.subcomponentName ? `${bug.component} / ${bug.subcomponentName}` : bug.component}
+                        >
                           {bug.component}
                           {bug.subcomponentName && <span className="text-slate-400"> › {bug.subcomponentName}</span>}
                         </span>
@@ -251,12 +212,6 @@ export function BugTable({
                         ) : triage?.browsers && triage.browsers.length > 0 ? (
                           <BrowserPills browsers={triage.browsers} />
                         ) : (
-                          /*
-                           * The column is shown, so this scope has UI bugs -
-                           * but an individual row may still be an API bug, or a
-                           * UI bug filed without the tag. A pill, like every
-                           * other cell, saying which of the two it is.
-                           */
                           <NoBrowserPill testType={triage?.testType} />
                         )}
                       </td>
@@ -267,7 +222,10 @@ export function BugTable({
                     <td className="max-w-0 px-3 py-3 align-middle">
                       <div className="flex items-center gap-2">
                         <Avatar name={bug.assignedTo?.name ?? '?'} />
-                        <span className="truncate text-[0.8667rem] font-medium text-slate-700" title={bug.assignedTo?.name ?? 'Unassigned'}>
+                        <span
+                          className="truncate text-[0.8667rem] font-medium text-slate-700"
+                          title={bug.assignedTo?.name ?? 'Unassigned'}
+                        >
                           {bug.assignedTo?.name ?? 'Unassigned'}
                         </span>
                       </div>
@@ -292,14 +250,17 @@ export function BugTable({
                           )}
                         </p>
                         <ul className="flex flex-col gap-1">
-                          {endpoints.map((e) => (
-                            <li key={`${e.method} ${e.path}`} className="flex items-center gap-2 font-mono text-xs text-slate-700">
-                              <span className="w-14 shrink-0 font-semibold text-slate-900">{e.method}</span>
-                              <span className="min-w-0 flex-1 truncate" title={e.path}>
-                                {e.path}
+                          {endpoints.map((endpoint) => (
+                            <li
+                              key={`${endpoint.method} ${endpoint.path}`}
+                              className="flex items-center gap-2 font-mono text-xs text-slate-700"
+                            >
+                              <span className="w-14 shrink-0 font-semibold text-slate-900">{endpoint.method}</span>
+                              <span className="min-w-0 flex-1 truncate" title={endpoint.path}>
+                                {endpoint.path}
                               </span>
-                              <span className="shrink-0 text-slate-500">{e.module}</span>
-                              <span className="w-10 shrink-0 text-right">x{e.occurrences}</span>
+                              <span className="shrink-0 text-slate-500">{endpoint.module}</span>
+                              <span className="w-10 shrink-0 text-right">x{endpoint.occurrences}</span>
                             </li>
                           ))}
                         </ul>

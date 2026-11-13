@@ -1,66 +1,30 @@
 import type { Env } from '../config/app.config';
 import { memo } from '../helpers/memo.helper';
 import { BugzillaClient } from '../clients/bugzilla.client';
-import { AppError } from '../helpers/errors.helper';
+import { AppError, badRequest, forbidden, notFound, conflict } from '../helpers/errors.helper';
 import { groupNameForProduct } from './productGroups.service';
 import { DELETED_RESOLUTION } from './softDelete.service';
 
-/**
- * Cross-product transfer: hand a bug to another team's product without
- * giving the person doing it access to that product.
- *
- * Why the BFF has to do this. Bugzilla 5.2 has no "may move bugs into a
- * product" permission separate from "may see every bug in it":
- *
- *   - Bug::_check_product calls can_enter_product(target), which for these
- *     products means membership of the product's group - and those groups are
- *     Mandatory/Mandatory, so membership also exposes every bug in it.
- *   - The editbugs / canconfirm columns of a product's group controls only ADD
- *     requirements; there is no group setting that grants entry alone.
- *
- * So the move is split along the line between "may this person ask for it"
- * and "who has the rights to carry it out":
- *
- *   USER token     proves the bug is visible to them, that they may hand it on
- *                  (assignee or tester - the same rule as reassigning), and
- *                  posts the explanation under their own name.
- *   SERVICE key    performs only the product/component/version/assignee change,
- *                  and only along a route in PRODUCT_TRANSFER_ROUTES.
- *
- * The user is CC'd (cclist_accessible is on for every bug here), so they can
- * still follow THAT bug after Bugzilla swaps its product group - and nothing
- * else in the target product becomes visible to them. Bugzilla itself removes
- * the old product's group and adds the new one's mandatory group as part of the
- * move (Bug::_set_product), so no group handling is done here.
- */
-
-// ------------------------------------------------------------------ routes
-
-/**
- * `KPost UI<->KPost API; KPost Admin UI<->KPost Admin` - `<->` both ways,
- * `->` one way, separated by `;` or `,`. Case-insensitive, like Bugzilla's
- * own product names.
- */
-/** Keyed by the lower-cased source; values keep the spelling written in the config. */
+/** Cross-product transfer: hand a bug to another team's product without giving the person doing it. */
 export function parseTransferRoutes(spec: string): Map<string, Set<string>> {
   const routes = new Map<string, Set<string>>();
   const add = (from: string, to: string) => {
-    const f = from.trim().toLowerCase();
-    const t = to.trim();
-    if (!f || !t || f === t.toLowerCase()) return;
-    if (!routes.has(f)) routes.set(f, new Set());
-    routes.get(f)!.add(t);
+    const normalizedFrom = from.trim().toLowerCase();
+    const normalizedTo = to.trim();
+    if (!normalizedFrom || !normalizedTo || normalizedFrom === normalizedTo.toLowerCase()) return;
+    if (!routes.has(normalizedFrom)) routes.set(normalizedFrom, new Set());
+    routes.get(normalizedFrom)!.add(normalizedTo);
   };
   for (const raw of spec.split(/[;,]/)) {
     const rule = raw.trim();
     if (!rule) continue;
     if (rule.includes('<->')) {
-      const [a, b] = rule.split('<->');
-      add(a, b);
-      add(b, a);
+      const [left, right] = rule.split('<->');
+      add(left, right);
+      add(right, left);
     } else if (rule.includes('->')) {
-      const [a, b] = rule.split('->');
-      add(a, b);
+      const [source, destination] = rule.split('->');
+      add(source, destination);
     }
   }
   return routes;
@@ -72,19 +36,12 @@ export function transferTargetsFor(product: string, routes: Map<string, Set<stri
 
 export function isTransferAllowed(from: string, to: string, routes: Map<string, Set<string>>): boolean {
   const want = to.trim().toLowerCase();
-  return transferTargetsFor(from, routes).some((t) => t.toLowerCase() === want);
+  return transferTargetsFor(from, routes).some((value) => value.toLowerCase() === want);
 }
 
-/**
- * Accounts that exist to run the BFF, not to work bugs. They are members of
- * every product group (that is how they can move bugs), so without this they
- * would be offered as assignees in every people list. Keep in step with
- * LOGIN in bugzilla/setup/setup-transfer-account.pl.
- */
+/** Accounts that exist to run the BFF, not to work bugs. */
 export const SERVICE_ACCOUNTS = new Set([
   'bugtracker-transfer@kpost.in',
-  // Mantis placeholders (bugzilla/migration): kept so old bugs can be credited to them,
-  // never a person anyone should assign work to or pick on a dashboard.
   'admin@example.com',
   'mantis-unknown@mantis.invalid',
 ]);
@@ -93,30 +50,20 @@ export function isServiceAccount(email: string | undefined): boolean {
   return !!email && SERVICE_ACCOUNTS.has(email.toLowerCase());
 }
 
-/**
- * The elevated WRITE client: performs the move. A dedicated, non-admin
- * account's key when configured.
- */
+/** The elevated WRITE client: performs the move. */
 export function transferClient(env: Env): BugzillaClient {
-  return new BugzillaClient(env.BUGZILLA_URL, { kind: 'api_key', apiKey: env.TRANSFER_API_KEY ?? env.BUGZILLA_API_KEY });
+  return new BugzillaClient(env.BUGZILLA_URL, {
+    kind: 'api_key',
+    apiKey: env.TRANSFER_API_KEY ?? env.BUGZILLA_API_KEY,
+  });
 }
 
-/**
- * The READ client for the target's directory data (components, versions, team).
- *
- * Not the transfer account, on purpose: Bugzilla's Group.get returns a group's
- * member list only to `editusers`, `creategroups` or someone who can bless that
- * group (WebService/Group.pm _get_group_membership) - exactly the rights the
- * transfer account must not have. The service key already reads this same
- * list for the assignee picker (controllers/meta.controller.ts), so nothing new is exposed by
- * using it here, and the account that can WRITE stays narrow.
- */
+/** The READ client for the target's directory data (components, versions, team). */
 export function directoryClient(env: Env): BugzillaClient {
   return new BugzillaClient(env.BUGZILLA_URL, { kind: 'api_key', apiKey: env.BUGZILLA_API_KEY });
 }
 
-// ------------------------------------------------------------- the bug itself
-
+/** ------------------------------------------------------------- the bug itself. */
 export interface TransferableBug {
   id: number;
   product: string;
@@ -128,18 +75,13 @@ export interface TransferableBug {
   last_change_time: string;
 }
 
-/**
- * Loads the bug on the USER's token and checks they may hand it on.
- *
- * A bug they cannot see comes back as not found - the same answer as a bug
- * that does not exist, so this cannot be used to probe other products.
- */
+/** Loads the bug on the USER's token and checks they may hand it on. */
 export async function loadTransferableBug(
   userClient: BugzillaClient,
   id: number,
-  actor: { email: string; canTriage: boolean }
+  actor: { email: string; canTriage: boolean },
 ): Promise<TransferableBug> {
-  const resp = await userClient
+  const response = await userClient
     .get<{ bugs: TransferableBug[] }>(`/bug/${id}`, {
       include_fields: 'id,product,component,status,is_open,resolution,assigned_to,last_change_time',
     })
@@ -147,31 +89,27 @@ export async function loadTransferableBug(
       if (err instanceof AppError && (err.status === 404 || err.status === 403)) return { bugs: [] };
       throw err;
     });
-  const bug = resp.bugs[0];
-  if (!bug) throw new AppError(404, 'NOT_FOUND', 'That bug could not be found.');
+  const bug = response.bugs[0];
+  if (!bug) throw notFound('That bug could not be found.');
 
   if (bug.resolution === DELETED_RESOLUTION) {
-    throw new AppError(409, 'CONFLICT', 'This bug is deleted. Restore it before transferring it.');
+    throw conflict('This bug is deleted. Restore it before transferring it.');
   }
   if (!bug.is_open) {
-    throw new AppError(409, 'CONFLICT', `Bug #${id} is ${bug.status}. Reopen it before transferring it to another team.`);
+    throw conflict(`Bug #${id} is ${bug.status}. Reopen it before transferring it to another team.`);
   }
-  // Same rule as reassigning (controllers/bugs.controller.ts assertReassignable): the assignee
-  // hands their own work on; testers and admins may move anyone's.
   if (!actor.canTriage && bug.assigned_to.toLowerCase() !== actor.email.toLowerCase()) {
-    throw new AppError(403, 'FORBIDDEN', 'Only the current assignee, or a tester, can transfer this bug to another team.');
+    throw forbidden('Only the current assignee, or a tester, can transfer this bug to another team.');
   }
   return bug;
 }
 
-// ------------------------------------------------------------ target product
-
+/** ------------------------------------------------------------ target product. */
 export interface TransferTarget {
   product: string;
   components: { name: string; defaultAssignee: string; defaultAssigneeName: string }[];
   versions: string[];
   defaultMilestone: string | null;
-  /** People who can work bugs in the target product - its group's members. */
   people: { email: string; name: string }[];
 }
 
@@ -183,28 +121,15 @@ interface RawProduct {
   versions: { name: string; is_active: boolean }[];
 }
 
-/**
- * What a transfer form needs about one target product, read on the SERVICE
- * key - the user cannot read it themselves, which is the point.
- *
- * Deliberately only directory data: component names, version names and the
- * names of the people on that team. No bugs, counts, summaries or anything
- * else about the product's contents.
- */
+/** What a transfer form needs about one target product. */
 export async function describeTarget(service: BugzillaClient, product: string): Promise<TransferTarget | null> {
   return (await describeTargets(service, [product]))[0] ?? null;
 }
 
-/**
- * The same, for several products at once - three Bugzilla calls however many
- * there are (the products, the group list, the gating groups' members), which
- * matters now that a user may transfer to every product they can access.
- * Inactive products, and products with no active component, are left out:
- * a bug cannot be filed there.
- */
+/** The same, for several products at once - three Bugzilla calls however many there are (the products. */
 export async function describeTargets(service: BugzillaClient, products: string[]): Promise<TransferTarget[]> {
   if (products.length === 0) return [];
-  const [productResp, groupsResp] = await Promise.all([
+  const [productResponse, groupsResponse] = await Promise.all([
     service.get<{ products: RawProduct[] }>('/product', {
       names: products,
       include_fields:
@@ -212,59 +137,64 @@ export async function describeTargets(service: BugzillaClient, products: string[
     }),
     service.get<{ groups: { name: string }[] }>('/group', { membership: 0 }),
   ]);
-  const raws = (productResp.products ?? []).filter((p) => p.is_active && p.components.some((c) => c.is_active));
+  const raws = (productResponse.products ?? []).filter(
+    (product) => product.is_active && product.components.some((component) => component.is_active),
+  );
   if (raws.length === 0) return [];
 
-  const groupNames = (groupsResp.groups ?? []).map((g) => g.name);
-  const poolOf = new Map(raws.map((r) => [r.name, groupNameForProduct(r.name, groupNames) ?? 'editbugs']));
+  const groupNames = (groupsResponse.groups ?? []).map((group) => group.name);
+  const poolOf = new Map(raws.map((raw) => [raw.name, groupNameForProduct(raw.name, groupNames) ?? 'editbugs']));
   const members = await service.get<{
-    groups: { name: string; membership?: { email?: string; real_name?: string; name?: string; can_login?: boolean }[] }[];
+    groups: {
+      name: string;
+      membership?: { email?: string; real_name?: string; name?: string; can_login?: boolean }[];
+    }[];
   }>('/group', { names: [...new Set(poolOf.values())], membership: 1 });
-  const membersOf = new Map((members.groups ?? []).map((g) => [g.name.toLowerCase(), g.membership ?? []]));
+  const membersOf = new Map((members.groups ?? []).map((group) => [group.name.toLowerCase(), group.membership ?? []]));
 
   return raws
     .map((raw) => {
       const people = new Map<string, { email: string; name: string }>();
-      for (const m of membersOf.get(poolOf.get(raw.name)!.toLowerCase()) ?? []) {
-        if (!m.email || m.can_login === false || isServiceAccount(m.email)) continue;
-        people.set(m.email.toLowerCase(), { email: m.email, name: m.real_name || m.name || m.email });
+      for (const member of membersOf.get(poolOf.get(raw.name)!.toLowerCase()) ?? []) {
+        if (!member.email || member.can_login === false || isServiceAccount(member.email)) continue;
+        people.set(member.email.toLowerCase(), {
+          email: member.email,
+          name: member.real_name || member.name || member.email,
+        });
       }
       const nameOf = (email: string) => people.get(email.toLowerCase())?.name ?? email;
       return {
         product: raw.name,
         components: raw.components
-          .filter((c) => c.is_active)
-          .map((c) => ({ name: c.name, defaultAssignee: c.default_assigned_to, defaultAssigneeName: nameOf(c.default_assigned_to) })),
-        versions: raw.versions.filter((v) => v.is_active).map((v) => v.name),
+          .filter((component) => component.is_active)
+          .map((component) => ({
+            name: component.name,
+            defaultAssignee: component.default_assigned_to,
+            defaultAssigneeName: nameOf(component.default_assigned_to),
+          })),
+        versions: raw.versions.filter((version) => version.is_active).map((version) => version.name),
         defaultMilestone: raw.default_milestone ?? null,
-        people: [...people.values()].sort((a, b) => a.name.localeCompare(b.name)),
+        people: [...people.values()].sort((left, right) => left.name.localeCompare(right.name)),
       };
     })
-    .sort((a, b) => a.product.localeCompare(b.product));
+    .sort((left, right) => left.product.localeCompare(right.product));
 }
 
-/**
- * Every active product - the transfer destinations. Read on the SERVICE key, so
- * a developer can hand a bug to a team whose product they have no access to;
- * the move itself also runs on the service key, and they are CC'd to keep
- * following the bug. Their own product access is not changed by this.
- * Cached for five minutes (products change rarely).
- */
+/** Every active product - the transfer destinations. */
 export async function allProductNames(env: Env): Promise<string[]> {
   return memo('transfer-products', 'all', 5 * 60 * 1000, async () => {
     const service = directoryClient(env);
     const accessible = await service.get<{ ids: number[] }>('/product_accessible');
     if (!accessible.ids?.length) return [];
-    const resp = await service.get<{ products: { name: string; is_active: boolean }[] }>('/product', {
+    const response = await service.get<{ products: { name: string; is_active: boolean }[] }>('/product', {
       ids: accessible.ids,
       include_fields: 'name,is_active',
     });
-    return (resp.products ?? []).filter((p) => p.is_active).map((p) => p.name);
+    return (response.products ?? []).filter((product) => product.is_active).map((product) => product.name);
   });
 }
 
-// --------------------------------------------------------------- the transfer
-
+/** --------------------------------------------------------------- the transfer. */
 export interface TransferRequest {
   product: string;
   component: string;
@@ -278,80 +208,79 @@ export interface TransferResult {
   product: string;
   component: string;
   assignee: string;
-  /** The person who asked can still open the bug, through CC. */
   ccAdded: string;
 }
 
-export async function transferBug(opts: {
+export async function transferBug(options: {
   env: Env;
   userClient: BugzillaClient;
   actor: { email: string; realName: string; canTriage: boolean };
   id: number;
   request: TransferRequest;
   routes: Map<string, Set<string>>;
-  /** Valid destinations: every active product (allProductNames), besides the configured routes. */
   accessibleProducts?: string[];
   useTargetMilestone: boolean;
 }): Promise<TransferResult> {
-  const { env, userClient, actor, id, request, routes } = opts;
+  const { env, userClient, actor, id, request, routes } = options;
 
-  // 1. On the user's own token: visible to them, open, theirs to hand on.
   const bug = await loadTransferableBug(userClient, id, actor);
 
-  // 2. To any other active product (opts.accessibleProducts is the full list), or along a configured route.
   const want = request.product.trim().toLowerCase();
-  const ownProduct = (opts.accessibleProducts ?? []).some((p) => p.toLowerCase() === want) && want !== bug.product.toLowerCase();
+  const ownProduct =
+    (options.accessibleProducts ?? []).some((accessibleProduct) => accessibleProduct.toLowerCase() === want) &&
+    want !== bug.product.toLowerCase();
   if (!ownProduct && !isTransferAllowed(bug.product, request.product, routes)) {
-    throw new AppError(403, 'FORBIDDEN', `Bugs in ${bug.product} cannot be transferred to ${request.product}.`);
+    throw forbidden(`Bugs in ${bug.product} cannot be transferred to ${request.product}.`);
   }
 
-  // 3. Resolve the target (directory key) and check every value against it.
   const service = transferClient(env);
   const target = await describeTarget(directoryClient(env), request.product);
-  if (!target) throw new AppError(400, 'VALIDATION', `${request.product} is not open for new bugs.`);
+  if (!target) throw badRequest(`${request.product} is not open for new bugs.`);
 
-  const component = target.components.find((c) => c.name.toLowerCase() === request.component.trim().toLowerCase());
+  const component = target.components.find(
+    (candidate) => candidate.name.toLowerCase() === request.component.trim().toLowerCase(),
+  );
   if (!component) {
-    throw new AppError(400, 'VALIDATION', `"${request.component}" is not a component of ${target.product}.`);
+    throw badRequest(`"${request.component}" is not a component of ${target.product}.`);
   }
 
   let version = request.version?.trim();
   if (!version) {
     if (target.versions.length !== 1) {
-      throw new AppError(400, 'VALIDATION', `Choose a version of ${target.product}: ${target.versions.join(', ')}.`);
+      throw badRequest(`Choose a version of ${target.product}: ${target.versions.join(', ')}.`);
     }
     version = target.versions[0];
   } else if (!target.versions.includes(version)) {
-    throw new AppError(400, 'VALIDATION', `"${version}" is not a version of ${target.product}.`);
+    throw badRequest(`"${version}" is not a version of ${target.product}.`);
   }
 
-  // An explicit assignee must be someone who can actually work bugs there.
   let assignee = component.defaultAssignee;
   if (request.assignee?.trim()) {
-    const chosen = target.people.find((p) => p.email.toLowerCase() === request.assignee!.trim().toLowerCase());
+    const chosen = target.people.find(
+      (person) => person.email.toLowerCase() === request.assignee!.trim().toLowerCase(),
+    );
     if (!chosen) {
-      throw new AppError(400, 'VALIDATION', `${request.assignee} is not on the ${target.product} team, so they could not work the bug there.`);
+      throw badRequest(
+        `${request.assignee} is not on the ${target.product} team, so they could not work the bug there.`,
+      );
     }
     assignee = chosen.email;
   }
 
-  // 4. The move, on the service key. Bugzilla swaps the product groups itself.
   const update: Record<string, unknown> = {
     product: target.product,
     component: component.name,
     version,
     assigned_to: assignee,
-    // A sub-component belongs to the OLD component; the receiving team picks their own.
     cf_subcomponent: '---',
     cc: { add: [actor.email] },
     is_cc_accessible: true,
   };
-  if (opts.useTargetMilestone && target.defaultMilestone) update.target_milestone = target.defaultMilestone;
+  if (options.useTargetMilestone && target.defaultMilestone) update.target_milestone = target.defaultMilestone;
   await service.put(`/bug/${id}`, update);
 
-  // 5. The explanation, under the requester's own name. They can still comment:
-  //    they are on the CC list now, and CC members may see the bug.
-  const assigneeName = target.people.find((p) => p.email.toLowerCase() === assignee.toLowerCase())?.name ?? assignee;
+  const assigneeName =
+    target.people.find((person) => person.email.toLowerCase() === assignee.toLowerCase())?.name ?? assignee;
   const body = [
     `Transferred from ${bug.product} / ${bug.component} to ${target.product} / ${component.name}, assigned to ${assigneeName}.`,
     '',
@@ -360,14 +289,15 @@ export async function transferBug(opts: {
   try {
     await userClient.post(`/bug/${id}/comment`, { comment: body });
   } catch {
-    // The move happened; the record of why must not be lost with it.
     await service
-      .post(`/bug/${id}/comment`, { comment: `${body}\n\n(Requested by ${actor.realName || actor.email} <${actor.email}> via the Bug Tracker.)` })
+      .post(`/bug/${id}/comment`, {
+        comment: `${body}\n\n(Requested by ${actor.realName || actor.email} <${actor.email}> via the Bug Tracker.)`,
+      })
       .catch(() => undefined);
   }
 
   console.info(
-    `[transfer] bug ${id}: ${bug.product}/${bug.component} -> ${target.product}/${component.name}, assignee ${assignee}, requested by ${actor.email}`
+    `[transfer] bug ${id}: ${bug.product}/${bug.component} -> ${target.product}/${component.name}, assignee ${assignee}, requested by ${actor.email}`,
   );
   return { id, product: target.product, component: component.name, assignee, ccAdded: actor.email };
 }

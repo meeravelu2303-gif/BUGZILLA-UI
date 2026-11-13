@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Bug, BugMeta, ListChange, Product, UpdateBugInput } from '../types';
 
-/**
- * Everything editable on a bug, as the form holds it. Numbers stay strings so a
- * half-typed "1." is editable; lists hold the full intended value and are
- * turned into Bugzilla's add/remove deltas only when saving.
- */
+/** Everything editable on a bug, as the form holds it. */
 export interface BugDraft {
   summary: string;
   status: string;
@@ -15,7 +11,6 @@ export interface BugDraft {
   severity: string;
   product: string;
   component: string;
-  /** Stored sub-component value; '' = none. */
   subcomponent: string;
   version: string;
   targetMilestone: string;
@@ -36,12 +31,10 @@ export interface BugDraft {
   deadline: string;
   estimatedTime: string;
   remainingTime: string;
-  /** Hours worked to ADD; '' when none is being logged. */
   workTime: string;
   isCcAccessible: boolean;
   isCreatorAccessible: boolean;
   whiteboard: string;
-  /** Flag id -> status ('+', '-', '?', or 'X' to clear). */
   flags: Record<number, string>;
 }
 
@@ -84,12 +77,20 @@ export const FIELD_LABELS: Record<DraftKey, string> = {
 };
 
 /** Fallback until Bugzilla's workflow has loaded; the live list comes from meta (is_open per status). */
-export const OPEN_STATUSES = new Set(['UNCONFIRMED', 'CONFIRMED', 'PENDING_APPROVAL', 'AWAITING_REQUIREMENT', 'IN_PROGRESS', 'IN_REVIEW', 'REOPENED']);
+export const OPEN_STATUSES = new Set([
+  'UNCONFIRMED',
+  'CONFIRMED',
+  'PENDING_APPROVAL',
+  'AWAITING_REQUIREMENT',
+  'IN_PROGRESS',
+  'IN_REVIEW',
+  'REOPENED',
+]);
 
 const LIST_KEYS = ['cc', 'dependsOn', 'blocks', 'seeAlso', 'alias', 'keywords', 'groups'] as const;
 type ListKey = (typeof LIST_KEYS)[number];
 
-const hoursText = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, ''));
+const hoursText = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0$/, ''));
 
 export function toDraft(bug: Bug): BugDraft {
   return {
@@ -125,30 +126,33 @@ export function toDraft(bug: Bug): BugDraft {
     isCcAccessible: bug.isCcAccessible,
     isCreatorAccessible: bug.isCreatorAccessible,
     whiteboard: bug.whiteboard,
-    flags: Object.fromEntries(bug.flags.map((f) => [f.id, f.status])),
+    flags: Object.fromEntries(bug.flags.map((flag) => [flag.id, flag.status])),
   };
 }
 
-function sameValue(a: unknown, b: unknown): boolean {
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    const sa = [...a].map(String).sort();
-    const sb = [...b].map(String).sort();
-    return sa.every((v, i) => v === sb[i]);
+function sameValue(left: unknown, right: unknown): boolean {
+  if (Array.isArray(left) && Array.isArray(right)) {
+    if (left.length !== right.length) return false;
+    const sortedLeft = [...left].map(String).sort();
+    const sortedRight = [...right].map(String).sort();
+    return sortedLeft.every((candidate, i) => candidate === sortedRight[i]);
   }
-  if (a && b && typeof a === 'object' && typeof b === 'object') {
-    const ka = Object.keys(a as object);
-    const kb = Object.keys(b as object);
-    return ka.length === kb.length && ka.every((k) => (a as Record<string, unknown>)[k] === (b as Record<string, unknown>)[k]);
+  if (left && right && typeof left === 'object' && typeof right === 'object') {
+    const leftKeys = Object.keys(left as object);
+    const rightKeys = Object.keys(right as object);
+    return (
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every((k) => (left as Record<string, unknown>)[k] === (right as Record<string, unknown>)[k])
+    );
   }
-  return a === b;
+  return left === right;
 }
 
 function delta<T>(before: T[], after: T[]): ListChange<T> | undefined {
-  const b = new Set(before.map(String));
-  const a = new Set(after.map(String));
-  const add = after.filter((v) => !b.has(String(v)));
-  const remove = before.filter((v) => !a.has(String(v)));
+  const beforeSet = new Set(before.map(String));
+  const afterSet = new Set(after.map(String));
+  const add = after.filter((item) => !beforeSet.has(String(item)));
+  const remove = before.filter((item) => !afterSet.has(String(item)));
   if (!add.length && !remove.length) return undefined;
   return { ...(add.length ? { add } : {}), ...(remove.length ? { remove } : {}) };
 }
@@ -159,7 +163,7 @@ export function parseBugRef(raw: string): number | null {
   return /^\d+$/.test(cleaned) && Number(cleaned) > 0 ? Number(cleaned) : null;
 }
 
-const isHours = (s: string) => s.trim() !== '' && /^\d+(\.\d{1,2})?$/.test(s.trim());
+const isHours = (value: string) => value.trim() !== '' && /^\d+(\.\d{1,2})?$/.test(value.trim());
 
 export interface BugEditor {
   draft: BugDraft;
@@ -169,14 +173,11 @@ export interface BugEditor {
   isDirty: (key: DraftKey) => boolean;
   errors: Partial<Record<DraftKey, string>>;
   comment: { body: string; isPrivate: boolean };
-  setComment: (c: { body: string; isPrivate: boolean }) => void;
+  setComment: (comment: { body: string; isPrivate: boolean }) => void;
   reset: () => void;
-  /** After a successful save: clears the one-shot values (hours logged, resets, comment). */
   markSaved: () => void;
   buildPayload: () => UpdateBugInput;
-  /** Statuses this bug may move to from its stored status, per the Bugzilla workflow. */
   allowedStatuses: string[];
-  /** The product the draft currently points at (for component/version choices). */
   draftProduct?: Product;
   needsResolution: boolean;
   commentRequired: boolean;
@@ -185,23 +186,26 @@ export interface BugEditor {
   isClosed: boolean;
 }
 
-export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Product[] | undefined, canTriage = false): BugEditor {
-  // Which statuses are open, per Bugzilla - so a status added later (REOPENED) needs no code change.
+export function useBugEditor(
+  bug: Bug,
+  meta: BugMeta | undefined,
+  products: Product[] | undefined,
+  canTriage = false,
+): BugEditor {
   const openSet = useMemo(
-    () => (meta?.workflow.length ? new Set(meta.workflow.filter((w) => w.isOpen).map((w) => w.status)) : OPEN_STATUSES),
-    [meta]
+    () =>
+      meta?.workflow.length
+        ? new Set(
+            meta.workflow.filter((workflow) => workflow.isOpen).map((workflowTransition) => workflowTransition.status),
+          )
+        : OPEN_STATUSES,
+    [meta],
   );
   const baseline = useMemo(() => toDraft(bug), [bug]);
   const [draft, setDraft] = useState<BugDraft>(baseline);
   const [comment, setComment] = useState({ body: '', isPrivate: false });
   const previousBaseline = useRef(baseline);
 
-  /*
-   * The bug was refetched (after our own save, or to pick up someone else's).
-   * Rebase rather than reset: fields the user has not touched follow the new
-   * stored value, fields they have edited keep their edit. A plain reset would
-   * throw away work-in-progress every time the cache refreshed.
-   */
   useEffect(() => {
     const before = previousBaseline.current;
     previousBaseline.current = baseline;
@@ -214,32 +218,30 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
     });
   }, [baseline]);
 
-  const draftProduct = products?.find((p) => p.name === draft.product);
+  const draftProduct = products?.find((product) => product.name === draft.product);
 
   const set = useCallback(
     <K extends DraftKey>(key: K, value: BugDraft[K]) => {
-      setDraft((prev) => {
-        const next = { ...prev, [key]: value };
-        // Choosing a closing status drops a pending reassignment: the backend
-        // refuses to change the assignee while closing (it records who fixed it).
+      setDraft((previous) => {
+        const next = { ...previous, [key]: value };
         if (key === 'status' && !openSet.has(String(value))) {
           next.assignedTo = baseline.assignedTo;
           next.resetAssignedTo = false;
         }
         if (key === 'status' && openSet.has(String(value))) next.resolution = '';
         if (key === 'status' && String(value) === baseline.status) next.resolution = baseline.resolution;
-        // A sub-component belongs to one component: moving component clears it,
-        // and moving back restores the saved one.
         if (key === 'component' || key === 'product') {
-          next.subcomponent = next.component === baseline.component && next.product === baseline.product ? baseline.subcomponent : '';
+          next.subcomponent =
+            next.component === baseline.component && next.product === baseline.product ? baseline.subcomponent : '';
         }
-        // A new product invalidates its dependants unless the same name exists there too.
         if (key === 'product') {
-          const target = products?.find((p) => p.name === value);
+          const target = products?.find((product) => product.name === value);
           if (target) {
-            if (!target.components.some((c) => c.name === prev.component)) next.component = '';
-            if (!target.versions.includes(prev.version)) next.version = target.versions.length === 1 ? target.versions[0] : '';
-            if (!target.milestones.includes(prev.targetMilestone)) next.targetMilestone = target.milestones[0] ?? '---';
+            if (!target.components.some((component) => component.name === previous.component)) next.component = '';
+            if (!target.versions.includes(previous.version))
+              next.version = target.versions.length === 1 ? target.versions[0] : '';
+            if (!target.milestones.includes(previous.targetMilestone))
+              next.targetMilestone = target.milestones[0] ?? '---';
           }
           if (value === baseline.product) {
             next.component = baseline.component;
@@ -255,61 +257,63 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
         return next;
       });
     },
-    [baseline, products, openSet]
+    [baseline, products, openSet],
   );
 
   const dirty = useMemo(
     () => (Object.keys(draft) as DraftKey[]).filter((k) => !sameValue(draft[k], baseline[k])),
-    [draft, baseline]
+    [draft, baseline],
   );
 
   const isClosed = !bug.isOpen;
   const needsResolution = !openSet.has(draft.status);
-  /** Bugzilla requires a comment for this move (REOPENED: what still fails). */
   const commentRequired =
     draft.status !== baseline.status &&
-    Boolean(meta?.workflow.find((w) => w.status === bug.status)?.commentRequiredTo?.includes(draft.status));
+    Boolean(
+      meta?.workflow.find((workflow) => workflow.status === bug.status)?.commentRequiredTo?.includes(draft.status),
+    );
   const isDuplicate = needsResolution && draft.resolution === 'DUPLICATE';
   const lockAssignee = isClosed || needsResolution;
 
   const errors = useMemo(() => {
-    const e: Partial<Record<DraftKey, string>> = {};
-    if (!draft.summary.trim()) e.summary = 'A bug needs a summary.';
-    else if (draft.summary.length > 255) e.summary = 'Keep the summary under 255 characters.';
-    if (needsResolution && !draft.resolution) e.resolution = `Choose how this bug was resolved.`;
+    const validationErrors: Partial<Record<DraftKey, string>> = {};
+    if (!draft.summary.trim()) validationErrors.summary = 'A bug needs a summary.';
+    else if (draft.summary.length > 255) validationErrors.summary = 'Keep the summary under 255 characters.';
+    if (needsResolution && !draft.resolution) validationErrors.resolution = `Choose how this bug was resolved.`;
     if (commentRequired && !comment.body.trim()) {
-      e.status =
+      validationErrors.status =
         draft.status === 'REOPENED'
           ? 'Reopening needs a comment: say what still fails after the fix.'
           : `Moving to ${draft.status.replace('_', ' ')} needs a comment.`;
     }
     if (isDuplicate) {
       const ref = parseBugRef(draft.dupeOf);
-      if (!draft.dupeOf.trim()) e.dupeOf = 'Enter the bug this one duplicates.';
-      else if (ref === null) e.dupeOf = 'Enter a bug number, for example 806 or KPA-806.';
-      else if (ref === bug.id) e.dupeOf = 'A bug cannot be a duplicate of itself.';
+      if (!draft.dupeOf.trim()) validationErrors.dupeOf = 'Enter the bug this one duplicates.';
+      else if (ref === null) validationErrors.dupeOf = 'Enter a bug number, for example 806 or KPA-806.';
+      else if (ref === bug.id) validationErrors.dupeOf = 'A bug cannot be a duplicate of itself.';
     }
     if (draft.product !== baseline.product) {
-      if (!draft.component) e.component = `Choose a component in ${draft.product}.`;
-      if (!draft.version) e.version = `Choose a version in ${draft.product}.`;
+      if (!draft.component) validationErrors.component = `Choose a component in ${draft.product}.`;
+      if (!draft.version) validationErrors.version = `Choose a version in ${draft.product}.`;
     }
-    if (draft.url.trim() && !/^https?:\/\/\S+$/i.test(draft.url.trim())) e.url = 'Enter a full link starting with http:// or https://.';
+    if (draft.url.trim() && !/^https?:\/\/\S+$/i.test(draft.url.trim()))
+      validationErrors.url = 'Enter a full link starting with http:// or https://.';
     if (bug.timeTracking) {
-      if (!isHours(draft.estimatedTime)) e.estimatedTime = 'Hours, e.g. 4 or 2.5.';
-      if (!isHours(draft.remainingTime)) e.remainingTime = 'Hours, e.g. 4 or 2.5.';
+      if (!isHours(draft.estimatedTime)) validationErrors.estimatedTime = 'Hours, e.g. 4 or 2.5.';
+      if (!isHours(draft.remainingTime)) validationErrors.remainingTime = 'Hours, e.g. 4 or 2.5.';
       if (draft.workTime.trim()) {
-        const n = Number(draft.workTime);
-        if (!/^-?\d+(\.\d{1,2})?$/.test(draft.workTime.trim()) || n === 0) e.workTime = 'Hours worked, e.g. 1.5.';
+        const hours = Number(draft.workTime);
+        if (!/^-?\d+(\.\d{1,2})?$/.test(draft.workTime.trim()) || hours === 0)
+          validationErrors.workTime = 'Hours worked, e.g. 1.5.';
       }
     }
-    return e;
+    return validationErrors;
   }, [draft, baseline, bug.id, bug.timeTracking, needsResolution, isDuplicate, commentRequired, comment.body]);
 
   const allowedStatuses = useMemo(() => {
-    const node = meta?.workflow.find((w) => w.status === bug.status);
+    const node = meta?.workflow.find((workflow) => workflow.status === bug.status);
     const targets = node ? node.canChangeTo : (meta?.statuses ?? []);
-    // Reopening is the tester's call (the backend enforces it too).
-    return [bug.status, ...targets.filter((s) => s !== bug.status && (canTriage || s !== 'REOPENED'))];
+    return [bug.status, ...targets.filter((target) => target !== bug.status && (canTriage || target !== 'REOPENED'))];
   }, [meta, bug.status, canTriage]);
 
   const reset = useCallback(() => {
@@ -318,59 +322,73 @@ export function useBugEditor(bug: Bug, meta: BugMeta | undefined, products: Prod
   }, [baseline]);
 
   const markSaved = useCallback(() => {
-    setDraft((d) => ({ ...d, workTime: '', resetAssignedTo: false, resetQaContact: false }));
+    setDraft((currentDraft) => ({ ...currentDraft, workTime: '', resetAssignedTo: false, resetQaContact: false }));
     setComment({ body: '', isPrivate: false });
   }, []);
 
   const buildPayload = useCallback((): UpdateBugInput => {
-    const p: UpdateBugInput = { lastChangeTime: bug.lastChangeTime };
+    const updateBugInput: UpdateBugInput = { lastChangeTime: bug.lastChangeTime };
     const changed = (k: DraftKey) => !sameValue(draft[k], baseline[k]);
 
     const scalars = [
-      'summary', 'status', 'resolution', 'priority', 'severity', 'product', 'component', 'subcomponent', 'version',
-      'targetMilestone', 'opSys', 'platform', 'url', 'whiteboard',
+      'summary',
+      'status',
+      'resolution',
+      'priority',
+      'severity',
+      'product',
+      'component',
+      'subcomponent',
+      'version',
+      'targetMilestone',
+      'opSys',
+      'platform',
+      'url',
+      'whiteboard',
     ] as const;
-    for (const k of scalars) if (changed(k)) (p as Record<string, unknown>)[k] = k === 'summary' ? draft[k].trim() : draft[k];
+    for (const k of scalars)
+      if (changed(k)) (updateBugInput as Record<string, unknown>)[k] = k === 'summary' ? draft[k].trim() : draft[k];
 
-    // A product move must carry its dependants even when their names happen to match.
     if (changed('product')) {
-      p.component = draft.component;
-      p.version = draft.version;
-      if (meta?.features.targetMilestone) p.targetMilestone = draft.targetMilestone;
+      updateBugInput.component = draft.component;
+      updateBugInput.version = draft.version;
+      if (meta?.features.targetMilestone) updateBugInput.targetMilestone = draft.targetMilestone;
     }
-    if (!meta?.features.targetMilestone) delete p.targetMilestone;
-    // Bugzilla needs the duplicate target with the DUPLICATE resolution, every time.
-    if (isDuplicate) p.dupeOf = parseBugRef(draft.dupeOf) ?? undefined;
-    if (needsResolution && !changed('resolution') && changed('status')) p.resolution = draft.resolution;
+    if (!meta?.features.targetMilestone) delete updateBugInput.targetMilestone;
+    if (isDuplicate) updateBugInput.dupeOf = parseBugRef(draft.dupeOf) ?? undefined;
+    if (needsResolution && !changed('resolution') && changed('status')) updateBugInput.resolution = draft.resolution;
 
-    if (draft.resetAssignedTo) p.resetAssignedTo = true;
-    else if (changed('assignedTo') && draft.assignedTo) p.assignedTo = draft.assignedTo;
+    if (draft.resetAssignedTo) updateBugInput.resetAssignedTo = true;
+    else if (changed('assignedTo') && draft.assignedTo) updateBugInput.assignedTo = draft.assignedTo;
     if (meta?.features.qaContact) {
-      if (draft.resetQaContact) p.resetQaContact = true;
-      else if (changed('qaContact')) p.qaContact = draft.qaContact;
+      if (draft.resetQaContact) updateBugInput.resetQaContact = true;
+      else if (changed('qaContact')) updateBugInput.qaContact = draft.qaContact;
     }
 
     for (const k of LIST_KEYS) {
-      const d = delta<string | number>(baseline[k as ListKey] as (string | number)[], draft[k as ListKey] as (string | number)[]);
-      if (d) (p as Record<string, unknown>)[k] = d;
+      const listChange = delta<string | number>(
+        baseline[k as ListKey] as (string | number)[],
+        draft[k as ListKey] as (string | number)[],
+      );
+      if (listChange) (updateBugInput as Record<string, unknown>)[k] = listChange;
     }
 
     if (bug.timeTracking) {
-      if (changed('deadline')) p.deadline = draft.deadline;
-      if (changed('estimatedTime')) p.estimatedTime = Number(draft.estimatedTime);
-      if (changed('remainingTime')) p.remainingTime = Number(draft.remainingTime);
-      if (draft.workTime.trim()) p.workTime = Number(draft.workTime);
+      if (changed('deadline')) updateBugInput.deadline = draft.deadline;
+      if (changed('estimatedTime')) updateBugInput.estimatedTime = Number(draft.estimatedTime);
+      if (changed('remainingTime')) updateBugInput.remainingTime = Number(draft.remainingTime);
+      if (draft.workTime.trim()) updateBugInput.workTime = Number(draft.workTime);
     }
-    if (changed('isCcAccessible')) p.isCcAccessible = draft.isCcAccessible;
-    if (changed('isCreatorAccessible')) p.isCreatorAccessible = draft.isCreatorAccessible;
+    if (changed('isCcAccessible')) updateBugInput.isCcAccessible = draft.isCcAccessible;
+    if (changed('isCreatorAccessible')) updateBugInput.isCreatorAccessible = draft.isCreatorAccessible;
 
     const flagChanges = Object.entries(draft.flags)
       .filter(([id, status]) => baseline.flags[Number(id)] !== status)
       .map(([id, status]) => ({ id: Number(id), status: status as '+' | '-' | '?' | 'X' }));
-    if (flagChanges.length) p.flags = flagChanges;
+    if (flagChanges.length) updateBugInput.flags = flagChanges;
 
-    if (comment.body.trim()) p.comment = { body: comment.body.trim(), isPrivate: comment.isPrivate };
-    return p;
+    if (comment.body.trim()) updateBugInput.comment = { body: comment.body.trim(), isPrivate: comment.isPrivate };
+    return updateBugInput;
   }, [draft, baseline, bug.lastChangeTime, bug.timeTracking, comment, isDuplicate, needsResolution, meta]);
 
   return {

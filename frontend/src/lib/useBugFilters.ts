@@ -9,19 +9,7 @@ import { saveFilters, savedFilters } from './savedFilters';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-/**
- * The single filter contract for every list view.
- *
- * State lives in the URL, not component state, so a filtered view is
- * shareable, survives reload, and works with back/forward. Multi-select is
- * expressed as a repeated key (`?severity=Critical&severity=Major`), which is
- * exactly what the backend's Zod schema accepts and what Bugzilla ORs together.
- *
- * BugList, MyBugs and AdvancedSearch all read from here. A second filter
- * implementation would inevitably drift from this one and from the API.
- */
-
-/** Array-valued facets. Everything else in BugFilters is scalar. */
+/** The single filter contract for every list view. */
 export const FACET_KEYS = [
   'severity',
   'priority',
@@ -49,32 +37,12 @@ export const FACET_LABELS: Record<FacetKey, string> = {
   resolution: 'Resolution',
 };
 
-/**
- * Resolution values offered in the UI.
- *
- * Status cannot answer "what did we actually fix?" — FIXED, INVALID and DUPLICATE are all
- * RESOLVED, and on this product they mean very different things: a genuine fix, a finding that
- * was never a defect, and a re-filed copy of one. `Unresolved` is Bugzilla's `---`, translated
- * server-side so the sentinel never reaches the URL.
- */
-export const RESOLUTION_VALUES = [
-  'Unresolved',
-  'FIXED',
-  'INVALID',
-  'DUPLICATE',
-  'WONTFIX',
-  'WORKSFORME',
-] as const;
+/** Resolution values offered in the UI. */
+export const RESOLUTION_VALUES = ['Unresolved', 'FIXED', 'INVALID', 'DUPLICATE', 'WONTFIX', 'WORKSFORME'] as const;
 
 /** Params the list/count/stats endpoints understand, built from the URL. */
 export type BugQueryParams = Record<string, string | number | string[] | undefined>;
 
-/**
- * People filters arriving from links (the dashboards' "Open full list" and
- * stat cards). Single-valued and passed straight to the API's assignee /
- * reporter filters; shown as chips so a filtered list never looks like the
- * whole one.
- */
 const PERSON_KEYS = ['assignedTo', 'creator'] as const;
 type PersonKey = (typeof PERSON_KEYS)[number];
 const PERSON_LABELS: Record<PersonKey, string> = { assignedTo: 'Assigned to', creator: 'Reported by' };
@@ -91,25 +59,20 @@ function readAll(params: URLSearchParams, key: string): string[] {
 
 export interface UseBugFilters {
   filters: BugFilters;
-  /** Non-pagination params to send to the API. */
   queryParams: BugQueryParams;
-  /** True when anything is narrowing the result set. */
   isFiltered: boolean;
   activeChips: ActiveChip[];
   toggleFacet: (key: FacetKey, value: string) => void;
   setFacet: (key: FacetKey, values: string[]) => void;
   setSearch: (value: string) => void;
-  /** Sets (or, with no from/to, clears) the date range. */
   setDateRange: (range: { field: DateField; from?: string; to?: string }) => void;
   removeChip: (chip: ActiveChip) => void;
   clearAll: () => void;
-  /** Sorting lives alongside the filters so the whole view is one URL. */
   sortBy: string;
   sortDir: 'asc' | 'desc';
   toggleSort: (key: string) => void;
   offset: number;
   setOffset: (offset: number) => void;
-  /** The testers' "Deleted bugs" view (`?deleted=only`). */
   showDeleted: boolean;
   setShowDeleted: (on: boolean) => void;
 }
@@ -118,25 +81,10 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
   const [params, setParams] = useSearchParams();
   const location = useLocation();
 
-  /*
-   * Record where the reader is, so a bug's "Back to bugs" returns to this exact view rather
-   * than a bare `/bugs`. Every list view already routes its filters, sort and pagination
-   * through this hook, so recording here covers BugList, MyBugs and AdvancedSearch at once and
-   * cannot fall out of step with them.
-   */
   useEffect(() => {
     rememberListView(location.pathname, location.search);
   }, [location.pathname, location.search]);
 
-  /*
-   * Keep each list page's filters until the reader changes them (lib/savedFilters.ts).
-   *
-   * Every filter change on these pages REPLACES the URL; arriving at a page (sidebar link,
-   * back button, fresh load) does not. So arriving with no query string means "came back
-   * here", and the saved filters are put back; any other URL - a change made on the page,
-   * a dashboard tile's own filter - becomes the saved one. Clearing everything replaces
-   * the URL with an empty query, which is saved too, so a cleared page stays clear.
-   */
   const navigate = useNavigate();
   const navigationType = useNavigationType();
   const user = useMe().data?.user.email;
@@ -169,36 +117,30 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       from: DAY.test(params.get('from') ?? '') ? params.get('from')! : '',
       to: DAY.test(params.get('to') ?? '') ? params.get('to')! : '',
     }),
-    [params]
+    [params],
   );
 
-  // Default: by bug id ascending (KPA-001, 002, 003…). A stable, sequential order rather than
-  // "importance", which interleaves ids and reads as scrambled.
   const sortBy = params.get('sortBy') ?? defaults?.sortBy ?? 'id';
   const sortDir = (params.get('sortDir') as 'asc' | 'desc') ?? defaults?.sortDir ?? 'asc';
   const offset = Number(params.get('offset') ?? 0);
 
-  /**
-   * Any change to a filter resets pagination: staying on page 7 of a result set
-   * that just shrank to two pages shows an empty table and looks like a bug.
-   */
   const commit = useCallback(
-    (mutate: (next: URLSearchParams) => void, opts?: { keepOffset?: boolean }) => {
+    (mutate: (next: URLSearchParams) => void, options?: { keepOffset?: boolean }) => {
       const next = new URLSearchParams(params);
       mutate(next);
-      if (!opts?.keepOffset) next.delete('offset');
+      if (!options?.keepOffset) next.delete('offset');
       setParams(next, { replace: true });
     },
-    [params, setParams]
+    [params, setParams],
   );
 
   const setFacet = useCallback(
     (key: FacetKey, values: string[]) =>
       commit((next) => {
         next.delete(key);
-        for (const v of values) next.append(key, v);
+        for (const value of values) next.append(key, value);
       }),
-    [commit]
+    [commit],
   );
 
   const toggleFacet = useCallback(
@@ -206,10 +148,12 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       commit((next) => {
         const current = next.getAll(key);
         next.delete(key);
-        const updated = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
-        for (const v of updated) next.append(key, v);
+        const updated = current.includes(value)
+          ? current.filter((existing) => existing !== value)
+          : [...current, value];
+        for (const selectedValue of updated) next.append(key, selectedValue);
       }),
-    [commit]
+    [commit],
   );
 
   const setSearch = useCallback(
@@ -218,7 +162,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
         if (value) next.set('search', value);
         else next.delete('search');
       }),
-    [commit]
+    [commit],
   );
 
   const setDateRange = useCallback(
@@ -230,7 +174,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
         if (from) next.set('from', from);
         if (to) next.set('to', to);
       }),
-    [commit]
+    [commit],
   );
 
   const activeChips = useMemo<ActiveChip[]>(() => {
@@ -238,9 +182,8 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
       readAll(params, key).map((value) => ({
         key,
         value,
-        // Sub-components travel as stored values (`Login [42]`); the chip shows the name.
         label: `${FACET_LABELS[key]}: ${key === 'subcomponent' ? subcomponentName(value) || 'None' : value}`,
-      }))
+      })),
     );
     for (const key of PERSON_KEYS) {
       const who = params.get(key);
@@ -251,7 +194,11 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     if (params.get('urgent') === '1') chips.push({ key: 'urgent', value: '1', label: 'Top priority: Critical or P0' });
     if (filters.from || filters.to) {
       const what = filters.dateField === 'updated' ? 'Updated' : 'Created';
-      chips.unshift({ key: 'date', value: `${filters.from}..${filters.to}`, label: `${what}: ${describeRange({ from: filters.from || undefined, to: filters.to || undefined })}` });
+      chips.unshift({
+        key: 'date',
+        value: `${filters.from}..${filters.to}`,
+        label: `${what}: ${describeRange({ from: filters.from || undefined, to: filters.to || undefined })}`,
+      });
     }
     return chips;
   }, [params, filters.from, filters.to, filters.dateField]);
@@ -267,11 +214,11 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
           for (const k of ['dateField', 'from', 'to']) next.delete(k);
           return;
         }
-        const remaining = next.getAll(chip.key).filter((v) => v !== chip.value);
+        const remaining = next.getAll(chip.key).filter((value) => value !== chip.value);
         next.delete(chip.key);
-        for (const v of remaining) next.append(chip.key, v);
+        for (const remainingValue of remaining) next.append(chip.key, remainingValue);
       }),
-    [commit]
+    [commit],
   );
 
   const clearAll = useCallback(
@@ -280,7 +227,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
         for (const key of FACET_KEYS) next.delete(key);
         for (const k of ['search', 'dateField', 'from', 'to', 'urgent', ...PERSON_KEYS]) next.delete(k);
       }),
-    [commit]
+    [commit],
   );
 
   const toggleSort = useCallback(
@@ -294,9 +241,9 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
             next.set('sortDir', 'asc');
           }
         },
-        { keepOffset: false }
+        { keepOffset: false },
       ),
-    [commit, sortBy, sortDir]
+    [commit, sortBy, sortDir],
   );
 
   const setOffset = useCallback(
@@ -306,18 +253,13 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
           if (value > 0) next.set('offset', String(value));
           else next.delete('offset');
         },
-        { keepOffset: true }
+        { keepOffset: true },
       ),
-    [commit]
+    [commit],
   );
 
   const showDeleted = params.get('deleted') === 'only';
 
-  /*
-   * `?assignment=picked|queued` - who owns the bug, in the sense the dashboard
-   * tiles use. Passed straight through to the API, which resolves it against
-   * each component's default owner; there is no Bugzilla search term for it.
-   */
   const assignmentParam = params.get('assignment');
   const assignment = assignmentParam === 'picked' || assignmentParam === 'queued' ? assignmentParam : undefined;
   const setShowDeleted = useCallback(
@@ -326,7 +268,7 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
         if (on) next.set('deleted', 'only');
         else next.delete('deleted');
       }),
-    [commit]
+    [commit],
   );
 
   const queryParams = useMemo<BugQueryParams>(() => {
@@ -343,7 +285,6 @@ export function useBugFilters(defaults?: { sortBy?: string; sortDir?: 'asc' | 'd
     }
     if (showDeleted) out.deleted = 'only';
     if (assignment) out.assignment = assignment;
-    // Critical severity OR P0 priority - from the dashboards' Top priority tiles.
     if (params.get('urgent') === '1') out.urgent = '1';
     for (const key of PERSON_KEYS) {
       const who = params.get(key)?.trim();

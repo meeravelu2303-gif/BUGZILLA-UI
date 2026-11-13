@@ -3,11 +3,6 @@ import type { ApiErrorBody } from '../types';
 export class ApiError extends Error {
   status: number;
   code: ApiErrorBody['code'];
-  /**
-   * Carried through so callers can react to an error, not just print it - the
-   * sign-in form reads the cooldown out of a RATE_LIMITED `details` block.
-   * Dropping this on the floor is why the retry time never reached the UI.
-   */
   details?: ApiErrorBody['details'];
 
   constructor(body: ApiErrorBody) {
@@ -31,23 +26,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await res.json().catch(() => null);
 
   if (!res.ok || (body && body.error === true)) {
-    throw new ApiError(
-      body ?? { error: true, status: res.status, code: 'INTERNAL', message: 'Unexpected error.' }
-    );
+    throw new ApiError(body ?? { error: true, status: res.status, code: 'INTERNAL', message: 'Unexpected error.' });
   }
 
   return body as T;
 }
 
-/**
- * Fetches a file from the API as a Blob, with the server's suggested filename.
- *
- * A separate path from `request` because the success body is binary, not JSON -
- * but the FAILURE body is still the API's JSON error, so a 401 or a 400 surfaces
- * as a proper ApiError with its message instead of downloading an error page
- * disguised as a spreadsheet.
- */
-export async function downloadFile(path: string): Promise<{ blob: Blob; filename: string | null; rows: number | null }> {
+/** Fetches a file from the API as a Blob, with the server's suggested filename. */
+export async function downloadFile(
+  path: string,
+): Promise<{ blob: Blob; filename: string | null; rows: number | null }> {
   const res = await fetch(`/api${path}`, { credentials: 'include' });
 
   if (!res.ok) {
@@ -63,28 +51,28 @@ export async function downloadFile(path: string): Promise<{ blob: Blob; filename
 
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
-  post: <T>(path: string, data?: unknown) => request<T>(path, { method: 'POST', body: data !== undefined ? JSON.stringify(data) : undefined }),
-  patch: <T>(path: string, data?: unknown) => request<T>(path, { method: 'PATCH', body: data !== undefined ? JSON.stringify(data) : undefined }),
+  post: <T>(path: string, data?: unknown) =>
+    request<T>(path, { method: 'POST', body: data !== undefined ? JSON.stringify(data) : undefined }),
+  patch: <T>(path: string, data?: unknown) =>
+    request<T>(path, { method: 'PATCH', body: data !== undefined ? JSON.stringify(data) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
-  deleteWithBody: <T>(path: string, data: unknown) => request<T>(path, { method: 'DELETE', body: JSON.stringify(data) }),
-  put: <T>(path: string, data?: unknown) => request<T>(path, { method: 'PUT', body: data !== undefined ? JSON.stringify(data) : undefined }),
+  deleteWithBody: <T>(path: string, data: unknown) =>
+    request<T>(path, { method: 'DELETE', body: JSON.stringify(data) }),
+  put: <T>(path: string, data?: unknown) =>
+    request<T>(path, { method: 'PUT', body: data !== undefined ? JSON.stringify(data) : undefined }),
 };
 
-/**
- * Array values become repeated keys (`?severity=Critical&severity=Major`),
- * which is how multi-select within one axis is expressed end to end: the
- * backend's Zod schema accepts repeats, and Bugzilla ORs them together.
- */
+/** Array values become repeated keys (?severity=Critical&severity=Major). */
 export function buildQuery(params: Record<string, string | number | string[] | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === '') continue;
     if (Array.isArray(value)) {
-      for (const v of value) if (v !== '') search.append(key, String(v));
+      for (const item of value) if (item !== '') search.append(key, String(item));
       continue;
     }
     search.set(key, String(value));
   }
-  const qs = search.toString();
-  return qs ? `?${qs}` : '';
+  const queryString = search.toString();
+  return queryString ? `?${queryString}` : '';
 }

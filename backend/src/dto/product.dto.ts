@@ -40,7 +40,6 @@ export interface NormalizedProduct {
 
 export interface NormalizedSubcomponent {
   id: number;
-  /** Stored value, `<name> [<component id>]` - what filters and bugs carry. */
   value: string;
   name: string;
   isActive: boolean;
@@ -50,32 +49,34 @@ export interface NormalizedComponent {
   id: number;
   name: string;
   description: string;
-  /** Inactive components keep their bugs but are closed for new ones. */
   isActive: boolean;
   defaultAssignee: string;
-  /** Sub-components (services/subcomponents.service.ts), inactive ones included and flagged. */
   subcomponents: NormalizedSubcomponent[];
 }
 
-/**
- * `subs` is the sub-component list grouped by component id (services/subcomponents.service.ts
- * `byComponent`). Omitted, components simply carry none.
- */
-export function normalizeProduct(raw: RawProduct, subs?: Map<number, Subcomponent[]>): NormalizedProduct {
+/** subs is the sub-component list grouped by component id (services/subcomponents.service.ts byComponent). */
+export function normalizeProduct(raw: RawProduct, subcomponents?: Map<number, Subcomponent[]>): NormalizedProduct {
   return {
     id: raw.id,
     name: raw.name,
     description: raw.description ?? '',
     isActive: raw.is_active ?? true,
-    components: raw.components.map((c) => ({
-      id: c.id ?? 0,
-      name: c.name,
-      description: c.description ?? '',
-      isActive: c.is_active ?? true,
-      defaultAssignee: c.default_assigned_to ?? '',
-      subcomponents: (c.id !== undefined ? subs?.get(c.id) ?? [] : []).map((s) => ({ id: s.id, value: s.value, name: s.name, isActive: s.isActive })),
+    components: raw.components.map((component) => ({
+      id: component.id ?? 0,
+      name: component.name,
+      description: component.description ?? '',
+      isActive: component.is_active ?? true,
+      defaultAssignee: component.default_assigned_to ?? '',
+      subcomponents: (component.id !== undefined ? (subcomponents?.get(component.id) ?? []) : []).map(
+        (subcomponent) => ({
+          id: subcomponent.id,
+          value: subcomponent.value,
+          name: subcomponent.name,
+          isActive: subcomponent.isActive,
+        }),
+      ),
     })),
-    versions: raw.versions.map((v) => v.name),
-    milestones: raw.milestones.map((m) => m.name),
+    versions: raw.versions.map((version) => version.name),
+    milestones: raw.milestones.map((milestone) => milestone.name),
   };
 }

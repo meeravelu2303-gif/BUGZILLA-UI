@@ -6,10 +6,13 @@
     "serve": "npm --prefix frontend run build && concurrently -n backend,frontend -c blue,green --kill-others-on-fail \"npm --prefix backend run dev\" \"node scripts/wait-for-port.cjs 4000 && npm --prefix frontend run preview\"",
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
-    "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install"
+    "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install",
+    "format": "prettier --write \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\" \"frontend/*.config.{ts,js}\" \"e2e/**/*.ts\"",
+    "format:check": "prettier --check \"backend/src/**/*.ts\" \"frontend/src/**/*.{ts,tsx}\" \"frontend/*.config.{ts,js}\" \"e2e/**/*.ts\""
   },
   "devDependencies": {
-    "concurrently": "^10.0.6"
+    "concurrently": "^10.0.6",
+    "prettier": "3.10.1"
   },
   "dependencies": {
     "claude": "^0.1.1"

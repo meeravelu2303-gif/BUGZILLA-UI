@@ -6,17 +6,8 @@ import { useResetPassword, useValidateResetToken } from '../api/hooks';
 import { AUTH_FIELD_BASE, AUTH_FIELD_ERROR, AUTH_FIELD_OK, AUTH_SUBMIT, AuthShell } from '../components/auth/AuthShell';
 import { getPasswordResetErrorMessage } from '../lib/authErrorMessage';
 
-/** Bugzilla's USER_PASSWORD_MIN_LENGTH. Its complexity rule (a parameter) is applied server-side. */
 const MIN_LENGTH = 6;
 
-/**
- * The token arrives in the URL because that is the only thing an email link
- * can carry. Reading it is pure; the URL is rewritten without it in an effect
- * below, so it does not sit in the address bar, the browser history, or the
- * next page's Referer header. (Pure on purpose: React runs state initialisers
- * twice in development, and an initialiser that also stripped the URL would
- * hand the second run nothing.)
- */
 function readTokenFromUrl(): string | null {
   const params = new URLSearchParams(window.location.search);
   return params.get('t') ?? params.get('token');
@@ -36,17 +27,9 @@ function Rule({ met, children }: { met: boolean; children: React.ReactNode }) {
   );
 }
 
-/**
- * Reset password: the page the emailed link opens.
- *
- * Three states besides the form. No token (someone typed the URL), a dead
- * token (used, expired, cancelled - checked with the server before the form is
- * shown, so nobody types a password into a link that was never going to work),
- * and done.
- */
+/** Reset password: the page the emailed link opens. */
 export function ResetPassword() {
   const [token] = useState<string | null>(readTokenFromUrl);
-  // Opened from the welcome email of a new account: same link, friendlier words.
   const [welcome] = useState(() => new URLSearchParams(window.location.search).get('welcome') === '1');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -71,8 +54,8 @@ export function ResetPassword() {
   const longEnough = password.length >= MIN_LENGTH;
   const matches = confirm.length > 0 && confirm === password;
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     setServerError(null);
     if (!longEnough) {
       setFieldError(`Use at least ${MIN_LENGTH} characters.`);
@@ -111,7 +94,8 @@ export function ResetPassword() {
             <LinkIcon className="h-5 w-5" aria-hidden />
           </span>
           <p className="leading-relaxed">
-            For your security, a link stops working as soon as it has been used, cancelled, or replaced by a newer request.
+            For your security, a link stops working as soon as it has been used, cancelled, or replaced by a newer
+            request.
           </p>
         </div>
         <Link to="/forgot-password" className={`${AUTH_SUBMIT} mt-6`}>
@@ -124,7 +108,10 @@ export function ResetPassword() {
 
   if (done) {
     return (
-      <AuthShell title="Password updated" subtitle="You can sign in with your new password now. Any other devices that were signed in will need to sign in again.">
+      <AuthShell
+        title="Password updated"
+        subtitle="You can sign in with your new password now. Any other devices that were signed in will need to sign in again."
+      >
         <div className="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-sm text-emerald-800">
           <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden />
           Your new password is in effect.
@@ -150,7 +137,10 @@ export function ResetPassword() {
   if (check.isError) {
     return (
       <AuthShell title="Choose a new password" subtitle="We could not check your link just now.">
-        <p role="alert" className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm leading-relaxed text-rose-700">
+        <p
+          role="alert"
+          className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm leading-relaxed text-rose-700"
+        >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>{getPasswordResetErrorMessage(check.error)}</span>
         </p>
@@ -166,7 +156,11 @@ export function ResetPassword() {
   return (
     <AuthShell
       title={welcome ? 'Welcome! Set your password' : 'Choose a new password'}
-      subtitle={welcome ? 'Choose the password you will sign in with. Pick something you do not use anywhere else.' : 'Pick something you do not use anywhere else.'}
+      subtitle={
+        welcome
+          ? 'Choose the password you will sign in with. Pick something you do not use anywhere else.'
+          : 'Pick something you do not use anywhere else.'
+      }
     >
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
@@ -174,15 +168,18 @@ export function ResetPassword() {
             New password
           </label>
           <div className="relative">
-            <Lock className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${fieldError ? 'text-rose-400' : 'text-slate-400'}`} aria-hidden />
+            <Lock
+              className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${fieldError ? 'text-rose-400' : 'text-slate-400'}`}
+              aria-hidden
+            />
             <input
               id="reset-password"
               ref={passwordRef}
               type={show ? 'text' : 'password'}
               autoComplete="new-password"
               value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
+              onChange={(event) => {
+                setPassword(event.target.value);
                 if (fieldError) setFieldError('');
               }}
               placeholder="••••••••"
@@ -193,7 +190,7 @@ export function ResetPassword() {
             />
             <button
               type="button"
-              onClick={() => setShow((v) => !v)}
+              onClick={() => setShow((currentShow) => !currentShow)}
               aria-label={show ? 'Hide password' : 'Show password'}
               aria-pressed={show}
               className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 outline-none transition-colors hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-[#0d6875]/30"
@@ -208,14 +205,17 @@ export function ResetPassword() {
             Confirm new password
           </label>
           <div className="relative">
-            <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+            <Lock
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
             <input
               id="reset-confirm"
               type={show ? 'text' : 'password'}
               autoComplete="new-password"
               value={confirm}
-              onChange={(e) => {
-                setConfirm(e.target.value);
+              onChange={(event) => {
+                setConfirm(event.target.value);
                 if (fieldError) setFieldError('');
               }}
               placeholder="••••••••"
@@ -230,7 +230,10 @@ export function ResetPassword() {
         </ul>
 
         {(fieldError || serverError) && (
-          <p role="alert" className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm leading-relaxed text-rose-700">
+          <p
+            role="alert"
+            className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm leading-relaxed text-rose-700"
+          >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span>{fieldError || serverError}</span>
           </p>

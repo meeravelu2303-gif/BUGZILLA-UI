@@ -24,7 +24,6 @@ const SECTION_FIELDS: Record<string, DraftKey[]> = {
   flags: ['flags'],
 };
 
-/** Options for a <select>, always including the current value so a set field never renders blank. */
 function withCurrent(options: string[], current: string): string[] {
   return current && !options.includes(current) ? [current, ...options] : options;
 }
@@ -39,7 +38,6 @@ export function MetadataSidebar({
   currentUser,
   saveBar,
 }: {
-  /** The save / discard section, shown under "Created" while there are unsaved changes. */
   saveBar?: ReactNode;
   bug: Bug;
   meta?: BugMeta;
@@ -55,11 +53,16 @@ export function MetadataSidebar({
   const err = editor.errors;
   const product = editor.draftProduct;
   const nameFor = (email: string) =>
-    bug.ccDetail.find((u) => u.email === email)?.name ?? people.find((u) => u.email === email)?.name ?? email;
+    bug.ccDetail.find((ccDetail) => ccDetail.email === email)?.name ??
+    people.find((person) => person.email === email)?.name ??
+    email;
 
   const me = currentUser ?? '';
-  const iAmCc = me !== '' && draft.cc.some((e) => e.toLowerCase() === me.toLowerCase());
-  const productNames = withCurrent((products ?? []).map((p) => p.name), baseline.product);
+  const iAmCc = me !== '' && draft.cc.some((cc) => cc.toLowerCase() === me.toLowerCase());
+  const productNames = withCurrent(
+    (products ?? []).map((productItem) => productItem.name),
+    baseline.product,
+  );
   const time = bug.timeTracking;
   const workLogged = Number(draft.workTime) || 0;
   const actual = (time?.actualTime ?? 0) + (editor.errors.workTime ? 0 : workLogged);
@@ -75,13 +78,18 @@ export function MetadataSidebar({
         </span>
       </div>
 
-      {/* ---- Status ---- */}
-      <EditSection id="status" title="Status" icon={CircleDot} changes={changesIn('status')} summary={draft.status.replace('_', ' ')}>
+      <EditSection
+        id="status"
+        title="Status"
+        icon={CircleDot}
+        changes={changesIn('status')}
+        summary={draft.status.replace('_', ' ')}
+      >
         <Changed when={editor.isDirty('status')}>
           <Select
             label="Status"
             value={draft.status}
-            onChange={(e) => set('status', e.target.value)}
+            onChange={(event) => set('status', event.target.value)}
             error={editor.errors.status}
             hint={
               editor.allowedStatuses.length <= 1
@@ -91,10 +99,10 @@ export function MetadataSidebar({
                   : undefined
             }
           >
-            {withCurrent(editor.allowedStatuses, draft.status).map((s) => (
-              <option key={s} value={s}>
-                {s.replace('_', ' ')}
-                {s === baseline.status ? ' (current)' : ''}
+            {withCurrent(editor.allowedStatuses, draft.status).map((value) => (
+              <option key={value} value={value}>
+                {value.replace('_', ' ')}
+                {value === baseline.status ? ' (current)' : ''}
               </option>
             ))}
           </Select>
@@ -106,12 +114,12 @@ export function MetadataSidebar({
               label="Resolution"
               placeholder="Choose…"
               value={draft.resolution}
-              onChange={(e) => set('resolution', e.target.value)}
+              onChange={(event) => set('resolution', event.target.value)}
               error={err.resolution}
             >
-              {(meta?.resolutions ?? [draft.resolution]).map((r) => (
-                <option key={r} value={r}>
-                  {r}
+              {(meta?.resolutions ?? [draft.resolution]).map((resolution) => (
+                <option key={resolution} value={resolution}>
+                  {resolution}
                 </option>
               ))}
             </Select>
@@ -123,7 +131,7 @@ export function MetadataSidebar({
             <Input
               label="Duplicate of"
               value={draft.dupeOf}
-              onChange={(e) => set('dupeOf', e.target.value)}
+              onChange={(event) => set('dupeOf', event.target.value)}
               placeholder="e.g. 806 or KPA-806"
               inputMode="numeric"
               error={err.dupeOf}
@@ -133,7 +141,6 @@ export function MetadataSidebar({
         )}
       </EditSection>
 
-      {/* ---- Priority & severity ---- */}
       <EditSection
         id="classification"
         title="Priority & severity"
@@ -143,19 +150,19 @@ export function MetadataSidebar({
       >
         <div className="grid grid-cols-2 gap-3">
           <Changed when={editor.isDirty('priority')}>
-            <Select label="Priority" value={draft.priority} onChange={(e) => set('priority', e.target.value)}>
-              {withCurrent(meta?.priorities ?? [], draft.priority).map((p) => (
-                <option key={p} value={p}>
-                  {p}
+            <Select label="Priority" value={draft.priority} onChange={(event) => set('priority', event.target.value)}>
+              {withCurrent(meta?.priorities ?? [], draft.priority).map((value) => (
+                <option key={value} value={value}>
+                  {value}
                 </option>
               ))}
             </Select>
           </Changed>
           <Changed when={editor.isDirty('severity')}>
-            <Select label="Severity" value={draft.severity} onChange={(e) => set('severity', e.target.value)}>
-              {withCurrent(meta?.severities ?? [], draft.severity).map((s) => (
-                <option key={s} value={s}>
-                  {s}
+            <Select label="Severity" value={draft.severity} onChange={(event) => set('severity', event.target.value)}>
+              {withCurrent(meta?.severities ?? [], draft.severity).map((value) => (
+                <option key={value} value={value}>
+                  {value}
                 </option>
               ))}
             </Select>
@@ -163,18 +170,27 @@ export function MetadataSidebar({
         </div>
       </EditSection>
 
-      {/* ---- Product & placement ---- */}
-      <EditSection id="placement" title="Product & component" icon={Boxes} changes={changesIn('placement')} summary={`${draft.product} / ${draft.component || '—'}${draft.subcomponent ? ` / ${subcomponentName(draft.subcomponent)}` : ''}`}>
+      <EditSection
+        id="placement"
+        title="Product & component"
+        icon={Boxes}
+        changes={changesIn('placement')}
+        summary={`${draft.product} / ${draft.component || '—'}${draft.subcomponent ? ` / ${subcomponentName(draft.subcomponent)}` : ''}`}
+      >
         <Changed when={editor.isDirty('product')}>
           <Select
             label="Product"
             value={draft.product}
-            onChange={(e) => set('product', e.target.value)}
-            hint={editor.isDirty('product') ? 'Moving products: pick the component and version it belongs to there. Visibility follows the new product.' : undefined}
+            onChange={(event) => set('product', event.target.value)}
+            hint={
+              editor.isDirty('product')
+                ? 'Moving products: pick the component and version it belongs to there. Visibility follows the new product.'
+                : undefined
+            }
           >
-            {productNames.map((p) => (
-              <option key={p} value={p}>
-                {p}
+            {productNames.map((productName) => (
+              <option key={productName} value={productName}>
+                {productName}
               </option>
             ))}
           </Select>
@@ -184,37 +200,43 @@ export function MetadataSidebar({
             label="Component"
             placeholder={draft.component ? undefined : 'Choose…'}
             value={draft.component}
-            onChange={(e) => set('component', e.target.value)}
+            onChange={(event) => set('component', event.target.value)}
             error={err.component}
           >
-            {withCurrent(product?.components.map((c) => c.name) ?? [], draft.component).map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {withCurrent(product?.components.map((component) => component.name) ?? [], draft.component).map((value) => (
+              <option key={value} value={value}>
+                {value}
               </option>
             ))}
           </Select>
         </Changed>
-        {/* Sub-component: the chosen component's live ones, plus the saved one if it has since been deactivated. */}
         {(() => {
-          const subs = product?.components.find((c) => c.name === draft.component)?.subcomponents ?? [];
-          const offered = subs.filter((sc) => sc.isActive || sc.value === draft.subcomponent);
+          const subcomponents =
+            product?.components.find((component) => component.name === draft.component)?.subcomponents ?? [];
+          const offered = subcomponents.filter(
+            (subcomponent) => subcomponent.isActive || subcomponent.value === draft.subcomponent,
+          );
           if (offered.length === 0 && !draft.subcomponent) return null;
           return (
             <Changed when={editor.isDirty('subcomponent')}>
               <Select
                 label="Sub-component"
                 value={draft.subcomponent}
-                onChange={(e) => set('subcomponent', e.target.value)}
-                hint={editor.isDirty('component') ? 'Cleared because the component changed. Pick one from the new component, or leave it empty.' : undefined}
+                onChange={(event) => set('subcomponent', event.target.value)}
+                hint={
+                  editor.isDirty('component')
+                    ? 'Cleared because the component changed. Pick one from the new component, or leave it empty.'
+                    : undefined
+                }
               >
                 <option value="">None</option>
-                {offered.map((sc) => (
-                  <option key={sc.id} value={sc.value}>
-                    {sc.name}
-                    {sc.isActive ? '' : ' (inactive)'}
+                {offered.map((subcomponent) => (
+                  <option key={subcomponent.id} value={subcomponent.value}>
+                    {subcomponent.name}
+                    {subcomponent.isActive ? '' : ' (inactive)'}
                   </option>
                 ))}
-                {draft.subcomponent && !offered.some((sc) => sc.value === draft.subcomponent) && (
+                {draft.subcomponent && !offered.some((subcomponent) => subcomponent.value === draft.subcomponent) && (
                   <option value={draft.subcomponent}>{subcomponentName(draft.subcomponent)}</option>
                 )}
               </Select>
@@ -227,22 +249,26 @@ export function MetadataSidebar({
               label="Version"
               placeholder={draft.version ? undefined : 'Choose…'}
               value={draft.version}
-              onChange={(e) => set('version', e.target.value)}
+              onChange={(event) => set('version', event.target.value)}
               error={err.version}
             >
-              {withCurrent(product?.versions ?? [], draft.version).map((v) => (
-                <option key={v} value={v}>
-                  {v}
+              {withCurrent(product?.versions ?? [], draft.version).map((value) => (
+                <option key={value} value={value}>
+                  {value}
                 </option>
               ))}
             </Select>
           </Changed>
           {features?.targetMilestone ? (
             <Changed when={editor.isDirty('targetMilestone')}>
-              <Select label="Milestone" value={draft.targetMilestone} onChange={(e) => set('targetMilestone', e.target.value)}>
-                {withCurrent(product?.milestones ?? [], draft.targetMilestone).map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+              <Select
+                label="Milestone"
+                value={draft.targetMilestone}
+                onChange={(event) => set('targetMilestone', event.target.value)}
+              >
+                {withCurrent(product?.milestones ?? [], draft.targetMilestone).map((value) => (
+                  <option key={value} value={value}>
+                    {value}
                   </option>
                 ))}
               </Select>
@@ -251,19 +277,19 @@ export function MetadataSidebar({
             <div />
           )}
           <Changed when={editor.isDirty('opSys')}>
-            <Select label="OS" value={draft.opSys} onChange={(e) => set('opSys', e.target.value)}>
-              {withCurrent(meta?.opSystems ?? [], draft.opSys).map((o) => (
-                <option key={o} value={o}>
-                  {o}
+            <Select label="OS" value={draft.opSys} onChange={(event) => set('opSys', event.target.value)}>
+              {withCurrent(meta?.opSystems ?? [], draft.opSys).map((value) => (
+                <option key={value} value={value}>
+                  {value}
                 </option>
               ))}
             </Select>
           </Changed>
           <Changed when={editor.isDirty('platform')}>
-            <Select label="Platform" value={draft.platform} onChange={(e) => set('platform', e.target.value)}>
-              {withCurrent(meta?.platforms ?? [], draft.platform).map((p) => (
-                <option key={p} value={p}>
-                  {p}
+            <Select label="Platform" value={draft.platform} onChange={(event) => set('platform', event.target.value)}>
+              {withCurrent(meta?.platforms ?? [], draft.platform).map((value) => (
+                <option key={value} value={value}>
+                  {value}
                 </option>
               ))}
             </Select>
@@ -271,7 +297,6 @@ export function MetadataSidebar({
         </div>
       </EditSection>
 
-      {/* ---- People ---- */}
       <EditSection
         id="people"
         title="People"
@@ -283,8 +308,10 @@ export function MetadataSidebar({
           <Select
             label="Assignee"
             value={draft.resetAssignedTo ? '__default__' : draft.assignedTo}
-            onChange={(e) =>
-              e.target.value === '__default__' ? set('resetAssignedTo', true) : set('assignedTo', e.target.value)
+            onChange={(event) =>
+              event.target.value === '__default__'
+                ? set('resetAssignedTo', true)
+                : set('assignedTo', event.target.value)
             }
             disabled={editor.lockAssignee}
             hint={
@@ -299,13 +326,16 @@ export function MetadataSidebar({
           >
             {(() => {
               const options = [...people];
-              if (draft.assignedTo && !options.some((u) => u.email === draft.assignedTo)) {
-                options.unshift({ email: draft.assignedTo, name: bug.assignedTo?.email === draft.assignedTo ? bug.assignedTo.name : draft.assignedTo });
+              if (draft.assignedTo && !options.some((option) => option.email === draft.assignedTo)) {
+                options.unshift({
+                  email: draft.assignedTo,
+                  name: bug.assignedTo?.email === draft.assignedTo ? bug.assignedTo.name : draft.assignedTo,
+                });
               }
               return [
-                ...options.map((u) => (
-                  <option key={u.email} value={u.email} title={u.email}>
-                    {u.name}
+                ...options.map((assignableUser) => (
+                  <option key={assignableUser.email} value={assignableUser.email} title={assignableUser.email}>
+                    {assignableUser.name}
                   </option>
                 )),
                 <option key="__default__" value="__default__">
@@ -321,14 +351,21 @@ export function MetadataSidebar({
             <Select
               label="QA contact"
               value={draft.resetQaContact ? '__default__' : draft.qaContact}
-              onChange={(e) => (e.target.value === '__default__' ? set('resetQaContact', true) : set('qaContact', e.target.value))}
+              onChange={(event) =>
+                event.target.value === '__default__'
+                  ? set('resetQaContact', true)
+                  : set('qaContact', event.target.value)
+              }
             >
               <option value="">Nobody</option>
-              {withCurrent(people.map((u) => u.email), draft.qaContact)
+              {withCurrent(
+                people.map((person) => person.email),
+                draft.qaContact,
+              )
                 .filter(Boolean)
                 .map((email) => (
                   <option key={email} value={email}>
-                    {people.find((u) => u.email === email)?.name ?? bug.qaContact?.name ?? email}
+                    {people.find((person) => person.email === email)?.name ?? bug.qaContact?.name ?? email}
                   </option>
                 ))}
               <option value="__default__">↺ Component default QA contact</option>
@@ -341,19 +378,23 @@ export function MetadataSidebar({
             label={`CC${draft.cc.length ? ` (${draft.cc.length})` : ''}`}
             values={draft.cc}
             baseline={baseline.cc}
-            onChange={(v) => set('cc', v)}
+            onChange={(value) => set('cc', value)}
             parse={(raw) =>
-              /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? { value: raw.toLowerCase() } : { error: `"${raw}" is not an email address.` }
+              /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)
+                ? { value: raw.toLowerCase() }
+                : { error: `"${raw}" is not an email address.` }
             }
             renderLabel={(email) => <span title={email}>{nameFor(email)}</span>}
             placeholder="Add by email…"
-            suggestions={people.map((u) => ({ value: u.email, label: u.name }))}
+            suggestions={people.map((person) => ({ value: person.email, label: person.name }))}
             emptyText="Nobody is CC'd."
           />
           {me && (
             <button
               type="button"
-              onClick={() => set('cc', iAmCc ? draft.cc.filter((e) => e.toLowerCase() !== me.toLowerCase()) : [...draft.cc, me])}
+              onClick={() =>
+                set('cc', iAmCc ? draft.cc.filter((cc) => cc.toLowerCase() !== me.toLowerCase()) : [...draft.cc, me])
+              }
               className="focus-ring mt-1.5 rounded text-xs font-medium text-brand-700 hover:underline"
             >
               {iAmCc ? 'Remove me from CC' : 'Add me to CC'}
@@ -370,7 +411,6 @@ export function MetadataSidebar({
         </dl>
       </EditSection>
 
-      {/* ---- Relationships ---- */}
       <EditSection
         id="relations"
         title="Relationships"
@@ -378,7 +418,9 @@ export function MetadataSidebar({
         changes={changesIn('relations')}
         defaultOpen={bug.dependsOn.length + bug.blocks.length + bug.seeAlso.length > 0 || Boolean(bug.url)}
         summary={
-          bug.dependsOn.length + bug.blocks.length > 0 ? `${bug.dependsOn.length} deps · ${bug.blocks.length} blocks` : 'None'
+          bug.dependsOn.length + bug.blocks.length > 0
+            ? `${bug.dependsOn.length} deps · ${bug.blocks.length} blocks`
+            : 'None'
         }
       >
         {(['dependsOn', 'blocks'] as const).map((key) => (
@@ -387,13 +429,16 @@ export function MetadataSidebar({
               label={key === 'dependsOn' ? 'Depends on' : 'Blocks'}
               values={draft[key]}
               baseline={baseline[key]}
-              onChange={(v) => set(key, v)}
+              onChange={(value) => set(key, value)}
               parse={(raw) => {
                 const id = parseBugRef(raw);
                 if (id === null) return { error: `"${raw}" is not a bug number. Try 806 or KPA-806.` };
                 if (id === bug.id) return { error: 'A bug cannot depend on itself.' };
                 const other = key === 'dependsOn' ? draft.blocks : draft.dependsOn;
-                if (other.includes(id)) return { error: `${bugDisplayId({ id })} is already in ${key === 'dependsOn' ? 'Blocks' : 'Depends on'}.` };
+                if (other.includes(id))
+                  return {
+                    error: `${bugDisplayId({ id })} is already in ${key === 'dependsOn' ? 'Blocks' : 'Depends on'}.`,
+                  };
                 return { value: id };
               }}
               renderLabel={(id) => bugDisplayId({ id })}
@@ -410,8 +455,12 @@ export function MetadataSidebar({
               label="See also"
               values={draft.seeAlso}
               baseline={baseline.seeAlso}
-              onChange={(v) => set('seeAlso', v)}
-              parse={(raw) => (/^https?:\/\/\S+$/i.test(raw) ? { value: raw } : { error: 'Paste a full link starting with http:// or https://.' })}
+              onChange={(value) => set('seeAlso', value)}
+              parse={(raw) =>
+                /^https?:\/\/\S+$/i.test(raw)
+                  ? { value: raw }
+                  : { error: 'Paste a full link starting with http:// or https://.' }
+              }
               renderLabel={(url) => url.replace(/^https?:\/\//, '')}
               hrefFor={(url) => url}
               placeholder="https://…"
@@ -425,14 +474,13 @@ export function MetadataSidebar({
             label="URL"
             type="url"
             value={draft.url}
-            onChange={(e) => set('url', e.target.value)}
+            onChange={(event) => set('url', event.target.value)}
             placeholder="https://… where the bug can be seen"
             error={editor.isDirty('url') ? err.url : undefined}
           />
         </Changed>
       </EditSection>
 
-      {/* ---- Time tracking ---- */}
       {time && (
         <EditSection
           id="time"
@@ -448,7 +496,7 @@ export function MetadataSidebar({
                 label="Estimate (h)"
                 inputMode="decimal"
                 value={draft.estimatedTime}
-                onChange={(e) => set('estimatedTime', e.target.value)}
+                onChange={(event) => set('estimatedTime', event.target.value)}
                 error={err.estimatedTime}
               />
             </Changed>
@@ -457,7 +505,7 @@ export function MetadataSidebar({
                 label="Remaining (h)"
                 inputMode="decimal"
                 value={draft.remainingTime}
-                onChange={(e) => set('remainingTime', e.target.value)}
+                onChange={(event) => set('remainingTime', event.target.value)}
                 error={err.remainingTime}
               />
             </Changed>
@@ -467,7 +515,7 @@ export function MetadataSidebar({
               label="Log hours worked"
               inputMode="decimal"
               value={draft.workTime}
-              onChange={(e) => set('workTime', e.target.value)}
+              onChange={(event) => set('workTime', event.target.value)}
               placeholder="e.g. 1.5"
               error={err.workTime}
               hint="Added to the total and recorded in the comment history."
@@ -480,14 +528,30 @@ export function MetadataSidebar({
               </span>
               <span className="tabular-nums">{progress}% done</span>
             </div>
-            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200/80" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Work completed">
+            <div
+              className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200/80"
+              role="progressbar"
+              aria-valuenow={progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Work completed"
+            >
               <div className="h-full rounded-full bg-brand-600 transition-[width]" style={{ width: `${progress}%` }} />
             </div>
           </div>
           <Changed when={editor.isDirty('deadline')}>
-            <Input label="Deadline" type="date" value={draft.deadline} onChange={(e) => set('deadline', e.target.value)} />
+            <Input
+              label="Deadline"
+              type="date"
+              value={draft.deadline}
+              onChange={(event) => set('deadline', event.target.value)}
+            />
             {draft.deadline && (
-              <button type="button" onClick={() => set('deadline', '')} className="focus-ring mt-1 rounded text-xs font-medium text-slate-500 hover:text-rose-600">
+              <button
+                type="button"
+                onClick={() => set('deadline', '')}
+                className="focus-ring mt-1 rounded text-xs font-medium text-slate-500 hover:text-rose-600"
+              >
                 Clear deadline
               </button>
             )}
@@ -495,7 +559,6 @@ export function MetadataSidebar({
         </EditSection>
       )}
 
-      {/* ---- Visibility ---- */}
       <EditSection
         id="visibility"
         title="Visibility"
@@ -508,21 +571,32 @@ export function MetadataSidebar({
           <fieldset>
             <legend className="text-sm font-medium text-slate-700">Only these groups can see this bug</legend>
             <div className="mt-2 flex flex-col gap-2">
-              {(bug.availableGroups ?? bug.groups).map((g) => (
-                <label key={g} className="flex items-center gap-2 text-sm text-slate-700">
+              {(bug.availableGroups ?? bug.groups).map((availableGroup) => (
+                <label key={availableGroup} className="flex items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
-                    checked={draft.groups.includes(g)}
-                    onChange={(e) => set('groups', e.target.checked ? [...draft.groups, g] : draft.groups.filter((x) => x !== g))}
+                    checked={draft.groups.includes(availableGroup)}
+                    onChange={(event) =>
+                      set(
+                        'groups',
+                        event.target.checked
+                          ? [...draft.groups, availableGroup]
+                          : draft.groups.filter((x) => x !== availableGroup),
+                      )
+                    }
                     className="rounded border-line text-brand-700 focus:ring-brand-600"
                   />
-                  {g}
+                  {availableGroup}
                 </label>
               ))}
-              {(bug.availableGroups ?? bug.groups).length === 0 && <p className="text-xs text-slate-500">No restricting group exists for this product.</p>}
+              {(bug.availableGroups ?? bug.groups).length === 0 && (
+                <p className="text-xs text-slate-500">No restricting group exists for this product.</p>
+              )}
             </div>
             <p className="mt-2 text-xs text-slate-600">
-              {draft.groups.length === 0 ? 'Unrestricted - anyone who can sign in can see it.' : 'Members of a ticked group can see it, plus the people below.'}
+              {draft.groups.length === 0
+                ? 'Unrestricted - anyone who can sign in can see it.'
+                : 'Members of a ticked group can see it, plus the people below.'}
             </p>
           </fieldset>
         </Changed>
@@ -538,7 +612,7 @@ export function MetadataSidebar({
                 <input
                   type="checkbox"
                   checked={draft[key]}
-                  onChange={(e) => set(key, e.target.checked)}
+                  onChange={(event) => set(key, event.target.checked)}
                   className="rounded border-line text-brand-700 focus:ring-brand-600"
                 />
                 {text}
@@ -548,7 +622,6 @@ export function MetadataSidebar({
         </div>
       </EditSection>
 
-      {/* ---- Labels ---- */}
       <EditSection
         id="labels"
         title="Labels"
@@ -562,7 +635,7 @@ export function MetadataSidebar({
             label="Alias"
             values={draft.alias}
             baseline={baseline.alias}
-            onChange={(v) => set('alias', v)}
+            onChange={(value) => set('alias', value)}
             parse={(raw) =>
               /^\d+$/.test(raw)
                 ? { error: 'An alias cannot be only digits - it would read as a bug number.' }
@@ -580,7 +653,7 @@ export function MetadataSidebar({
               label="Keywords"
               values={draft.keywords}
               baseline={baseline.keywords}
-              onChange={(v) => set('keywords', v)}
+              onChange={(value) => set('keywords', value)}
               parse={(raw) => {
                 const match = meta!.keywords.find((k) => k.toLowerCase() === raw.toLowerCase());
                 return match ? { value: match } : { error: `"${raw}" is not a keyword on this Bugzilla.` };
@@ -594,7 +667,7 @@ export function MetadataSidebar({
           <Input
             label="Whiteboard"
             value={draft.whiteboard}
-            onChange={(e) => set('whiteboard', e.target.value)}
+            onChange={(event) => set('whiteboard', event.target.value)}
             hint="Holds the [cat:…], [platform:…], [browser:…] and [device:…] tags used for classification."
             className="font-mono text-xs"
           />
@@ -608,26 +681,31 @@ export function MetadataSidebar({
           bug.triage?.browsers &&
           bug.triage.browsers.length > 0 && (
             <div className="flex items-start justify-between gap-3 text-sm">
-              <span className="shrink-0 pt-0.5 text-slate-600">{bug.triage.uiPlatform === 'Web' ? 'Web · Browser' : 'Browser'}</span>
+              <span className="shrink-0 pt-0.5 text-slate-600">
+                {bug.triage.uiPlatform === 'Web' ? 'Web · Browser' : 'Browser'}
+              </span>
               <BrowserPills browsers={bug.triage.browsers} className="justify-end" />
             </div>
           )
         )}
       </EditSection>
 
-      {/* ---- Flags (only when the bug carries any) ---- */}
       {bug.flags.length > 0 && (
         <EditSection id="flags" title="Flags" icon={Flag} changes={changesIn('flags')}>
-          {bug.flags.map((f) => (
-            <Changed key={f.id} when={draft.flags[f.id] !== baseline.flags[f.id]}>
+          {bug.flags.map((flag) => (
+            <Changed key={flag.id} when={draft.flags[flag.id] !== baseline.flags[flag.id]}>
               <Select
-                label={f.name}
-                value={draft.flags[f.id]}
-                onChange={(e) => set('flags', { ...draft.flags, [f.id]: e.target.value })}
-                hint={[f.setter && `Set by ${f.setter}`, f.requestee && `asked of ${f.requestee}`].filter(Boolean).join(', ') || undefined}
+                label={flag.name}
+                value={draft.flags[flag.id]}
+                onChange={(event) => set('flags', { ...draft.flags, [flag.id]: event.target.value })}
+                hint={
+                  [flag.setter && `Set by ${flag.setter}`, flag.requestee && `asked of ${flag.requestee}`]
+                    .filter(Boolean)
+                    .join(', ') || undefined
+                }
               >
-                {Object.entries(FLAG_STATUS).map(([v, label]) => (
-                  <option key={v} value={v}>
+                {Object.entries(FLAG_STATUS).map(([key, label]) => (
+                  <option key={key} value={key}>
                     {label}
                   </option>
                 ))}

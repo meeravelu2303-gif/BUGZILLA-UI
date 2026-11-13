@@ -10,31 +10,25 @@ import { UEducateLogo } from '../brand/UEducateLogo';
 import { CommandPalette } from './CommandPalette';
 import { ErrorBoundary } from './ErrorBoundary';
 
-/*
- * Nav items are pills. The active one carries a brand-tinted fill, a hairline
- * ring and a small accent dot on its left edge, so the current page is found by
- * shape and colour, not by reading every label.
- */
 function navLinkClasses({ isActive }: { isActive: boolean }): string {
   return cn(
     'focus-ring group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[0.9rem] font-medium transition-all duration-200',
     isActive
       ? 'bg-white/85 text-brand-800 shadow-card ring-1 ring-inset ring-brand-500/25'
-      : 'text-slate-600 hover:bg-white/55 hover:text-slate-900'
+      : 'text-slate-600 hover:bg-white/55 hover:text-slate-900',
   );
 }
 
 function SidebarSection({ section, permissions }: { section: NavSection; permissions?: Permissions }) {
   const [collapsed, setCollapsed] = useState(false);
 
-  // A section with nothing visible (e.g. Administration for a developer) is not drawn at all.
   const items = visibleNavItems(section, permissions);
   if (items.length === 0) return null;
 
   return (
     <div className="px-3 pt-5 first:pt-2">
       <button
-        onClick={() => setCollapsed((c) => !c)}
+        onClick={() => setCollapsed((currentCollapsed) => !currentCollapsed)}
         className="focus-ring flex w-full items-center justify-between rounded-md px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-500 hover:text-slate-700"
         aria-expanded={!collapsed}
       >
@@ -51,11 +45,14 @@ function SidebarSection({ section, permissions }: { section: NavSection; permiss
                     aria-hidden
                     className={cn(
                       'absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-brand-500 to-brand-700 transition-opacity',
-                      isActive ? 'opacity-100' : 'opacity-0'
+                      isActive ? 'opacity-100' : 'opacity-0',
                     )}
                   />
                   <item.icon
-                    className={cn('h-4 w-4 shrink-0 transition-colors', isActive ? 'text-brand-700' : 'text-slate-400 group-hover:text-slate-600')}
+                    className={cn(
+                      'h-4 w-4 shrink-0 transition-colors',
+                      isActive ? 'text-brand-700' : 'text-slate-400 group-hover:text-slate-600',
+                    )}
                     aria-hidden
                   />
                   <span className="truncate">{item.label}</span>
@@ -77,23 +74,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const user = data?.user;
-  // Refresh what is on screen when anyone changes a bug (lib/useLiveUpdates.ts).
   useLiveUpdates(Boolean(user));
   const permissions = user?.permissions;
 
-  // ⌘K / Ctrl-K opens the command palette anywhere in the app.
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setPaletteOpen((o) => !o);
+    function onKey(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen((currentPaletteOpen) => !currentPaletteOpen);
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Close the mobile drawer on navigation.
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
@@ -107,11 +101,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
               <Bug className="h-3 w-3" aria-hidden />
             </span>
-            {/*
-              Product name, matching the sign-in screen. Purely a brand label -
-              unlike the "Open in Bugzilla" links on the admin pages, which name
-              the actual system they navigate to and must keep saying so.
-            */}
             <span className="text-sm font-semibold tracking-tight text-ueducate-ink">Bug Tracker</span>
           </div>
         </div>
@@ -128,20 +117,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="px-4 pb-1">
           <NavLink
             to="/bugs/new"
-            /*
-             * The sidebar's one premium control.
-             *
-             * Three stacked cues make the 3D read, and each does a distinct job:
-             *   - a vertical gradient (brand-500 -> brand-700) for the lit face;
-             *   - `ring-white/25 inset` as a specular highlight along the top edge;
-             *   - a coloured cast below, so it sits ON the sidebar rather than in it.
-             * On press, the shadow collapses and the button drops 1px, which is
-             * what sells the depth as physical rather than painted.
-             *
-             * White text clears AA across the whole ramp - 5.17:1 on brand-600,
-             * 6.70:1 on brand-700 - which is the check a gradient fill quietly
-             * fails at its lightest stop.
-             */
             className="focus-ring flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-brand-500 via-brand-600 to-brand-700 px-4 text-sm font-semibold text-white shadow-[0_6px_16px_-4px_rgb(37_99_235_/_0.5),inset_0_1px_0_0_rgb(255_255_255_/_0.25)] ring-1 ring-inset ring-white/25 transition-all duration-200 hover:from-brand-600 hover:to-brand-800 hover:shadow-[0_10px_22px_-4px_rgb(37_99_235_/_0.6),inset_0_1px_0_0_rgb(255_255_255_/_0.3)] active:translate-y-px active:shadow-[0_2px_8px_-2px_rgb(37_99_235_/_0.5)]"
           >
             <Plus className="h-4 w-4" aria-hidden />
@@ -183,36 +158,26 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      {/*
-       * Depth behind the glass: two slow, blurred colour fields fixed under the
-       * content. Without them the frosted surfaces have nothing to diffuse and
-       * read as flat grey. Pointer-events off, aria-hidden, well under the page.
-       */}
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 left-[12%] h-[34rem] w-[34rem] rounded-full bg-brand-400/25 blur-3xl animate-blob-slow" />
         <div className="absolute right-[-10rem] top-[18%] h-[30rem] w-[30rem] rounded-full bg-ueducate-accent/25 blur-3xl animate-blob" />
         <div className="absolute bottom-[-12rem] left-[38%] h-[32rem] w-[32rem] rounded-full bg-indigo-300/20 blur-3xl animate-blob-slow" />
       </div>
 
-      {/* Desktop sidebar */}
       <aside className="glass-panel fixed inset-y-0 left-0 z-30 hidden w-[15rem] flex-col xl:w-[17rem] rounded-none border-y-0 border-l-0 lg:flex">
         {sidebar}
       </aside>
 
-      {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <aside className="glass-raised absolute inset-y-0 left-0 w-72 rounded-none border-y-0 border-l-0">{sidebar}</aside>
+          <aside className="glass-raised absolute inset-y-0 left-0 w-72 rounded-none border-y-0 border-l-0">
+            {sidebar}
+          </aside>
         </div>
       )}
 
       <div className="lg:pl-[15rem] xl:pl-[17rem]">
-        {/*
-         * Floating top bar: inset from the edges and rounded, so it reads as a
-         * glass element over the page rather than a wall across it. Sticky with
-         * a little headroom so it never touches the viewport edge.
-         */}
         <header className="sticky top-0 z-20 px-3 pt-3 sm:px-5">
           <div className="glass-panel flex h-14 items-center gap-3 rounded-2xl px-3 sm:px-4">
             <button
@@ -254,7 +219,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </header>
 
         <main>
-          {/* Keyed by route so navigating away from a crashed page clears the error. */}
           <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>
         </main>
       </div>

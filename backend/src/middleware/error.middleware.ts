@@ -18,7 +18,6 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return;
   }
 
-  // body-parser's own refusal of an oversized upload: a readable 413, not "something went wrong".
   if ((err as { type?: string })?.type === 'entity.too.large') {
     res.status(413).json({
       error: true,
@@ -39,7 +38,6 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return;
   }
 
-  // Never leak stack traces or raw error messages for anything unexpected.
   console.error('Unhandled error:', err);
   res.status(500).json({
     error: true,

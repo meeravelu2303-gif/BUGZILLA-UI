@@ -1,7 +1,14 @@
 import { Crown, Pencil, Plus, Search, Trash2, UsersRound, X } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { ApiError } from '../../api/client';
-import { useDeleteTeam, useSaveTeam, useSearchableAssignees, useTeams, type AssignableUser, type Team } from '../../api/hooks';
+import {
+  useDeleteTeam,
+  useSaveTeam,
+  useSearchableAssignees,
+  useTeams,
+  type AssignableUser,
+  type Team,
+} from '../../api/hooks';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Card, CardBody, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -19,11 +26,7 @@ const ROLE_LABEL: Record<NonNullable<AssignableUser['role']>, string> = {
 };
 const ROLE_ORDER = ['developer', 'tester', 'admin', 'reporter'] as const;
 
-/**
- * Teams: a name, one team leader and the members who report to them. Members
- * may work on any product - a team is who reports to whom, so each leader can
- * be sent their team's activity. Admin only.
- */
+/** Teams: a name, one team leader and the members who report to them. */
 export function Teams() {
   const { data, isLoading, error } = useTeams();
   const teams = data?.teams ?? [];
@@ -45,7 +48,11 @@ export function Teams() {
       />
 
       {editing !== null && (
-        <TeamForm key={editing === 'new' ? 'new' : editing.id} team={editing === 'new' ? null : editing} onDone={() => setEditing(null)} />
+        <TeamForm
+          key={editing === 'new' ? 'new' : editing.id}
+          team={editing === 'new' ? null : editing}
+          onDone={() => setEditing(null)}
+        />
       )}
 
       {isLoading ? (
@@ -56,7 +63,9 @@ export function Teams() {
       ) : error ? (
         <Card>
           <CardBody>
-            <p className="text-sm text-slate-600">{error instanceof ApiError ? error.message : 'Could not load the teams.'}</p>
+            <p className="text-sm text-slate-600">
+              {error instanceof ApiError ? error.message : 'Could not load the teams.'}
+            </p>
           </CardBody>
         </Card>
       ) : teams.length === 0 ? (
@@ -74,7 +83,12 @@ export function Teams() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {teams.map((team) => (
-            <TeamCard key={team.id} team={team} onEdit={() => setEditing(team)} editingThis={editing !== null && editing !== 'new' && editing.id === team.id} />
+            <TeamCard
+              key={team.id}
+              team={team}
+              onEdit={() => setEditing(team)}
+              editingThis={editing !== null && editing !== 'new' && editing.id === team.id}
+            />
           ))}
         </div>
       )}
@@ -94,9 +108,17 @@ function TeamCard({ team, onEdit, editingThis }: { team: Team; onEdit: () => voi
     }
     try {
       await remove.mutateAsync(team.id);
-      toast({ variant: 'success', title: 'Team deleted', description: `${team.name} was deleted. Its people are not affected.` });
+      toast({
+        variant: 'success',
+        title: 'Team deleted',
+        description: `${team.name} was deleted. Its people are not affected.`,
+      });
     } catch (err) {
-      toast({ variant: 'error', title: 'Could not delete the team', description: err instanceof ApiError ? err.message : 'Please try again.' });
+      toast({
+        variant: 'error',
+        title: 'Could not delete the team',
+        description: err instanceof ApiError ? err.message : 'Please try again.',
+      });
       setConfirming(false);
     }
   }
@@ -123,7 +145,9 @@ function TeamCard({ team, onEdit, editingThis }: { team: Team; onEdit: () => voi
               </p>
             </div>
           ) : (
-            <p className="text-sm text-amber-800">No team leader - the leader's account was removed. Edit the team to choose one.</p>
+            <p className="text-sm text-amber-800">
+              No team leader - the leader's account was removed. Edit the team to choose one.
+            </p>
           )}
         </div>
 
@@ -131,10 +155,14 @@ function TeamCard({ team, onEdit, editingThis }: { team: Team; onEdit: () => voi
           <p className="text-sm text-slate-500">No members yet.</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
-            {team.members.map((m) => (
-              <li key={m.id} title={m.email} className="flex items-center gap-1.5 rounded-full bg-white/70 py-1 pl-1 pr-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200">
-                <Avatar name={m.name} size="sm" />
-                {m.name}
+            {team.members.map((member) => (
+              <li
+                key={member.id}
+                title={member.email}
+                className="flex items-center gap-1.5 rounded-full bg-white/70 py-1 pl-1 pr-3 text-sm text-slate-700 ring-1 ring-inset ring-slate-200"
+              >
+                <Avatar name={member.name} size="sm" />
+                {member.name}
               </li>
             ))}
           </ul>
@@ -165,30 +193,45 @@ function TeamForm({ team, onDone }: { team: Team | null; onDone: () => void }) {
 
   const [name, setName] = useState(team?.name ?? '');
   const [leader, setLeader] = useState(team?.leader?.email ?? '');
-  const [members, setMembers] = useState<string[]>(team?.members.map((m) => m.email) ?? []);
+  const [members, setMembers] = useState<string[]>(team?.members.map((member) => member.email) ?? []);
   const [filter, setFilter] = useState('');
   const [formError, setFormError] = useState('');
 
-  const people = useMemo(() => (peopleData?.users ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)), [peopleData]);
-  const byEmail = useMemo(() => new Map(people.map((p) => [p.email.toLowerCase(), p])), [people]);
-  const selected = new Set(members.map((m) => m.toLowerCase()));
+  const people = useMemo(
+    () => (peopleData?.users ?? []).slice().sort((left, right) => left.name.localeCompare(right.name)),
+    [peopleData],
+  );
+  const byEmail = useMemo(() => new Map(people.map((person) => [person.email.toLowerCase(), person])), [people]);
+  const selected = new Set(members.map((member) => member.toLowerCase()));
 
   const choices = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    return people.filter((p) => p.email.toLowerCase() !== leader.toLowerCase() && (!q || `${p.name} ${p.email}`.toLowerCase().includes(q)));
+    const normalizedFilter = filter.trim().toLowerCase();
+    return people.filter(
+      (person) =>
+        person.email.toLowerCase() !== leader.toLowerCase() &&
+        (!normalizedFilter || `${person.name} ${person.email}`.toLowerCase().includes(normalizedFilter)),
+    );
   }, [people, filter, leader]);
 
   function toggle(email: string) {
-    setMembers((prev) => (prev.some((m) => m.toLowerCase() === email.toLowerCase()) ? prev.filter((m) => m.toLowerCase() !== email.toLowerCase()) : [...prev, email]));
+    setMembers((previous) =>
+      previous.some((candidate) => candidate.toLowerCase() === email.toLowerCase())
+        ? previous.filter((value) => value.toLowerCase() !== email.toLowerCase())
+        : [...previous, email],
+    );
   }
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     setFormError('');
     if (!name.trim()) return setFormError('Please give the team a name.');
     if (!leader) return setFormError('Please choose the team leader.');
     try {
-      const input = { name: name.trim(), leader, members: members.filter((m) => m.toLowerCase() !== leader.toLowerCase()) };
+      const input = {
+        name: name.trim(),
+        leader,
+        members: members.filter((member) => member.toLowerCase() !== leader.toLowerCase()),
+      };
       const result = await save.mutateAsync(team ? { id: team.id, ...input } : input);
       toast({
         variant: 'success',
@@ -211,24 +254,31 @@ function TeamForm({ team, onDone }: { team: Team | null; onDone: () => void }) {
       <CardBody>
         <form onSubmit={onSubmit} className="space-y-5">
           <div className="grid gap-4 md:grid-cols-2">
-            <Input label="Team name" required value={name} maxLength={64} onChange={(e) => setName(e.target.value)} placeholder="e.g. Flutter Developers" />
+            <Input
+              label="Team name"
+              required
+              value={name}
+              maxLength={64}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g. Flutter Developers"
+            />
             <Select
               label="Team leader"
               required
               value={leader}
               disabled={peopleLoading}
-              onChange={(e) => setLeader(e.target.value)}
+              onChange={(event) => setLeader(event.target.value)}
               hint="Gets this team's reports. Can lead more than one team."
             >
               <option value="">{peopleLoading ? 'Loading people…' : 'Choose the team leader'}</option>
               {ROLE_ORDER.map((role) => {
-                const group = people.filter((p) => (p.role ?? 'developer') === role);
+                const group = people.filter((person) => (person.role ?? 'developer') === role);
                 if (group.length === 0) return null;
                 return (
                   <optgroup key={role} label={`${ROLE_LABEL[role]}s`}>
-                    {group.map((p) => (
-                      <option key={p.email} value={p.email}>
-                        {p.name} ({p.email})
+                    {group.map((assignableUser) => (
+                      <option key={assignableUser.email} value={assignableUser.email}>
+                        {assignableUser.name} ({assignableUser.email})
                       </option>
                     ))}
                   </optgroup>
@@ -249,15 +299,18 @@ function TeamForm({ team, onDone }: { team: Team | null; onDone: () => void }) {
             {members.length > 0 && (
               <ul className="mb-3 flex flex-wrap gap-2">
                 {members.map((email) => {
-                  const p = byEmail.get(email.toLowerCase());
+                  const assignableUser = byEmail.get(email.toLowerCase());
                   return (
-                    <li key={email} className="flex items-center gap-1 rounded-full bg-brand-50 py-1 pl-3 pr-1 text-sm text-brand-800 ring-1 ring-inset ring-brand-200">
-                      {p?.name ?? email}
+                    <li
+                      key={email}
+                      className="flex items-center gap-1 rounded-full bg-brand-50 py-1 pl-3 pr-1 text-sm text-brand-800 ring-1 ring-inset ring-brand-200"
+                    >
+                      {assignableUser?.name ?? email}
                       <button
                         type="button"
                         onClick={() => toggle(email)}
                         className="focus-ring rounded-full p-0.5 text-brand-600 hover:bg-brand-100"
-                        aria-label={`Remove ${p?.name ?? email}`}
+                        aria-label={`Remove ${assignableUser?.name ?? email}`}
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -271,7 +324,7 @@ function TeamForm({ team, onDone }: { team: Team | null; onDone: () => void }) {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={filter}
-                onChange={(e) => setFilter(e.target.value)}
+                onChange={(event) => setFilter(event.target.value)}
                 placeholder="Search people by name or email"
                 className="focus-ring h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm"
               />
@@ -283,21 +336,23 @@ function TeamForm({ team, onDone }: { team: Team | null; onDone: () => void }) {
                 <p className="p-3 text-sm text-slate-500">Nobody matches "{filter}".</p>
               ) : (
                 <ul className="divide-y divide-slate-100">
-                  {choices.map((p) => (
-                    <li key={p.email}>
+                  {choices.map((choice) => (
+                    <li key={choice.email}>
                       <label className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-slate-50">
                         <input
                           type="checkbox"
-                          checked={selected.has(p.email.toLowerCase())}
-                          onChange={() => toggle(p.email)}
+                          checked={selected.has(choice.email.toLowerCase())}
+                          onChange={() => toggle(choice.email)}
                           className="h-4 w-4 rounded border-slate-300 text-brand-600"
                         />
-                        <Avatar name={p.name} size="sm" />
+                        <Avatar name={choice.name} size="sm" />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm text-slate-900">{p.name}</span>
-                          <span className="block truncate text-xs text-slate-500">{p.email}</span>
+                          <span className="block truncate text-sm text-slate-900">{choice.name}</span>
+                          <span className="block truncate text-xs text-slate-500">{choice.email}</span>
                         </span>
-                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{ROLE_LABEL[p.role ?? 'developer']}</span>
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          {ROLE_LABEL[choice.role ?? 'developer']}
+                        </span>
                       </label>
                     </li>
                   ))}

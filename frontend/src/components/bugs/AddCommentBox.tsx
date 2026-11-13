@@ -32,7 +32,7 @@ export function AddCommentBox({ bugId }: { bugId: number }) {
         aria-label="Add a comment"
         placeholder="Leave a comment…"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(event) => setText(event.target.value)}
         rows={3}
       />
       <div className="mt-3 flex justify-end">

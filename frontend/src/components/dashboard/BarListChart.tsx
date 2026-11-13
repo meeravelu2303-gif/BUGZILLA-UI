@@ -6,7 +6,6 @@ export interface BarListItem {
   tone?: 'slate' | 'blue' | 'amber' | 'emerald' | 'violet' | 'rose' | 'orange' | 'sky';
 }
 
-/* A gradient per tone: a flat bar on a glass card looks printed on; a lit one looks like data. */
 const FILL_CLASS: Record<NonNullable<BarListItem['tone']>, string> = {
   slate: 'from-slate-400 to-slate-500',
   blue: 'from-blue-400 to-blue-600',
@@ -20,7 +19,7 @@ const FILL_CLASS: Record<NonNullable<BarListItem['tone']>, string> = {
 
 export function BarListChart({ items, title }: { items: BarListItem[]; title: string }) {
   const max = Math.max(1, ...items.map((i) => i.value));
-  const total = items.reduce((n, i) => n + i.value, 0);
+  const total = items.reduce((value, i) => value + i.value, 0);
 
   return (
     <div>
@@ -30,7 +29,7 @@ export function BarListChart({ items, title }: { items: BarListItem[]; title: st
       ) : (
         <div className="flex flex-col gap-3.5" role="img" aria-label={`${title} bar chart`}>
           {items.map((item) => {
-            const pct = Math.max(3, Math.round((item.value / max) * 100));
+            const percent = Math.max(3, Math.round((item.value / max) * 100));
             const share = total ? Math.round((item.value / total) * 100) : 0;
             return (
               <div key={item.label} className="group flex items-center gap-3 text-sm">
@@ -39,11 +38,16 @@ export function BarListChart({ items, title }: { items: BarListItem[]; title: st
                 </span>
                 <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-900/[0.06]">
                   <div
-                    className={cn('h-full rounded-full bg-gradient-to-r shadow-[inset_0_1px_0_rgb(255_255_255_/_0.35)] transition-[width] duration-500', FILL_CLASS[item.tone ?? 'slate'])}
-                    style={{ width: `${pct}%` }}
+                    className={cn(
+                      'h-full rounded-full bg-gradient-to-r shadow-[inset_0_1px_0_rgb(255_255_255_/_0.35)] transition-[width] duration-500',
+                      FILL_CLASS[item.tone ?? 'slate'],
+                    )}
+                    style={{ width: `${percent}%` }}
                   />
                 </div>
-                <span className="w-10 shrink-0 text-right text-[0.8667rem] font-semibold tabular-nums text-slate-800">{item.value.toLocaleString()}</span>
+                <span className="w-10 shrink-0 text-right text-[0.8667rem] font-semibold tabular-nums text-slate-800">
+                  {item.value.toLocaleString()}
+                </span>
                 <span className="w-9 shrink-0 text-right text-[0.7333rem] tabular-nums text-slate-400">{share}%</span>
               </div>
             );

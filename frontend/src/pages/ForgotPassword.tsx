@@ -5,19 +5,9 @@ import { useForgotPassword } from '../api/hooks';
 import { AUTH_FIELD_BASE, AUTH_FIELD_ERROR, AUTH_FIELD_OK, AUTH_SUBMIT, AuthShell } from '../components/auth/AuthShell';
 import { getPasswordResetErrorMessage } from '../lib/authErrorMessage';
 
-/** Same permissive shape as the sign-in form: catch the certainly-wrong, let Bugzilla judge the rest. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * Forgot password: ask for the address, hand off to email.
- *
- * The confirmation deliberately reads the same whether or not the address has
- * an account - the server answers 202 either way - so this page cannot be used
- * to find out who has one. What it CAN tell people is what to do next: where
- * the email comes from, how long the link lasts, and that asking again inside
- * ten minutes sends nothing (Bugzilla issues one token per account per
- * interval).
- */
+/** Forgot password: ask for the address, hand off to email. */
 export function ForgotPassword() {
   const [login, setLogin] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -43,8 +33,8 @@ export function ForgotPassword() {
     return true;
   }
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     setServerError(null);
     if (!validateEmail(login)) {
       emailRef.current?.focus();
@@ -67,7 +57,8 @@ export function ForgotPassword() {
         title="Check your email"
         subtitle={
           <>
-            If <span className="font-medium text-slate-700">{sentTo}</span> has an account, a password reset link is on its way.
+            If <span className="font-medium text-slate-700">{sentTo}</span> has an account, a password reset link is on
+            its way.
           </>
         }
       >
@@ -132,9 +123,9 @@ export function ForgotPassword() {
               type="email"
               autoComplete="username"
               value={login}
-              onChange={(e) => {
-                setLogin(e.target.value);
-                if (emailError) validateEmail(e.target.value);
+              onChange={(event) => {
+                setLogin(event.target.value);
+                if (emailError) validateEmail(event.target.value);
               }}
               onBlur={() => login && validateEmail(login)}
               placeholder="you@example.com"
@@ -152,7 +143,10 @@ export function ForgotPassword() {
         </div>
 
         {serverError && (
-          <p role="alert" className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm leading-relaxed text-rose-700">
+          <p
+            role="alert"
+            className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-sm leading-relaxed text-rose-700"
+          >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             <span>{serverError}</span>
           </p>

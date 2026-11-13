@@ -7,18 +7,11 @@ import { Button } from '../ui/Button';
 import { EmptyState } from '../ui/EmptyState';
 import { Skeleton } from '../ui/Skeleton';
 import { StatCard } from '../ui/StatCard';
-import { Hint, TooltipProvider } from '../ui/primitives/tooltip';
+import { Hint, TooltipProvider } from '../ui/primitives/Tooltip';
 import { ROLE_GROUPS, ROLE_LABELS, ROLE_TONES, roleFromGroups as roleOf } from '../../lib/roles';
 import { Pill } from '../ui/Pill';
 
-/**
- * The admin board: is the system up, and who can reach what.
- *
- * Roles come from lib/roles.ts, not a local copy. This file carried its own
- * `roleOf` and its own tone map, which is how one account could end up badged
- * a different colour here than on the Users page.
- */
-
+/** The admin board: is the system up, and who can reach what. */
 export function AdminDashboard() {
   const health = useHealth();
   const { data: users, isLoading: usersLoading } = useAdminUsers('');
@@ -29,24 +22,19 @@ export function AdminDashboard() {
 
   const allUsers = users?.users ?? [];
   const visibleUsers = useMemo(
-    () => (showDisabled ? allUsers : allUsers.filter((u) => u.isEnabled)),
-    [allUsers, showDisabled]
+    () => (showDisabled ? allUsers : allUsers.filter((user) => user.isEnabled)),
+    [allUsers, showDisabled],
   );
 
-  /*
-   * The matrix columns are PRODUCT groups: the instance follows a
-   * one-group-per-product convention, so a user can see a product when they
-   * hold the same-named group. Matched case-insensitively because Bugzilla
-   * compares group names that way - `Kpost Admin UI` does gate `KPost Admin UI`,
-   * and an exact match would report the access as missing.
-   */
   const productColumns = useMemo(() => {
-    const groupNames = new Set((groups?.groups ?? []).map((g) => g.name.toLowerCase()));
-    return (products?.products ?? []).map((p) => p.name).filter((name) => groupNames.has(name.toLowerCase()));
+    const groupNames = new Set((groups?.groups ?? []).map((group) => group.name.toLowerCase()));
+    return (products?.products ?? [])
+      .map((product) => product.name)
+      .filter((name) => groupNames.has(name.toLowerCase()));
   }, [groups, products]);
 
   const holds = (userGroups: string[], productName: string) =>
-    userGroups.some((g) => g.toLowerCase() === productName.toLowerCase());
+    userGroups.some((userGroup) => userGroup.toLowerCase() === productName.toLowerCase());
 
   const bugzillaUp = health.data?.bugzilla?.ok === true;
   const bffUp = !health.isError && health.data?.ok === true;
@@ -60,19 +48,16 @@ export function AdminDashboard() {
           <StatCard label="Open defects" value={counts?.counts.open ?? 0} icon={Activity} tone="amber" to="/bugs" />
           <StatCard
             label="Administrators"
-            value={allUsers.filter((u) => roleOf(u.groups) === 'admin').length}
+            value={allUsers.filter((user) => roleOf(user.groups) === 'admin').length}
             icon={ShieldCheck}
             tone="emerald"
           />
         </div>
 
-        {/* ------------------------------------------------ system metrics */}
         <section className="surface">
           <header className="flex items-center justify-between border-b border-hairline px-5 py-4">
             <h2 className="font-display text-sm font-semibold text-slate-900">System health</h2>
-            <span className="text-2xs text-slate-400">
-              {health.isFetching ? 'Checking…' : 'Refreshes every 30s'}
-            </span>
+            <span className="text-2xs text-slate-400">{health.isFetching ? 'Checking…' : 'Refreshes every 30s'}</span>
           </header>
 
           <div className="grid gap-px bg-slate-100 sm:grid-cols-3">
@@ -100,13 +85,6 @@ export function AdminDashboard() {
                     : (health.data?.bugzilla?.error ?? 'Unreachable')
               }
             />
-            {/*
-              There is no direct database probe, and showing a green light we
-              cannot verify would be worse than showing none. The BFF ships with
-              no database driver - it proxies Bugzilla's API and nothing else -
-              so MariaDB is observed THROUGH Bugzilla: if the database is down,
-              Bugzilla's own call fails and the tile beside this one turns red.
-            */}
             <HealthTile
               icon={Database}
               label="MariaDB"
@@ -117,17 +95,18 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        {/* ------------------------------------------------ access matrix */}
         <section className="surface overflow-hidden">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-4">
             <div>
               <h2 className="font-display text-sm font-semibold text-slate-900">User access matrix</h2>
-              <p className="mt-0.5 text-2xs text-slate-500">
-                Role, plus which products each account can reach
-              </p>
+              <p className="mt-0.5 text-2xs text-slate-500">Role, plus which products each account can reach</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setShowDisabled((v) => !v)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDisabled((currentShowDisabled) => !currentShowDisabled)}
+              >
                 {showDisabled ? 'Hide disabled' : 'Show disabled'}
               </Button>
               <Button asChild variant="secondary" size="sm">
@@ -175,7 +154,10 @@ export function AdminDashboard() {
                   {visibleUsers.map((user) => {
                     const role = roleOf(user.groups);
                     return (
-                      <tr key={user.id} className="border-b border-hairline transition-colors duration-200 last:border-0 hover:bg-slate-50/80">
+                      <tr
+                        key={user.id}
+                        className="border-b border-hairline transition-colors duration-200 last:border-0 hover:bg-slate-50/80"
+                      >
                         <td className="sticky left-0 z-10 bg-white px-5 py-3.5">
                           <Link
                             to={`/admin/users/${user.id}`}
@@ -224,13 +206,6 @@ export function AdminDashboard() {
           )}
         </section>
 
-        {/*
-          Active sessions are deliberately absent rather than faked.
-          backend/src/services/sessionRegistry.service.ts tracks them, but no route exposes
-          that registry - `GET /api/auth/me` returns only the current user. The
-          panel would need a new read-only BFF endpoint, which is a backend
-          change rather than a UI one.
-        */}
         <section className="surface flex items-start gap-3 px-5 py-4">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
           <p className="text-xs text-slate-600">
@@ -263,7 +238,7 @@ function HealthTile({
       <span
         className={cn(
           'mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg',
-          ok ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+          ok ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -285,9 +260,9 @@ function HealthTile({
 
 function formatUptime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
-  const m = Math.floor(seconds / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ${m % 60}m`;
-  return `${Math.floor(h / 24)}d ${h % 24}h`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }

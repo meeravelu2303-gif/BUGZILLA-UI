@@ -7,16 +7,7 @@ import { useToast } from '../../context/ToastContext';
 import type { AdminUser } from '../../types';
 import { Button } from '../ui/Button';
 
-/**
- * Safe delete for a user account.
- *
- * Asks the server first (which asks Bugzilla's own delete page) whether
- * anything points at the account. If it has history - bugs, comments,
- * attachments, assignments, component ownership - deleting would orphan that
- * work, so the dialog lists exactly what and offers Disable instead, which
- * removes access and keeps every record intact. Only a clean account can be
- * deleted, and only after typing its email.
- */
+/** Safe delete for a user account. */
 export function DeleteUserDialog({
   open,
   user,
@@ -26,7 +17,6 @@ export function DeleteUserDialog({
   open: boolean;
   user: AdminUser;
   onClose: () => void;
-  /** Where to go once the account is gone (e.g. back to the list). */
   afterDelete?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -60,7 +50,11 @@ export function DeleteUserDialog({
     setError(null);
     try {
       await del.mutateAsync(typed.trim());
-      toast({ variant: 'success', title: `${label} deleted`, description: 'The account had no history, so nothing else changed.' });
+      toast({
+        variant: 'success',
+        title: `${label} deleted`,
+        description: 'The account had no history, so nothing else changed.',
+      });
       onClose();
       if (afterDelete) navigate(afterDelete, { replace: true });
     } catch (err) {
@@ -73,7 +67,11 @@ export function DeleteUserDialog({
     setError(null);
     try {
       await update.mutateAsync({ disabled: true, disabledReason: reason.trim() });
-      toast({ variant: 'success', title: `${label} disabled`, description: 'They can no longer sign in. Their bugs and comments are unchanged.' });
+      toast({
+        variant: 'success',
+        title: `${label} disabled`,
+        description: 'They can no longer sign in. Their bugs and comments are unchanged.',
+      });
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not disable the account.');
@@ -84,15 +82,15 @@ export function DeleteUserDialog({
     <dialog
       ref={ref}
       onClose={onClose}
-      onClick={(e) => e.target === ref.current && !busy && onClose()}
+      onClick={(event) => event.target === ref.current && !busy && onClose()}
       aria-labelledby={`delete-user-${user.id}`}
       className="w-[min(34rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 backdrop:backdrop-blur-[2px]"
     >
       <form
         method="dialog"
         noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
+        onSubmit={(event) => {
+          event.preventDefault();
           void (deletable ? onDelete() : onDisable());
         }}
         className="flex flex-col gap-4 p-6"
@@ -127,14 +125,15 @@ export function DeleteUserDialog({
               </p>
               {!deletable && check.data.blockers.length > 0 && (
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                  {check.data.blockers.map((b) => (
-                    <li key={b}>{b}</li>
+                  {check.data.blockers.map((blocker) => (
+                    <li key={blocker}>{blocker}</li>
                   ))}
                 </ul>
               )}
               {!deletable && (
                 <p className="mt-2 text-sm text-slate-600">
-                  <span className="font-medium text-slate-800">Disable</span> it instead: they lose access, and every record keeps their name.
+                  <span className="font-medium text-slate-800">Disable</span> it instead: they lose access, and every
+                  record keeps their name.
                 </p>
               )}
             </div>
@@ -144,12 +143,13 @@ export function DeleteUserDialog({
         {check.data && deletable && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor={`delete-user-email-${user.id}`} className="text-sm font-medium text-slate-700">
-              Type <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.8667rem]">{user.email}</span> to confirm
+              Type <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.8667rem]">{user.email}</span>{' '}
+              to confirm
             </label>
             <input
               id={`delete-user-email-${user.id}`}
               value={typed}
-              onChange={(e) => setTyped(e.target.value)}
+              onChange={(event) => setTyped(event.target.value)}
               autoFocus
               autoComplete="off"
               className="focus-ring h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
@@ -165,7 +165,7 @@ export function DeleteUserDialog({
             <input
               id={`disable-user-reason-${user.id}`}
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={(event) => setReason(event.target.value)}
               placeholder="e.g. Left the company in October 2026."
               autoComplete="off"
               className="focus-ring h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"

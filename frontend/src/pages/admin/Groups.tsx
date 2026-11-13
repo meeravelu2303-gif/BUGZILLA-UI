@@ -43,7 +43,9 @@ export function Groups() {
           </div>
           <div className="rounded-xl bg-white/60 px-4 py-3 ring-1 ring-inset ring-white/60">
             <p className="text-xs text-slate-500">Manage products</p>
-            <p className="text-sm font-semibold text-slate-900">{me?.user.permissions.canManageProducts ? 'Yes' : 'No'}</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {me?.user.permissions.canManageProducts ? 'Yes' : 'No'}
+            </p>
           </div>
         </CardBody>
       </Card>
@@ -52,7 +54,9 @@ export function Groups() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-4 w-4 text-brand-600" /> My group memberships
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-500">{groups.length}</span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-500">
+              {groups.length}
+            </span>
           </CardTitle>
         </CardHeader>
         <CardBody>
@@ -63,15 +67,19 @@ export function Groups() {
               {error instanceof ApiError ? error.message : 'Could not load group membership.'}
             </p>
           ) : groups.length === 0 ? (
-            <EmptyState icon={ShieldCheck} title="No group memberships" description="Your account isn’t a member of any Bugzilla group." />
+            <EmptyState
+              icon={ShieldCheck}
+              title="No group memberships"
+              description="Your account isn’t a member of any Bugzilla group."
+            />
           ) : (
             <div className="divide-y divide-white/40">
-              {groups.map((g) => (
-                <div key={g.name} className="flex items-start gap-3 py-3">
+              {groups.map((group) => (
+                <div key={group.name} className="flex items-start gap-3 py-3">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
                   <div>
-                    <p className="font-mono text-sm font-medium text-slate-900">{g.name}</p>
-                    {g.description && <p className="text-xs text-slate-600">{g.description}</p>}
+                    <p className="font-mono text-sm font-medium text-slate-900">{group.name}</p>
+                    {group.description && <p className="text-xs text-slate-600">{group.description}</p>}
                   </div>
                 </div>
               ))}

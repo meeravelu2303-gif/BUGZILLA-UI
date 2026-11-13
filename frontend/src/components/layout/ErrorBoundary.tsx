@@ -4,7 +4,6 @@ import { Button } from '../ui/Button';
 
 interface Props {
   children: ReactNode;
-  /** Changing this resets the boundary - pass the route so navigating away clears a crash. */
   resetKey?: string;
 }
 
@@ -12,18 +11,7 @@ interface State {
   error: Error | null;
 }
 
-/**
- * Catches render-time exceptions from the page currently mounted in AppLayout.
- *
- * React unmounts the *entire* tree when a component throws and nothing catches
- * it, which is why an uncaught error here used to leave a blank white page with
- * no sidebar and no message - the failure was invisible unless you happened to
- * have DevTools open. Wrapping only the page content means a broken page shows
- * what went wrong while the shell around it keeps working.
- *
- * The message is shown deliberately: this is an internal tool whose users are
- * the engineers who would otherwise have to reproduce the fault to see it.
- */
+/** Catches render-time exceptions from the page currently mounted in AppLayout. */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
@@ -35,10 +23,8 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('Page crashed:', error, info.componentStack);
   }
 
-  componentDidUpdate(prev: Props): void {
-    // A crash is tied to the page that caused it; navigating elsewhere should not
-    // leave the user stuck on the error screen.
-    if (this.state.error && prev.resetKey !== this.props.resetKey) {
+  componentDidUpdate(previous: Props): void {
+    if (this.state.error && previous.resetKey !== this.props.resetKey) {
       this.setState({ error: null });
     }
   }

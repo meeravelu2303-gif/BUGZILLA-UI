@@ -8,12 +8,6 @@ import { CATEGORIES, PRIORITIES, SEVERITIES, SOURCES, type BugMeta, type Product
 import { DateRangeFilter } from './DateRangeFilter';
 import { MultiSelect, type MultiSelectOption } from '../ui/MultiSelect';
 
-/**
- * Playwright's project names are lowercase slugs; the filter menu shows the
- * product names a person would say out loud. Kept beside the options rather
- * than in Pill.tsx because an unknown project must still be selectable under
- * its raw name here, exactly as it renders under its raw name there.
- */
 const BROWSER_LABELS: Record<string, string> = {
   chromium: 'Chromium',
   'mobile-chrome': 'Mobile Chrome',
@@ -21,12 +15,7 @@ const BROWSER_LABELS: Record<string, string> = {
   webkit: 'WebKit / Safari',
 };
 
-/**
- * The primary control surface for every bug list.
- *
- * One component, one URL contract (lib/useBugFilters.ts) - BugList, MyBugs and
- * AdvancedSearch all mount this rather than each growing their own filters.
- */
+/** The primary control surface for every bug list. */
 export function FilterBar({
   controller,
   meta,
@@ -39,171 +28,150 @@ export function FilterBar({
   controller: UseBugFilters;
   meta?: BugMeta;
   products?: Product[];
-  /**
-   * Per-value counts, so a facet shows how much it would narrow to.
-   *
-   * A `FacetStats`, not a bare `BugStats`: each facet needs its counts computed
-   * with every OTHER active filter applied and its own selection excluded. One
-   * shared breakdown cannot satisfy both halves of that at once.
-   */
   stats?: FacetStats;
   resultCount?: number;
-  /** Unfiltered total, used to say plainly how much is being hidden. */
   totalCount?: number;
   isLoading?: boolean;
 }) {
-  const { filters, activeChips, isFiltered, toggleFacet, setFacet, setSearch, setDateRange, removeChip, clearAll } = controller;
+  const { filters, activeChips, isFiltered, toggleFacet, setFacet, setSearch, setDateRange, removeChip, clearAll } =
+    controller;
 
-  // Typing must not fire a request per keystroke; the URL updates once the user pauses.
   const [searchInput, setSearchInput] = useState(filters.search);
   const debounced = useDebounce(searchInput, 350);
   useEffect(() => {
     if (debounced !== filters.search) setSearch(debounced);
-    // `setSearch` is stable per params object; re-running on filters.search would
-    // fight the user's typing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debounced]);
   useEffect(() => {
-    // Keep the box in step when the URL changes from elsewhere (chip removal, back button).
     setSearchInput(filters.search);
   }, [filters.search]);
 
   const withCounts = (values: readonly string[], counts?: Record<string, number>): MultiSelectOption[] =>
-    values.map((v) => ({ value: v, label: v, count: counts?.[v] }));
+    values.map((value) => ({ value: value, label: value, count: counts?.[value] }));
 
-  /*
-   * Every dropdown lists only the values present in the CURRENT view, each with
-   * its count - e.g. opened from "Selva - 12 open", Product offers just the
-   * products those 12 bugs are in. Counts follow the usual faceted rule (every
-   * other filter applied, not the facet's own), so sibling values stay
-   * reachable. A value already ticked is always kept, so it can be unticked.
-   * Until the counts arrive the full list is shown, never an empty menu.
-   */
-  const present = (options: MultiSelectOption[], selected: string[], counts: Record<string, number> | undefined): MultiSelectOption[] =>
-    counts === undefined ? options : options.filter((o) => (o.count ?? 0) > 0 || selected.includes(o.value));
+  const present = (
+    options: MultiSelectOption[],
+    selected: string[],
+    counts: Record<string, number> | undefined,
+  ): MultiSelectOption[] =>
+    counts === undefined
+      ? options
+      : options.filter((option) => (option.count ?? 0) > 0 || selected.includes(option.value));
 
-  /*
-   * `stats.byComponent` is instance-wide — it lists the components of every product the caller
-   * can see. Once a product is selected, the component facet must offer only THAT product's
-   * components (Bugzilla components are product-scoped, and a component from another product can
-   * never match a bug in this one). We intersect the instance-wide list with the selected
-   * product's own components, which we already hold on `products`. The restriction only applies
-   * once `products` has loaded, so a selected-but-not-yet-resolved product never blanks the menu.
-   */
   const selectedProducts = new Set(filters.product);
   const allowedComponents: Set<string> | null =
     products && selectedProducts.size > 0
       ? new Set(
           products
-            .filter((p) => selectedProducts.has(p.name))
-            .flatMap((p) => p.components.map((c) => c.name)),
+            .filter((product) => selectedProducts.has(product.name))
+            .flatMap((product) => product.components.map((component) => component.name)),
         )
       : null;
 
   const componentOptions: MultiSelectOption[] = Object.entries(stats?.for('component')?.byComponent ?? {})
     .filter(([name]) => !allowedComponents || allowedComponents.has(name))
-    .sort((a, b) => b[1] - a[1])
+    .sort((left, right) => right[1] - left[1])
     .map(([name, count]) => ({ value: name, label: name, count }));
 
-  /*
-   * Sub-components: the full list up front (every component in the chosen
-   * products, or everything the caller can see), narrowed to the chosen
-   * components' own sub-components once a Component is picked. Hidden when the
-   * scope has none - e.g. a chosen component without sub-components. Each
-   * option is a stored value (`Login [42]`), so two components' "Login" never
-   * collide; while more than one component is in scope the label names its
-   * component ("Mobile App › Login").
-   */
   const selectedComponents = new Set(filters.component);
-  const subCounts = stats?.for('subcomponent')?.bySubcomponent;
+  const subcomponentCounts = stats?.for('subcomponent')?.bySubcomponent;
   const scopedComponents = (products ?? [])
-    .filter((p) => selectedProducts.size === 0 || selectedProducts.has(p.name))
-    .flatMap((p) => p.components)
-    .filter((c) => selectedComponents.size === 0 || selectedComponents.has(c.name));
-  const scopedSubs = scopedComponents.flatMap((c) => (c.subcomponents ?? []).map((s) => ({ ...s, component: c.name })));
-  const multiComponent = new Set(scopedSubs.map((s) => s.component)).size > 1;
-  const subcomponentOptions: MultiSelectOption[] = scopedSubs.length
+    .filter((product) => selectedProducts.size === 0 || selectedProducts.has(product.name))
+    .flatMap((product) => product.components)
+    .filter((productComponent) => selectedComponents.size === 0 || selectedComponents.has(productComponent.name));
+  const scopedSubcomponents = scopedComponents.flatMap((scopedComponent) =>
+    (scopedComponent.subcomponents ?? []).map((subcomponent) => ({ ...subcomponent, component: scopedComponent.name })),
+  );
+  const multiComponent =
+    new Set(scopedSubcomponents.map((scopedSubcomponent) => scopedSubcomponent.component)).size > 1;
+  const subcomponentOptions: MultiSelectOption[] = scopedSubcomponents.length
     ? [
-        ...scopedSubs
-          .filter((s) => s.isActive || (subCounts?.[s.value] ?? 0) > 0 || filters.subcomponent.includes(s.value))
-          .map((s) => ({
-            value: s.value,
-            label: multiComponent ? `${s.component} › ${s.name}` : s.name,
-            count: subCounts?.[s.value] ?? 0,
+        ...scopedSubcomponents
+          .filter(
+            (scopedSubcomponent) =>
+              scopedSubcomponent.isActive ||
+              (subcomponentCounts?.[scopedSubcomponent.value] ?? 0) > 0 ||
+              filters.subcomponent.includes(scopedSubcomponent.value),
+          )
+          .map((scopedSubcomponent) => ({
+            value: scopedSubcomponent.value,
+            label: multiComponent
+              ? `${scopedSubcomponent.component} › ${scopedSubcomponent.name}`
+              : scopedSubcomponent.name,
+            count: subcomponentCounts?.[scopedSubcomponent.value] ?? 0,
           }))
-          .sort((a, b) => a.label.localeCompare(b.label)),
-        { value: '---', label: 'None (no sub-component)', count: subCounts?.['---'] },
+          .sort((left, right) => left.label.localeCompare(right.label)),
+        { value: '---', label: 'None (no sub-component)', count: subcomponentCounts?.['---'] },
       ]
     : [];
-  const presentSubOptions = present(subcomponentOptions, filters.subcomponent, subCounts);
-  // "None" alone is not a choice worth a control: show it only when a real sub-component is in view.
-  const showSubcomponent = presentSubOptions.some((o) => o.value !== '---') || filters.subcomponent.length > 0;
+  const presentSubcomponentOptions = present(subcomponentOptions, filters.subcomponent, subcomponentCounts);
+  const showSubcomponent =
+    presentSubcomponentOptions.some((presentSubcomponentOption) => presentSubcomponentOption.value !== '---') ||
+    filters.subcomponent.length > 0;
 
-  /*
-   * A sub-component selection only makes sense under its own component. When
-   * the component choice changes - cleared, swapped, or a chip removed - any
-   * selected sub-component that no longer belongs is dropped, so the list is
-   * never silently narrowed by a filter the bar no longer shows.
-   */
-  const validSubs = new Set(scopedSubs.map((sc) => sc.value));
-  if (scopedSubs.length > 0) validSubs.add('---');
-  const prunedSubs = filters.subcomponent.filter((v) => validSubs.has(v));
-  const mustPrune = products !== undefined && prunedSubs.length !== filters.subcomponent.length;
+  const validSubcomponents = new Set(scopedSubcomponents.map((scopedSubcomponent) => scopedSubcomponent.value));
+  if (scopedSubcomponents.length > 0) validSubcomponents.add('---');
+  const prunedSubcomponents = filters.subcomponent.filter((subcomponent) => validSubcomponents.has(subcomponent));
+  const mustPrune = products !== undefined && prunedSubcomponents.length !== filters.subcomponent.length;
   useEffect(() => {
-    if (mustPrune) setFacet('subcomponent', prunedSubs);
-    // Re-run only when the verdict changes; prunedSubs is derived from the same inputs.
+    if (mustPrune) setFacet('subcomponent', prunedSubcomponents);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mustPrune, prunedSubs.join('|')]);
+  }, [mustPrune, prunedSubcomponents.join('|')]);
 
   const productCounts = stats?.for('product')?.byProduct;
   const productOptions: MultiSelectOption[] = present(
-    (products ?? []).map((p) => ({ value: p.name, label: p.name, count: productCounts?.[p.name] })),
+    (products ?? []).map((product) => ({
+      value: product.name,
+      label: product.name,
+      count: productCounts?.[product.name],
+    })),
     filters.product,
-    productCounts
-  ).sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label));
+    productCounts,
+  ).sort((left, right) => (right.count ?? 0) - (left.count ?? 0) || left.label.localeCompare(right.label));
   const statusCounts = stats?.for('status')?.byStatus;
   const statusOptions: MultiSelectOption[] = present(
-    (meta?.statuses ?? []).map((s) => ({ value: s, label: s.replace('_', ' '), count: statusCounts?.[s] })),
+    (meta?.statuses ?? []).map((status) => ({
+      value: status,
+      label: status.replace('_', ' '),
+      count: statusCounts?.[status],
+    })),
     filters.status,
-    statusCounts
+    statusCounts,
   );
 
-  /*
-   * Prefer the resolutions this Bugzilla actually declares; fall back to the standard set when
-   * the meta call has not resolved yet, so the control is never an empty dropdown. Bugzilla
-   * reports "no resolution" as `---`, which reads as nothing in a menu — relabelled here and
-   * translated back server-side.
-   */
-  const resolutionOptions: MultiSelectOption[] = (meta?.resolutions?.length
-    ? ['Unresolved', ...meta.resolutions.filter((r) => r && r !== '---')]
-    : [...RESOLUTION_VALUES]
-  ).map((r) => ({ value: r, label: r === 'Unresolved' ? 'Unresolved (open)' : r, count: stats?.for('resolution')?.byResolution?.[r] }));
-  const presentResolutionOptions = present(resolutionOptions, filters.resolution, stats?.for('resolution')?.byResolution);
+  const resolutionOptions: MultiSelectOption[] = (
+    meta?.resolutions?.length
+      ? ['Unresolved', ...meta.resolutions.filter((resolution) => resolution && resolution !== '---')]
+      : [...RESOLUTION_VALUES]
+  ).map((value) => ({
+    value: value,
+    label: value === 'Unresolved' ? 'Unresolved (open)' : value,
+    count: stats?.for('resolution')?.byResolution?.[value],
+  }));
+  const presentResolutionOptions = present(
+    resolutionOptions,
+    filters.resolution,
+    stats?.for('resolution')?.byResolution,
+  );
 
   const hidden = totalCount !== undefined && resultCount !== undefined ? totalCount - resultCount : 0;
 
-  /*
-   * Browser is a UI-bench-only field: it comes from the `[browser:…]` whiteboard
-   * tag, which the API bench never writes. The control is hidden unless the
-   * current scope actually contains browser-tagged bugs.
-   *
-   * Shared with BugTable through `useBrowserScope`, deliberately: the filter and
-   * the table column have to agree, and computing "is browser meaningful here"
-   * twice is how they would eventually stop agreeing.
-   */
   const { counts: browserCounts, hasBrowsers: showBrowser } = useBrowserScope(filters, stats?.for('browser'));
   const browserOptions: MultiSelectOption[] = Object.entries(browserCounts)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
     .map(([name, count]) => ({ value: name, label: BROWSER_LABELS[name] ?? name, count }));
 
   return (
     <div className="border-b border-hairline bg-gradient-to-b from-slate-50/80 to-white/40 px-5 py-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+          <Search
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            aria-hidden
+          />
           <input
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(event) => setSearchInput(event.target.value)}
             placeholder="Search summary or KPA-494…"
             aria-label="Search bug summaries"
             className="h-10 w-full rounded-xl border border-line bg-white/85 pl-10 pr-3 text-sm text-slate-900 shadow-[inset_0_1px_1px_rgb(15_23_42_/_0.03)] outline-none transition-all placeholder:text-slate-400 hover:border-slate-500/55 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/15"
@@ -218,49 +186,62 @@ export function FilterBar({
           onChange={setDateRange}
         />
 
-        {/* Product leads the row: it is the top-level scope for a user with access to more
-            than one product; the facets to its right narrow within that scope. */}
         {(products?.length ?? 0) > 1 && (
           <MultiSelect
             label={FACET_LABELS.product}
             className="w-44"
             options={productOptions}
             selected={filters.product}
-            onToggle={(v) => toggleFacet('product', v)}
+            onToggle={(value) => toggleFacet('product', value)}
             onClear={() => setFacet('product', [])}
           />
         )}
         <MultiSelect
           label={FACET_LABELS.severity}
           className="w-40"
-          options={present(withCounts(SEVERITIES, stats?.for('severity')?.bySeverity), filters.severity, stats?.for('severity')?.bySeverity)}
+          options={present(
+            withCounts(SEVERITIES, stats?.for('severity')?.bySeverity),
+            filters.severity,
+            stats?.for('severity')?.bySeverity,
+          )}
           selected={filters.severity}
-          onToggle={(v) => toggleFacet('severity', v)}
+          onToggle={(value) => toggleFacet('severity', value)}
           onClear={() => setFacet('severity', [])}
         />
         <MultiSelect
           label={FACET_LABELS.priority}
           className="w-36"
-          options={present(withCounts(PRIORITIES, stats?.for('priority')?.byPriority), filters.priority, stats?.for('priority')?.byPriority)}
+          options={present(
+            withCounts(PRIORITIES, stats?.for('priority')?.byPriority),
+            filters.priority,
+            stats?.for('priority')?.byPriority,
+          )}
           selected={filters.priority}
-          onToggle={(v) => toggleFacet('priority', v)}
+          onToggle={(value) => toggleFacet('priority', value)}
           onClear={() => setFacet('priority', [])}
         />
         <MultiSelect
           label={FACET_LABELS.category}
           className="w-44"
-          options={present(withCounts(CATEGORIES, stats?.for('category')?.byCategory), filters.category, stats?.for('category')?.byCategory)}
+          options={present(
+            withCounts(CATEGORIES, stats?.for('category')?.byCategory),
+            filters.category,
+            stats?.for('category')?.byCategory,
+          )}
           selected={filters.category}
-          onToggle={(v) => toggleFacet('category', v)}
+          onToggle={(value) => toggleFacet('category', value)}
           onClear={() => setFacet('category', [])}
         />
-        {/* Who filed it: the test benches (Automation) or a person (Manual). */}
         <MultiSelect
           label={FACET_LABELS.source}
           className="w-40"
-          options={present(withCounts(SOURCES, stats?.for('source')?.bySource), filters.source, stats?.for('source')?.bySource)}
+          options={present(
+            withCounts(SOURCES, stats?.for('source')?.bySource),
+            filters.source,
+            stats?.for('source')?.bySource,
+          )}
           selected={filters.source}
-          onToggle={(v) => toggleFacet('source', v)}
+          onToggle={(value) => toggleFacet('source', value)}
           onClear={() => setFacet('source', [])}
         />
         {showBrowser && (
@@ -269,7 +250,7 @@ export function FilterBar({
             className="w-44"
             options={browserOptions}
             selected={filters.browser}
-            onToggle={(v) => toggleFacet('browser', v)}
+            onToggle={(value) => toggleFacet('browser', value)}
             onClear={() => setFacet('browser', [])}
           />
         )}
@@ -278,16 +259,16 @@ export function FilterBar({
           className="w-52"
           options={componentOptions}
           selected={filters.component}
-          onToggle={(v) => toggleFacet('component', v)}
+          onToggle={(value) => toggleFacet('component', value)}
           onClear={() => setFacet('component', [])}
         />
         {showSubcomponent && (
           <MultiSelect
             label={FACET_LABELS.subcomponent}
             className="w-52"
-            options={presentSubOptions}
+            options={presentSubcomponentOptions}
             selected={filters.subcomponent}
-            onToggle={(v) => toggleFacet('subcomponent', v)}
+            onToggle={(value) => toggleFacet('subcomponent', value)}
             onClear={() => setFacet('subcomponent', [])}
           />
         )}
@@ -296,17 +277,15 @@ export function FilterBar({
           className="w-40"
           options={statusOptions}
           selected={filters.status}
-          onToggle={(v) => toggleFacet('status', v)}
+          onToggle={(value) => toggleFacet('status', value)}
           onClear={() => setFacet('status', [])}
         />
-        {/* Beside Status because it answers what Status cannot: every closed bug reads RESOLVED,
-            and FIXED / INVALID / DUPLICATE mean entirely different things on this product. */}
         <MultiSelect
           label={FACET_LABELS.resolution}
           className="w-44"
           options={presentResolutionOptions}
           selected={filters.resolution}
-          onToggle={(v) => toggleFacet('resolution', v)}
+          onToggle={(value) => toggleFacet('resolution', value)}
           onClear={() => setFacet('resolution', [])}
         />
       </div>

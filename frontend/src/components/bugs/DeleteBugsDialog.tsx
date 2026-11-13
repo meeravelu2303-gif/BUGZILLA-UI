@@ -6,14 +6,7 @@ import { useToast } from '../../context/ToastContext';
 import { bugDisplayId } from '../../lib/utils';
 import { Button } from '../ui/Button';
 
-/**
- * Confirms a soft delete. A reason is required: it goes into the bug's history,
- * and "why was this deleted?" is the first question anyone asks when a bug they
- * were following disappears.
- *
- * Built on the native <dialog> - showModal() traps focus, makes the page behind
- * inert and closes on Escape without any hand-rolled focus management.
- */
+/** Confirms a soft delete. */
 export function DeleteBugsDialog({
   open,
   ids,
@@ -54,7 +47,11 @@ export function DeleteBugsDialog({
       onDeleted?.();
       onClose();
     } catch (err) {
-      toast({ variant: 'error', title: 'Could not delete', description: err instanceof ApiError ? err.message : 'Please try again.' });
+      toast({
+        variant: 'error',
+        title: 'Could not delete',
+        description: err instanceof ApiError ? err.message : 'Please try again.',
+      });
     }
   }
 
@@ -62,14 +59,14 @@ export function DeleteBugsDialog({
     <dialog
       ref={ref}
       onClose={onClose}
-      onClick={(e) => e.target === ref.current && !del.isPending && onClose()}
+      onClick={(event) => event.target === ref.current && !del.isPending && onClose()}
       aria-labelledby="delete-title"
       className="w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-hairline bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 backdrop:backdrop-blur-[2px]"
     >
       <form
         method="dialog"
-        onSubmit={(e) => {
-          e.preventDefault();
+        onSubmit={(event) => {
+          event.preventDefault();
           void confirm();
         }}
         className="flex flex-col gap-4 p-6"
@@ -83,8 +80,9 @@ export function DeleteBugsDialog({
               Delete {label}?
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              {ids.length === 1 ? 'It' : 'They'} will disappear from every list, report and export. Nothing is erased: testers and admins
-              can restore {ids.length === 1 ? 'it' : 'them'} exactly as {ids.length === 1 ? 'it was' : 'they were'}.
+              {ids.length === 1 ? 'It' : 'They'} will disappear from every list, report and export. Nothing is erased:
+              testers and admins can restore {ids.length === 1 ? 'it' : 'them'} exactly as{' '}
+              {ids.length === 1 ? 'it was' : 'they were'}.
             </p>
           </div>
         </div>
@@ -96,7 +94,7 @@ export function DeleteBugsDialog({
           <textarea
             id="delete-reason"
             value={reason}
-            onChange={(e) => setReason(e.target.value)}
+            onChange={(event) => setReason(event.target.value)}
             rows={3}
             autoFocus
             maxLength={1000}

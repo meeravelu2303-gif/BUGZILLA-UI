@@ -3,16 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import { copyText } from '../../lib/clipboard';
 import { Linkify } from '../ui/Linkify';
 
-/**
- * Renders the bench's structured defect description as clean, labelled sections instead of one
- * raw monospace dump: a metadata grid, the narrative, an Expected-vs-Actual contrast, and the
- * reproduction commands as copyable code blocks.
- *
- * The bench writes a stable, line-anchored format (`Classification:` … `Expected:` … `Actual:`
- * … `curl:` …). This parses by those anchors; if the shape is ever unrecognised it falls back
- * to the raw text, so a format change degrades gracefully rather than dropping content.
- */
-
 interface Sections {
   meta: Array<{ label: string; value: string }>;
   summary: string;
@@ -26,7 +16,6 @@ interface Sections {
   preconditions: string;
   steps: string;
   responseBody: string;
-  /** "HTTP 500" when the Response body heading names a status. */
   responseLabel: string;
 }
 
@@ -39,11 +28,6 @@ const META_LINE: Record<string, string> = {
   'Severity:': 'Severity / Priority',
 };
 
-/**
- * Anchors that begin a multi-line block; text runs until the next anchor. Some are listed only so
- * their text stops the block above them (Owner, Environment, Filed by …) - without them a trailing
- * "Filed by:" line would read as part of the curl.
- */
 const BLOCK_ANCHORS = [
   'Summary:',
   'Preconditions:',
@@ -82,13 +66,12 @@ export function parse(raw: string): Sections | null {
       meta.push({ label: META_LINE[metaKey], value: line.slice(metaKey.length).trim() });
       continue;
     }
-    const anchor = BLOCK_ANCHORS.find((a) => line.trim() === a || line.startsWith(a));
+    const anchor = BLOCK_ANCHORS.find((blockAnchor) => line.trim() === blockAnchor || line.startsWith(blockAnchor));
     if (anchor) {
       seenAnchor = true;
       current = anchor;
       blocks[anchor] = [];
       let inline = line.slice(line.indexOf(anchor) + anchor.length).trim();
-      // "Response body (HTTP 500):" / "Correlation ID (search …): abc" - the heading runs to the colon.
       if (!anchor.endsWith(':')) {
         if (anchor === 'Response body') responseLabel = /\((HTTP [^)]*)\)/.exec(inline)?.[1] ?? '';
         inline = inline.includes(':') ? inline.slice(inline.indexOf(':') + 1).trim() : '';
@@ -101,7 +84,7 @@ export function parse(raw: string): Sections | null {
     else summaryLines.push(line);
   }
 
-  const get = (a: string) => (blocks[a] ?? []).join('\n').trim();
+  const get = (value: string) => (blocks[value] ?? []).join('\n').trim();
   const sections: Sections = {
     meta,
     summary: [summaryLines.join('\n').trim(), get('Summary:')].filter(Boolean).join('\n\n'),
@@ -118,7 +101,6 @@ export function parse(raw: string): Sections | null {
     responseLabel,
   };
 
-  // If we recognised essentially nothing, signal a fallback to raw.
   if (meta.length === 0 && !sections.expected && !sections.actual && !sections.curl) return null;
   return sections;
 }
@@ -129,34 +111,21 @@ function CopyButton({ text }: { text: string }) {
   const [state, setState] = useState<CopyState>('idle');
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
-  // Clear the reset timer on unmount. Navigating away from a bug within the
-  // hold window would otherwise fire setState on a component that is gone.
   useEffect(() => () => clearTimeout(timer.current), []);
 
   async function onCopy() {
-    /*
-     * Awaited, and the result actually used. The old version fired the write
-     * and reported "Copied" regardless - so on an insecure origin, where
-     * `navigator.clipboard` does not exist at all, it claimed success while
-     * copying nothing. See lib/clipboard.ts.
-     */
     const ok = await copyText(text);
     setState(ok ? 'copied' : 'failed');
     clearTimeout(timer.current);
-    // A failure needs longer on screen than a success: it asks the reader to do
-    // something, rather than just confirming what already happened.
     timer.current = setTimeout(() => setState('idle'), ok ? 1500 : 5000);
   }
 
-  const label =
-    state === 'copied' ? 'Copied' : state === 'failed' ? 'Select the text and press Ctrl+C' : 'Copy';
+  const label = state === 'copied' ? 'Copied' : state === 'failed' ? 'Select the text and press Ctrl+C' : 'Copy';
 
   return (
     <button
       type="button"
       onClick={onCopy}
-      // Announced, not just coloured - the label changes in place, so a screen
-      // reader needs to be told the region updated.
       aria-live="polite"
       title={state === 'failed' ? 'Your browser blocks clipboard access on this page' : undefined}
       className={`focus-ring inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-white/5 ${
@@ -182,7 +151,6 @@ function CodeBlock({ title, code }: { title: string; code: string }) {
         <span className="font-mono text-xs font-medium text-slate-300">{title}</span>
         <CopyButton text={code} />
       </div>
-      {/* Fixed viewport: long commands scroll inside the block instead of stretching the page. */}
       <pre className="max-h-80 max-w-full overflow-auto whitespace-pre bg-slate-900 p-4 font-mono text-[0.8333rem] leading-relaxed text-slate-100">
         {code}
       </pre>
@@ -194,8 +162,6 @@ export function DescriptionReport({ description }: { description: string }) {
   const parsed = parse(description);
 
   if (!parsed) {
-    // `[overflow-wrap:anywhere]` not `break-all`: long tokens still break, but
-    // ordinary sentences keep wrapping at spaces instead of mid-word.
     return (
       <pre className="max-w-full whitespace-pre-wrap rounded-xl bg-slate-50 p-4 font-mono text-[0.8333rem] leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200 [overflow-wrap:anywhere]">
         <Linkify text={description} />
@@ -207,18 +173,16 @@ export function DescriptionReport({ description }: { description: string }) {
     <div className="flex flex-col gap-6">
       {parsed.meta.length > 0 && (
         <dl className="grid grid-cols-1 gap-x-10 gap-y-5 rounded-xl bg-slate-50 p-5 ring-1 ring-inset ring-slate-200 sm:grid-cols-2">
-          {parsed.meta.map((m) => (
-            <div key={m.label} className="flex flex-col gap-1">
-              <dt className="text-[0.7333rem] font-semibold uppercase tracking-wider text-slate-500">{m.label}</dt>
-              <dd className="break-words font-mono text-[0.9rem] text-slate-800">{m.value}</dd>
+          {parsed.meta.map((meta) => (
+            <div key={meta.label} className="flex flex-col gap-1">
+              <dt className="text-[0.7333rem] font-semibold uppercase tracking-wider text-slate-500">{meta.label}</dt>
+              <dd className="break-words font-mono text-[0.9rem] text-slate-800">{meta.value}</dd>
             </div>
           ))}
         </dl>
       )}
 
-      {parsed.summary && (
-        <p className="text-[0.9667rem] leading-7 text-slate-700">{parsed.summary}</p>
-      )}
+      {parsed.summary && <p className="text-[0.9667rem] leading-7 text-slate-700">{parsed.summary}</p>}
 
       {parsed.preconditions && (
         <p className="text-[0.9rem] leading-6 text-slate-600">
@@ -229,9 +193,7 @@ export function DescriptionReport({ description }: { description: string }) {
 
       {(parsed.whatThisMeans || parsed.whyItMatters || parsed.howToFix) && (
         <div className="flex flex-col gap-3 rounded-xl bg-sky-50/70 p-5 ring-1 ring-inset ring-sky-600/20">
-          <p className="text-[0.7333rem] font-semibold uppercase tracking-wide text-sky-700">
-            For the developer
-          </p>
+          <p className="text-[0.7333rem] font-semibold uppercase tracking-wide text-sky-700">For the developer</p>
           {parsed.whatThisMeans && (
             <p className="text-[0.9333rem] leading-7 text-slate-700">
               <span className="font-semibold text-slate-900">What this means. </span>
@@ -260,8 +222,6 @@ export function DescriptionReport({ description }: { description: string }) {
               <p className="mb-2 flex items-center gap-1.5 text-[0.7333rem] font-semibold uppercase tracking-wide text-emerald-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Expected
               </p>
-              {/* Monospace + preserved whitespace so the bench's aligned `case → code` diff lines up;
-                  fixed height so long values scroll inside instead of swallowing the page. */}
               <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-mono text-[0.8667rem] leading-relaxed text-emerald-900">
                 <Linkify text={parsed.expected} />
               </pre>
@@ -280,13 +240,12 @@ export function DescriptionReport({ description }: { description: string }) {
         </div>
       )}
 
-      {/* Filed without steps (allowed for Medium / Low severity): say so plainly instead of hiding the section. */}
       {parsed.steps.trim() === '(not given)' ? (
         <div className="flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-600/20">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
           <span>
-            <strong className="font-semibold">No steps given.</strong> The reporter did not list how to reproduce this. If it cannot be
-            reproduced from the summary, ask them in a comment.
+            <strong className="font-semibold">No steps given.</strong> The reporter did not list how to reproduce this.
+            If it cannot be reproduced from the summary, ask them in a comment.
           </span>
         </div>
       ) : (
@@ -305,22 +264,15 @@ export function DescriptionReport({ description }: { description: string }) {
           <p className="text-[0.7333rem] font-semibold uppercase tracking-wide text-slate-500">Reproduce</p>
           {parsed.curl && <CodeBlock title="curl" code={parsed.curl} />}
           {parsed.responseBody && (
-            <CodeBlock title={parsed.responseLabel ? `Response body (${parsed.responseLabel})` : 'Response body'} code={parsed.responseBody} />
+            <CodeBlock
+              title={parsed.responseLabel ? `Response body (${parsed.responseLabel})` : 'Response body'}
+              code={parsed.responseBody}
+            />
           )}
           {parsed.repro && <CodeBlock title="Playwright" code={parsed.repro} />}
         </div>
       )}
 
-      {/*
-        The original text, always reachable.
-        
-        `parse` keeps only the anchors it knows and DISCARDS everything else -
-        a line under an unrecognised heading is dropped on the floor. That is
-        fine for the tidy view above, but it means the structured render is not
-        guaranteed to be complete, and a reader has no way to tell what was
-        lost. Collapsed by default so it costs nothing, open when something
-        does not add up.
-      */}
       <details className="group rounded-xl border border-hairline bg-white">
         <summary className="focus-ring flex cursor-pointer list-none items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900">
           <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" aria-hidden />

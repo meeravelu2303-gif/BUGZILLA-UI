@@ -41,25 +41,21 @@ export function useMe() {
 }
 
 export function useLogin() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { login: string; password: string }) => api.post<{ user: AuthUser }>('/auth/login', input),
     onSuccess: (data) => {
-      qc.setQueryData(['me'], data);
+      queryClient.setQueryData(['me'], data);
     },
   });
 }
 
 export function useLogout() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api.post<undefined>('/auth/logout'),
     onSuccess: () => {
-      qc.clear();
-      // Hard redirect rather than relying on RequireAuth's reactive Navigate: a
-      // security-sensitive transition like logout should guarantee a clean slate
-      // (no stale component state, no query-cache observer edge cases) rather than
-      // trust SPA cache reactivity to unwind every mounted query correctly.
+      queryClient.clear();
       window.location.href = '/login';
     },
   });
@@ -68,15 +64,14 @@ export function useLogout() {
 export function useForgotPassword() {
   return useMutation({
     mutationFn: (input: { login: string }) =>
-      api.post<{ accepted: true; cooldownMinutes: number; linkValidDays: number; dailyLimit: number }>('/auth/forgot-password', input),
+      api.post<{ accepted: true; cooldownMinutes: number; linkValidDays: number; dailyLimit: number }>(
+        '/auth/forgot-password',
+        input,
+      ),
   });
 }
 
-/**
- * POST rather than GET so the token travels in a body - the reset page has
- * already scrubbed it from its own URL, and it should not reappear in a
- * query string on the way to the server.
- */
+/** POST rather than GET so the token travels in a body. */
 export function useValidateResetToken(token: string | null) {
   return useQuery({
     queryKey: ['reset-token', token],
@@ -98,7 +93,10 @@ export function useResetPassword() {
 export function useReporters(enabled = true) {
   return useQuery({
     queryKey: ['meta', 'reporters'],
-    queryFn: () => api.get<{ users: { email: string; name: string; role: 'admin' | 'tester' | 'reporter' | 'developer' }[] }>('/meta/reporters'),
+    queryFn: () =>
+      api.get<{ users: { email: string; name: string; role: 'admin' | 'tester' | 'reporter' | 'developer' }[] }>(
+        '/meta/reporters',
+      ),
     enabled,
     staleTime: 5 * 60 * 1000,
   });
@@ -122,56 +120,33 @@ export function useMeta() {
 export interface AssignableUser {
   email: string;
   name: string;
-  /**
-   * Derived by the BFF from Bugzilla groups, not stored anywhere. Optional so
-   * a client running against an older backend still renders the name.
-   */
   role?: 'admin' | 'developer' | 'tester' | 'reporter';
 }
 
-/**
- * The people a bug can be reassigned to — populates the Assignee dropdown.
- *
- * `product` scopes the list to that product's team. Without it the dropdown listed every account
- * on the instance, so reassigning a KPost UI bug offered the API team and vice versa — and
- * choosing one hands the bug to somebody who cannot see it. Keyed by product so switching
- * between bugs never serves a cached list belonging to a different team.
- */
+/** The people a bug can be reassigned to — populates the Assignee dropdown. */
 export function useAssignableUsers(product?: string | string[]) {
-  // Normalised so ['KPost API'] and 'KPost API' share one cache entry rather
-  // than fetching the same list twice under two keys.
   const products = (Array.isArray(product) ? product : product ? [product] : []).filter(Boolean).sort();
   return useQuery({
     queryKey: ['meta', 'assignable-users', products.join('|')],
     queryFn: () =>
       api.get<{ users: AssignableUser[]; owners?: string[] }>(
-        `/meta/assignable-users${buildQuery(products.length ? { product: products } : {})}`
+        `/meta/assignable-users${buildQuery(products.length ? { product: products } : {})}`,
       ),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-/**
- * Everyone who can hold a bug, for SEARCHING by assignee (Advanced Search).
- * Unlike useAssignableUsers it keeps testers, reporters and the signed-in user:
- * they are left out of "hand this bug to" pickers, but their bugs still need finding.
- */
+/** Everyone who can hold a bug, for SEARCHING by assignee (Advanced Search). */
 export function useSearchableAssignees() {
   return useQuery({
     queryKey: ['meta', 'assignable-users', 'scope:all'],
-    queryFn: () => api.get<{ users: AssignableUser[]; owners?: string[] }>(`/meta/assignable-users${buildQuery({ scope: 'all' })}`),
+    queryFn: () =>
+      api.get<{ users: AssignableUser[]; owners?: string[] }>(`/meta/assignable-users${buildQuery({ scope: 'all' })}`),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-/**
- * Products for the signed-in user.
- *
- * `forFiling` asks for everything Bugzilla will accept a bug into, rather than
- * the narrower same-named-group scope used for filters and dashboards. The two
- * are cached separately because they are genuinely different answers - sharing
- * a key would let a filter's list leak into the filing form and back.
- */
+/** Products for the signed-in user. */
 export function useProducts(options?: { forFiling?: boolean }) {
   const forFiling = options?.forFiling ?? false;
   return useQuery({
@@ -185,46 +160,27 @@ export function useBugs(params: BugQueryParams, options?: { enabled?: boolean })
   return useQuery({
     queryKey: ['bugs', params],
     queryFn: () => api.get<BugListResponse>(`/bugs${buildQuery(params)}`),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous) => previous,
     enabled: options?.enabled ?? true,
   });
 }
 
-/**
- * Genuine totals for the dashboard stat cards. Separate from useBugs because
- * useBugs is capped at 200 server-side - counting its results understates the
- * real number as soon as there are more bugs than one page.
- */
+/** Genuine totals for the dashboard stat cards. */
 export function useBugCounts(params: BugQueryParams = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['bugs', 'count', params],
     queryFn: () => api.get<{ counts: BugCounts }>(`/bugs/count${buildQuery(params)}`),
     staleTime: 30 * 1000,
-    /*
-     * Lets a caller skip a count that cannot be answered truthfully.
-     *
-     * Bugzilla DROPS a `bug_status` value it does not recognise rather than
-     * matching nothing, so counting a status this instance has never heard of
-     * returns the caller's ENTIRE accessible scope. A filter that silently
-     * becomes "everything" is worse than no filter: it reads as a real number.
-     */
     enabled: options?.enabled ?? true,
   });
 }
 
-/**
- * Every dashboard and report breakdown in one request: counts by severity, by
- * category, by component, and the severity x category matrix. Computed
- * server-side so drawing a chart never costs 1,283 bug records.
- */
+/** Every dashboard and report breakdown in one request. */
 export function useBugStats(params: BugQueryParams = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['bugs', 'stats', params],
     queryFn: () => api.get<BugStats>(`/bugs/stats${buildQuery(params)}`),
     staleTime: 30 * 1000,
-    // Callers that only need a scoped breakdown under some condition (the
-    // filter bar's browser gate) can skip the request entirely rather than
-    // fetching a duplicate of the unscoped stats they already hold.
     enabled: options?.enabled ?? true,
   });
 }
@@ -237,10 +193,7 @@ export function useBug(id: number) {
   });
 }
 
-/**
- * A bug's recorded changes and status journey. Keyed under ['bugs', id] so
- * every save that refreshes the bug refreshes its activity too.
- */
+/** A bug's recorded changes and status journey. */
 export function useBugActivity(id: number) {
   return useQuery({
     queryKey: ['bugs', id, 'activity'],
@@ -250,70 +203,84 @@ export function useBugActivity(id: number) {
 }
 
 export function useCreateBug() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateBugInput) => api.post<{ bug: BugDetailResponse['bug'] }>('/bugs', input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bugs'] });
+      queryClient.invalidateQueries({ queryKey: ['bugs'] });
     },
   });
 }
 
 export function useUpdateBug(id: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateBugInput) =>
       api.patch<{ bug: BugDetailResponse['bug']; changes: BugChanges }>(`/bugs/${id}`, input),
     onSuccess: ({ bug }) => {
-      // The response already carries the saved bug: apply it at once so the
-      // editor's baseline moves and the save bar clears without waiting for a
-      // refetch (each Bugzilla call costs ~600ms under mod_cgi). The refetch
-      // below then fills in the derived fields (triage, description, groups).
-      qc.setQueryData<BugDetailResponse>(['bugs', id], (prev) => (prev ? { ...prev, bug: { ...prev.bug, ...bug } } : prev));
-      qc.invalidateQueries({ queryKey: ['bugs', id] });
-      qc.invalidateQueries({ queryKey: ['bugs'], exact: false });
+      queryClient.setQueryData<BugDetailResponse>(['bugs', id], (previous) =>
+        previous ? { ...previous, bug: { ...previous.bug, ...bug } } : previous,
+      );
+      queryClient.invalidateQueries({ queryKey: ['bugs', id] });
+      queryClient.invalidateQueries({ queryKey: ['bugs'], exact: false });
     },
   });
 }
 
 export function useUpdateAttachment(bugId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ attachmentId, input }: { attachmentId: number; input: UpdateAttachmentInput }) =>
       api.patch<{ attachment: Attachment }>(`/bugs/${bugId}/attachments/${attachmentId}`, input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bugs', bugId] });
+      queryClient.invalidateQueries({ queryKey: ['bugs', bugId] });
     },
   });
 }
 
-/** Deletes one attachment for good. The bug is refetched: its "Created attachment" comment goes too. */
+/** Deletes one attachment for good. */
 export function useDeleteAttachment(bugId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (attachmentId: number) =>
-      api.delete<{ removed: { id: number; bugId: number; fileName: string } }>(`/bugs/${bugId}/attachments/${attachmentId}`),
+      api.delete<{ removed: { id: number; bugId: number; fileName: string } }>(
+        `/bugs/${bugId}/attachments/${attachmentId}`,
+      ),
     onSuccess: (_result, attachmentId) => {
-      qc.setQueryData<BugDetailResponse>(['bugs', bugId], (prev) =>
-        prev ? { ...prev, attachments: prev.attachments.filter((a) => a.id !== attachmentId) } : prev
+      queryClient.setQueryData<BugDetailResponse>(['bugs', bugId], (previous) =>
+        previous
+          ? { ...previous, attachments: previous.attachments.filter((attachment) => attachment.id !== attachmentId) }
+          : previous,
       );
-      qc.invalidateQueries({ queryKey: ['bugs', bugId] });
+      queryClient.invalidateQueries({ queryKey: ['bugs', bugId] });
     },
   });
 }
 
-/** The author corrects their comment. Patches the cached comment at once, then refetches. */
+/** The author corrects their comment. */
 export function useEditComment(bugId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ commentId, text }: { commentId: number; text: string }) =>
-      api.patch<{ comment: { id: number; text: string }; edited?: Comment['edited']; changed: boolean }>(`/bugs/${bugId}/comments/${commentId}`, { text }),
+      api.patch<{ comment: { id: number; text: string }; edited?: Comment['edited']; changed: boolean }>(
+        `/bugs/${bugId}/comments/${commentId}`,
+        { text },
+      ),
     onSuccess: ({ comment, edited }) => {
-      qc.setQueryData<BugDetailResponse>(['bugs', bugId], (prev) =>
-        prev ? { ...prev, comments: prev.comments.map((c) => (c.id === comment.id ? { ...c, text: comment.text, ...(edited ? { edited } : {}) } : c)) } : prev
+      queryClient.setQueryData<BugDetailResponse>(['bugs', bugId], (previous) =>
+        previous
+          ? {
+              ...previous,
+              comments: previous.comments.map((commentItem) =>
+                commentItem.id === comment.id
+                  ? { ...commentItem, text: comment.text, ...(edited ? { edited } : {}) }
+                  : commentItem,
+              ),
+            }
+          : previous,
       );
-      qc.invalidateQueries({ queryKey: ['bugs', bugId] });
-      qc.invalidateQueries({ queryKey: ['bugs', bugId, 'comment-history', comment.id] });
+      queryClient.invalidateQueries({ queryKey: ['bugs', bugId] });
+      queryClient.invalidateQueries({ queryKey: ['bugs', bugId, 'comment-history', comment.id] });
     },
   });
 }
@@ -327,15 +294,20 @@ export function useCommentHistory(bugId: number, commentId: number, enabled: boo
   });
 }
 
-/** Adds/removes tags on one comment. Patches the cached comment so the chip appears without a refetch. */
+/** Adds/removes tags on one comment. */
 export function useUpdateCommentTags(bugId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ commentId, add, remove }: { commentId: number; add?: string[]; remove?: string[] }) =>
       api.put<{ tags: string[] }>(`/bugs/${bugId}/comments/${commentId}/tags`, { add, remove }),
     onSuccess: ({ tags }, { commentId }) => {
-      qc.setQueryData<BugDetailResponse>(['bugs', bugId], (prev) =>
-        prev ? { ...prev, comments: prev.comments.map((c) => (c.id === commentId ? { ...c, tags } : c)) } : prev
+      queryClient.setQueryData<BugDetailResponse>(['bugs', bugId], (previous) =>
+        previous
+          ? {
+              ...previous,
+              comments: previous.comments.map((comment) => (comment.id === commentId ? { ...comment, tags } : comment)),
+            }
+          : previous,
       );
     },
   });
@@ -343,32 +315,31 @@ export function useUpdateCommentTags(bugId: number) {
 
 /** Tags already used elsewhere, for the tag input's suggestions. */
 export function useCommentTagSuggestions(query: string, enabled: boolean) {
-  const q = query.trim();
+  const normalizedQuery = query.trim();
   return useQuery({
-    queryKey: ['bugs', 'comment-tags', q.toLowerCase()],
-    queryFn: () => api.get<{ tags: string[] }>(`/bugs/comment-tags${buildQuery({ q })}`),
-    enabled: enabled && q.length > 0 && /^[^\s,/]+$/.test(q),
+    queryKey: ['bugs', 'comment-tags', normalizedQuery.toLowerCase()],
+    queryFn: () => api.get<{ tags: string[] }>(`/bugs/comment-tags${buildQuery({ q: normalizedQuery })}`),
+    enabled: enabled && normalizedQuery.length > 0 && /^[^\s,/]+$/.test(normalizedQuery),
     staleTime: 60 * 1000,
   });
 }
 
 /** Saves the whole bug report (and its category) as a new report revision. */
 export function useUpdateReport(id: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { text: string; category?: string; note?: string; baseRevisions?: number }) =>
       api.put<{ textChanged: boolean; categoryChanged: boolean }>(`/bugs/${id}/report`, input),
-    // Lists too: category, classification and the exported report all follow the new text.
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bugs'], exact: false }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bugs'], exact: false }),
   });
 }
 
-/** Soft-deletes bugs (testers and admins). Everything bug-shaped is refetched: lists, counts, the bug itself. */
+/** Soft-deletes bugs (testers and admins). */
 export function useDeleteBugs() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { ids: number[]; reason: string }) => api.post<{ deleted: number }>('/bugs/delete', input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bugs'], exact: false }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bugs'], exact: false }),
   });
 }
 
@@ -384,54 +355,53 @@ export function useTransferOptions(id: number, enabled: boolean) {
 }
 
 export function useTransferBug(id: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: TransferBugInput) =>
-      api.post<{ id: number; product: string; component: string; assignee: string; ccAdded: string }>(`/bugs/${id}/transfer`, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bugs'], exact: false }),
+      api.post<{ id: number; product: string; component: string; assignee: string; ccAdded: string }>(
+        `/bugs/${id}/transfer`,
+        input,
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bugs'], exact: false }),
   });
 }
 
 export function useRestoreBugs() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { ids: number[] }) => api.post<{ restored: number }>('/bugs/restore', input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bugs'], exact: false }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bugs'], exact: false }),
   });
 }
 
 /** Reassigns many bugs to one assignee in a single call. */
 export function useBulkReassign() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { ids: number[]; assignedTo: string }) =>
-      api.patch<{ updated: number }>('/bugs', input),
+    mutationFn: (input: { ids: number[]; assignedTo: string }) => api.patch<{ updated: number }>('/bugs', input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bugs'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['bugs'], exact: false });
     },
   });
 }
 
 export function useAddComment(id: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { comment: string; isPrivate?: boolean }) =>
       api.post<{ comment: BugDetailResponse['comments'][number] }>(`/bugs/${id}/comments`, input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['bugs', id] });
+      queryClient.invalidateQueries({ queryKey: ['bugs', id] });
     },
   });
 }
 
-// ---- Admin: Users ----
-
+/** ---- Admin: Users ----. */
 export function useAdminUsers(search: string) {
   return useQuery({
     queryKey: ['admin', 'users', search],
-    // No search term lists everyone; a term narrows it. Always enabled so the
-    // page shows the full list on open.
     queryFn: () => api.get<{ users: AdminUser[] }>(`/admin/users${buildQuery({ search })}`),
-    placeholderData: (prev) => prev,
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -444,20 +414,17 @@ export function useAdminUser(id: number) {
 }
 
 export function useCreateUser() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    // `skippedGroups` names any product with no matching Bugzilla group, so the
-    // form can say what was NOT granted instead of implying full setup.
     mutationFn: (input: CreateUserInput) =>
       api.post<{
         user: AdminUser;
         skippedGroups?: string[];
         groupError?: string;
-        /** Present when a welcome email was asked for: where it went, or why it did not. */
         welcome?: { sentTo?: string; error?: string };
       }>('/admin/users', input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
   });
 }
@@ -469,7 +436,7 @@ export function useSendWelcome(id: number) {
   });
 }
 
-/** Read-only: can this account be deleted, and if not, why. Loaded when the dialog opens. */
+/** Read-only: can this account be deleted, and if not, why. */
 export function useUserDeleteCheck(id: number, enabled: boolean) {
   return useQuery({
     queryKey: ['admin', 'users', 'delete-check', id],
@@ -481,26 +448,25 @@ export function useUserDeleteCheck(id: number, enabled: boolean) {
 }
 
 export function useDeleteUser(id: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (confirmEmail: string) => api.deleteWithBody<undefined>(`/admin/users/${id}`, { confirmEmail }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
   });
 }
 
 export function useUpdateUser(id: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateUserInput) =>
       api.patch<{ user: AdminUser; skippedGroups?: string[]; groupError?: string }>(`/admin/users/${id}`, input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
   });
 }
 
-// ---- Admin: Products & Components ----
-
+/** ---- Admin: Products & Components ----. */
 export function useAdminProducts() {
   return useQuery({
     queryKey: ['admin', 'products'],
@@ -509,9 +475,9 @@ export function useAdminProducts() {
   });
 }
 
-function invalidateProductLists(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ['products'] });
-  qc.invalidateQueries({ queryKey: ['admin', 'products'] });
+function invalidateProductLists(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['products'] });
+  queryClient.invalidateQueries({ queryKey: ['admin', 'products'] });
 }
 
 /** A person on a team, as the Teams extension describes them. */
@@ -521,7 +487,7 @@ export interface TeamPerson {
   name: string;
 }
 
-/** A team: one leader and the members who report to them. Not tied to products. */
+/** A team: one leader and the members who report to them. */
 export interface Team {
   id: number;
   name: string;
@@ -544,53 +510,53 @@ export function useTeams() {
 }
 
 export function useSaveTeam() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...input }: TeamInput & { id?: number }) =>
       id ? api.patch<{ team: Team }>(`/admin/teams/${id}`, input) : api.post<{ team: Team }>('/admin/teams', input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'teams'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'teams'] }),
   });
 }
 
 export function useDeleteTeam() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => api.delete<void>(`/admin/teams/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'teams'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'teams'] }),
   });
 }
 
 export function useCreateProduct() {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateProductInput) => api.post<{ product: Product; warnings?: string[] }>('/admin/products', input),
-    onSuccess: () => invalidateProductLists(qc),
+    mutationFn: (input: CreateProductInput) =>
+      api.post<{ product: Product; warnings?: string[] }>('/admin/products', input),
+    onSuccess: () => invalidateProductLists(queryClient),
   });
 }
 
 export function useUpdateProduct(id: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateProductInput) =>
       api.patch<{ product: Product; warnings?: string[] }>(`/admin/products/${id}`, input),
-    onSuccess: () => invalidateProductLists(qc),
+    onSuccess: () => invalidateProductLists(queryClient),
   });
 }
 
 /** Deletes an EMPTY product through Bugzilla's own admin page; refused while it has bugs. */
 export function useDeleteProduct(id: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (confirmName: string) => api.deleteWithBody<undefined>(`/admin/products/${id}`, { confirmName }),
     onSuccess: () => {
-      invalidateProductLists(qc);
-      qc.invalidateQueries({ queryKey: ['meta'] });
+      invalidateProductLists(queryClient);
+      queryClient.invalidateQueries({ queryKey: ['meta'] });
     },
   });
 }
 
-// ---- Admin: read-only metadata (parameters, groups) ----
-
+/** ---- Admin: read-only metadata (parameters, groups) ----. */
 export function useAdminParameters() {
   return useQuery({
     queryKey: ['admin', 'parameters'],
@@ -609,76 +575,65 @@ export function useAdminGroups() {
   });
 }
 
-/** Sub-components (backend/src/services/subcomponents.service.ts). Adding follows the add-component rule; edit and delete are admin-only. */
+/** Sub-components (backend/src/services/subcomponents.service.ts). */
 export function useCreateSubcomponent(productId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateSubcomponentInput) => api.post<{ product: Product }>(`/admin/products/${productId}/subcomponents`, input),
-    onSuccess: () => invalidateProductLists(qc),
+    mutationFn: (input: CreateSubcomponentInput) =>
+      api.post<{ product: Product }>(`/admin/products/${productId}/subcomponents`, input),
+    onSuccess: () => invalidateProductLists(queryClient),
   });
 }
 
 export function useUpdateSubcomponent(productId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...input }: UpdateSubcomponentInput & { id: number }) =>
       api.patch<{ product: Product }>(`/admin/products/${productId}/subcomponents/${id}`, input),
-    onSuccess: () => invalidateProductLists(qc),
+    onSuccess: () => invalidateProductLists(queryClient),
   });
 }
 
 export function useDeleteSubcomponent(productId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => api.delete<{ product: Product }>(`/admin/products/${productId}/subcomponents/${id}`),
-    onSuccess: () => invalidateProductLists(qc),
+    onSuccess: () => invalidateProductLists(queryClient),
   });
 }
 
-/** Admins and testers. A rename carries the component's bugs and sub-components along. */
+/** Admins and testers. */
 export function useUpdateComponent(productId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ componentId, ...input }: UpdateComponentInput & { componentId: number }) =>
       api.patch<{ product: Product }>(`/admin/products/${productId}/components/${componentId}`, input),
-    onSuccess: () => invalidateProductLists(qc),
+    onSuccess: () => invalidateProductLists(queryClient),
   });
 }
 
 /** Admins and testers, and only for an empty component that is not the product's last one. */
 export function useDeleteComponent(productId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ componentId, confirmName }: { componentId: number; confirmName: string }) =>
-      api.deleteWithBody<{ product: Product }>(`/admin/products/${productId}/components/${componentId}`, { confirmName }),
-    onSuccess: () => invalidateProductLists(qc),
+      api.deleteWithBody<{ product: Product }>(`/admin/products/${productId}/components/${componentId}`, {
+        confirmName,
+      }),
+    onSuccess: () => invalidateProductLists(queryClient),
   });
 }
 
 export function useCreateComponent(productId: number) {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateComponentInput) => api.post<{ product: Product }>(`/admin/products/${productId}/components`, input),
-    onSuccess: () => invalidateProductLists(qc),
+    mutationFn: (input: CreateComponentInput) =>
+      api.post<{ product: Product }>(`/admin/products/${productId}/components`, input),
+    onSuccess: () => invalidateProductLists(queryClient),
   });
 }
 
-/**
- * Live service health, for the admin dashboard's system metrics.
- *
- * `?deep=1` makes the BFF additionally call Bugzilla on the SERVICE key, so a
- * green light here means the whole chain is up - the browser reached the BFF,
- * and the BFF reached Bugzilla - not merely that this process is running.
- *
- * Note what it cannot tell you: the BFF holds no database driver (it proxies
- * Bugzilla's API and nothing else), so there is no MariaDB probe to read. A
- * failing database surfaces INDIRECTLY, as `bugzilla.ok === false` with
- * Bugzilla's own error, because Bugzilla is the thing that talks to it.
- *
- * Polled rather than fetched once: this is a status panel, and a stale green
- * light is worse than no light. `retry: false` so an outage shows as an outage
- * instead of spinning.
- */
+/** Live service health, for the admin dashboard's system metrics. */
 export interface HealthResponse {
   ok: boolean;
   uptimeSeconds: number;

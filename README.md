@@ -77,14 +77,20 @@ BUGZILLA-UI/
 │       ├── pages/              Route screens; admin/ holds the admin screens
 │       └── types/              Shared TypeScript types
 │
-├── backend/                    BFF - Node + Express + TypeScript  (port 4000)
+├── backend/                    BFF - Node + Express + TypeScript  (port 4000) - layers: backend/README.md
 │   ├── .env.example            Every setting, documented - copy to .env (never commit .env)
+│   ├── Dockerfile              Two-stage image: compile TypeScript, run dist/ as non-root
 │   └── src/
-│       ├── config/             Zod-validated environment configuration
-│       ├── lib/                Bugzilla client, auth, sessions, exports, domain logic
-│       ├── middleware/         Authentication / permission checks, error handler
-│       ├── routes/             HTTP routes: auth, bugs, products, meta, proof, admin*
-│       ├── schemas/            Zod request schemas + Bugzilla → API mappers
+│       ├── index.ts            Entry point: security headers, CORS, sessions, mounts /api, listen
+│       ├── routes/             api.route.ts - the one route file: every endpoint, middleware, handler
+│       ├── middleware/         Auth / permission checks, rate limits, error handler
+│       ├── controllers/        Exported request handlers only, one file per resource
+│       ├── dto/                Zod request schemas + Bugzilla → API mappers (*.dto.ts)
+│       ├── services/           Business logic (*.service.ts)
+│       ├── clients/            Bugzilla JSON-RPC client, Bugzilla sign-in, session store
+│       ├── events/             Live updates (Server-Sent Events)
+│       ├── helpers/            Responses, errors, validation, memo cache, proof pages
+│       ├── config/             app.config.ts - Zod-validated environment configuration
 │       └── types/              Express type augmentation
 │
 ├── bugzilla/                   Everything that is deployed into, or runs inside, C:\Bugzilla (Perl)
@@ -110,6 +116,7 @@ BUGZILLA-UI/
 ├── package.json                Root scripts that drive both apps (dev / build / typecheck)
 ├── .editorconfig               Shared editor settings
 ├── .gitattributes              Line-ending and binary rules
+├── .gitlab-ci.yml              CI: secret scan, dependency audit, backend + frontend build
 └── .nvmrc                      Node.js version
 ```
 

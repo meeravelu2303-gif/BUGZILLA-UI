@@ -1,4 +1,16 @@
-import { ArrowRight, Boxes, Eye, Gauge, History, Link2, ListChecks, PenLine, RotateCcw, UserRound, Users } from 'lucide-react';
+import {
+  ArrowRight,
+  Boxes,
+  Eye,
+  Gauge,
+  History,
+  Link2,
+  ListChecks,
+  PenLine,
+  RotateCcw,
+  UserRound,
+  Users,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useBugActivity } from '../../api/hooks';
 import { cn, formatDateTime, timeAgo } from '../../lib/utils';
@@ -7,22 +19,6 @@ import { Avatar } from '../ui/Avatar';
 import { Card, CardBody, CardHeader, CardTitle } from '../ui/Card';
 import { Skeleton } from '../ui/Skeleton';
 import { StatusPill } from '../ui/Pill';
-
-/**
- * The bug's activity - every recorded change, who made it and when - the way
- * Mantis's "Bug History" showed it, read from Bugzilla's own change log.
- *
- * Two views of the same log:
- *
- *   1. The journey: the status story as a row of steps (Filed -> Confirmed ->
- *      Resolved (FIXED) -> Reopened -> Resolved (FIXED) -> Verified), each with
- *      who and when, so "fixed, reopened by QA, fixed again" reads at a glance.
- *      Reopen steps are marked, and a count says how many times it bounced.
- *
- *   2. The timeline: every save, newest first, each change as "field: old ->
- *      new". "Key changes" (status, resolution, assignee, placement, severity
- *      and priority) is the default; "All changes" adds tags, CC, links, etc.
- */
 
 const KEY_KINDS = new Set<ActivityChangeKind>(['status', 'resolution', 'assignee', 'placement', 'priority']);
 
@@ -39,10 +35,9 @@ const KIND_ICON: Record<ActivityChangeKind, typeof History> = {
   other: PenLine,
 };
 
-/** Statuses that mean "the fix is in", and the one that means "it came back". */
 const DONE = new Set(['RESOLVED', 'VERIFIED', 'CLOSED']);
-const isReopen = (step: JourneyStep, prev?: JourneyStep) =>
-  step.status === 'REOPENED' || (prev !== undefined && DONE.has(prev.status) && !DONE.has(step.status));
+const isReopen = (step: JourneyStep, previous?: JourneyStep) =>
+  step.status === 'REOPENED' || (previous !== undefined && DONE.has(previous.status) && !DONE.has(step.status));
 
 export function BugActivity({ bugId }: { bugId: number }) {
   const { data, isLoading, isError } = useBugActivity(bugId);
@@ -53,13 +48,16 @@ export function BugActivity({ bugId }: { bugId: number }) {
     const list = data?.entries ?? [];
     if (view === 'all') return list;
     return list
-      .map((e) => ({ ...e, changes: e.changes.filter((c) => KEY_KINDS.has(c.kind)) }))
-      .filter((e) => e.changes.length > 0);
+      .map((activityEntry) => ({
+        ...activityEntry,
+        changes: activityEntry.changes.filter((change) => KEY_KINDS.has(change.kind)),
+      }))
+      .filter((item) => item.changes.length > 0);
   }, [data, view]);
 
   const reopenCount = useMemo(
     () => (data?.journey ?? []).filter((step, i, all) => i > 0 && isReopen(step, all[i - 1])).length,
-    [data]
+    [data],
   );
 
   const LIMIT = 8;
@@ -71,7 +69,11 @@ export function BugActivity({ bugId }: { bugId: number }) {
         <div className="flex min-w-0 items-center gap-2">
           <History className="h-4 w-4 text-brand-600" aria-hidden />
           <CardTitle>Activity</CardTitle>
-          {data && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-2xs font-semibold text-slate-600">{data.entries.length}</span>}
+          {data && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-2xs font-semibold text-slate-600">
+              {data.entries.length}
+            </span>
+          )}
           {reopenCount > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-2xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/15">
               <RotateCcw className="h-3 w-3" aria-hidden />
@@ -79,20 +81,24 @@ export function BugActivity({ bugId }: { bugId: number }) {
             </span>
           )}
         </div>
-        <div className="flex shrink-0 rounded-lg bg-slate-100 p-0.5 text-xs font-medium" role="tablist" aria-label="Which changes to show">
-          {(['key', 'all'] as const).map((v) => (
+        <div
+          className="flex shrink-0 rounded-lg bg-slate-100 p-0.5 text-xs font-medium"
+          role="tablist"
+          aria-label="Which changes to show"
+        >
+          {(['key', 'all'] as const).map((value) => (
             <button
-              key={v}
+              key={value}
               type="button"
               role="tab"
-              aria-selected={view === v}
-              onClick={() => setView(v)}
+              aria-selected={view === value}
+              onClick={() => setView(value)}
               className={cn(
                 'focus-ring rounded-md px-2.5 py-1 transition-colors',
-                view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                view === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800',
               )}
             >
-              {v === 'key' ? 'Key changes' : 'All changes'}
+              {value === 'key' ? 'Key changes' : 'All changes'}
             </button>
           ))}
         </div>
@@ -113,11 +119,12 @@ export function BugActivity({ bugId }: { bugId: number }) {
 
             {entries.length === 0 ? (
               <p className="text-sm text-slate-500">
-                {data.entries.length === 0 ? 'No changes yet - the bug is as it was filed.' : 'No key changes yet. Switch to "All changes" to see the rest.'}
+                {data.entries.length === 0
+                  ? 'No changes yet - the bug is as it was filed.'
+                  : 'No key changes yet. Switch to "All changes" to see the rest.'}
               </p>
             ) : (
               <ol className="relative flex flex-col">
-                {/* the timeline rail */}
                 <span aria-hidden className="absolute bottom-3 left-[17.5px] top-3 w-px bg-slate-200" />
                 {visible.map((entry, i) => (
                   <TimelineEntry key={`${entry.when}-${entry.who}-${i}`} entry={entry} />
@@ -139,7 +146,7 @@ export function BugActivity({ bugId }: { bugId: number }) {
             {entries.length > LIMIT && (
               <button
                 type="button"
-                onClick={() => setShowAll((v) => !v)}
+                onClick={() => setShowAll((currentShowAll) => !currentShowAll)}
                 className="focus-ring self-start rounded px-1 text-xs font-medium text-brand-700 hover:underline"
               >
                 {showAll ? 'Show fewer' : `Show all ${entries.length} changes`}
@@ -152,7 +159,6 @@ export function BugActivity({ bugId }: { bugId: number }) {
   );
 }
 
-/** The status story as a row of steps, wrapping on narrow screens. */
 function Journey({ steps }: { steps: JourneyStep[] }) {
   if (steps.length === 0) return null;
   return (
@@ -167,7 +173,7 @@ function Journey({ steps }: { steps: JourneyStep[] }) {
               <div
                 className={cn(
                   'flex flex-col gap-1 rounded-lg px-2 py-1.5',
-                  reopened && 'bg-rose-50 ring-1 ring-inset ring-rose-600/15'
+                  reopened && 'bg-rose-50 ring-1 ring-inset ring-rose-600/15',
                 )}
                 title={`${step.status}${step.resolution && DONE.has(step.status) ? ` (${step.resolution})` : ''} - ${step.whoName}, ${formatDateTime(step.when)}`}
               >
@@ -224,17 +230,19 @@ function TimelineEntry({ entry }: { entry: ActivityEntry }) {
 function ChangeLine({ change }: { change: ActivityChange }) {
   const Icon = KIND_ICON[change.kind];
   const statusLike = change.kind === 'status';
-  const value = (v: string, side: 'old' | 'new') => {
-    if (!v) return <span className="italic text-slate-400">{side === 'old' ? 'none' : 'cleared'}</span>;
-    if (statusLike) return <StatusPill status={v} />;
+  const value = (rawValue: string, side: 'old' | 'new') => {
+    if (!rawValue) return <span className="italic text-slate-400">{side === 'old' ? 'none' : 'cleared'}</span>;
+    if (statusLike) return <StatusPill status={rawValue} />;
     return (
       <span
         className={cn(
           'break-words rounded px-1.5 py-0.5',
-          side === 'old' ? 'bg-slate-100 text-slate-500 line-through decoration-slate-400/70' : 'bg-brand-50 font-medium text-slate-900'
+          side === 'old'
+            ? 'bg-slate-100 text-slate-500 line-through decoration-slate-400/70'
+            : 'bg-brand-50 font-medium text-slate-900',
         )}
       >
-        {v}
+        {rawValue}
       </span>
     );
   };

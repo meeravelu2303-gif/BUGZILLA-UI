@@ -11,11 +11,6 @@ import { formatDateTime } from '../../lib/utils';
 import { Avatar } from '../ui/Avatar';
 import { Linkify } from '../ui/Linkify';
 
-/**
- * Tags on one comment ("needs-info", "repro", ...). Saved immediately - unlike
- * bug fields, a tag is not part of the bug's change history, so there is
- * nothing for the save bar to batch it with.
- */
 function CommentTags({ bugId, comment, editable }: { bugId: number; comment: Comment; editable: boolean }) {
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState('');
@@ -29,7 +24,11 @@ function CommentTags({ bugId, comment, editable }: { bugId: number; comment: Com
     try {
       await update.mutateAsync({ commentId: comment.id, add, remove });
     } catch (err) {
-      toast({ variant: 'error', title: 'Could not update tags', description: err instanceof ApiError ? err.message : 'Please try again.' });
+      toast({
+        variant: 'error',
+        title: 'Could not update tags',
+        description: err instanceof ApiError ? err.message : 'Please try again.',
+      });
     }
   }
 
@@ -49,16 +48,19 @@ function CommentTags({ bugId, comment, editable }: { bugId: number; comment: Com
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
-      {comment.tags.map((t) => (
-        <span key={t} className="inline-flex items-center gap-1 rounded-md bg-sky-50 py-0.5 pl-1.5 pr-1 text-[0.7333rem] font-medium text-sky-800 ring-1 ring-inset ring-sky-600/20">
+      {comment.tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex items-center gap-1 rounded-md bg-sky-50 py-0.5 pl-1.5 pr-1 text-[0.7333rem] font-medium text-sky-800 ring-1 ring-inset ring-sky-600/20"
+        >
           <Tag className="h-3 w-3" aria-hidden />
-          {t}
+          {tag}
           {editable && (
             <button
               type="button"
-              onClick={() => change(undefined, [t])}
+              onClick={() => change(undefined, [tag])}
               className="focus-ring rounded p-0.5 text-sky-500 hover:bg-sky-100 hover:text-sky-900"
-              aria-label={`Remove tag ${t}`}
+              aria-label={`Remove tag ${tag}`}
             >
               <X className="h-2.5 w-2.5" aria-hidden />
             </button>
@@ -71,12 +73,12 @@ function CommentTags({ bugId, comment, editable }: { bugId: number; comment: Com
             <input
               autoFocus
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
+              onChange={(event) => setText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
                   commit();
-                } else if (e.key === 'Escape') {
+                } else if (event.key === 'Escape') {
                   setText('');
                   setAdding(false);
                 }
@@ -88,9 +90,11 @@ function CommentTags({ bugId, comment, editable }: { bugId: number; comment: Com
               className="focus-ring w-24 rounded-md border border-sky-200 bg-white px-1.5 py-0.5 text-[0.7333rem]"
             />
             <datalist id={listId}>
-              {(suggestions?.tags ?? []).filter((s) => !comment.tags.includes(s)).map((s) => (
-                <option key={s} value={s} />
-              ))}
+              {(suggestions?.tags ?? [])
+                .filter((tag) => !comment.tags.includes(tag))
+                .map((tag) => (
+                  <option key={tag} value={tag} />
+                ))}
             </datalist>
           </>
         ) : (
@@ -107,8 +111,16 @@ function CommentTags({ bugId, comment, editable }: { bugId: number; comment: Com
   );
 }
 
-export function CommentThread({ bugId, comments, tagsEnabled = false }: { bugId: number; comments: Comment[]; tagsEnabled?: boolean }) {
-  const followUps = comments.filter((c) => c.count > 0);
+export function CommentThread({
+  bugId,
+  comments,
+  tagsEnabled = false,
+}: {
+  bugId: number;
+  comments: Comment[];
+  tagsEnabled?: boolean;
+}) {
+  const followUps = comments.filter((comment) => comment.count > 0);
 
   if (followUps.length === 0) {
     return <p className="px-5 py-6 text-center text-sm text-slate-600">No comments yet. Be the first to add one.</p>;
@@ -121,17 +133,12 @@ export function CommentThread({ bugId, comments, tagsEnabled = false }: { bugId:
           <ReportRevisionEntry key={comment.id} comment={comment} />
         ) : (
           <DiscussionComment key={comment.id} bugId={bugId} comment={comment} tagsEnabled={tagsEnabled} />
-        )
+        ),
       )}
     </ol>
   );
 }
 
-/**
- * One discussion comment. Its author can correct it in place (Edit); once
- * edited it says so, and anyone can open the earlier versions - an edit never
- * hides what was said before.
- */
 function DiscussionComment({ bugId, comment, tagsEnabled }: { bugId: number; comment: Comment; tagsEnabled: boolean }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(comment.text);
@@ -146,10 +153,18 @@ function DiscussionComment({ bugId, comment, tagsEnabled }: { bugId: number; com
     if (!changed) return setEditing(false);
     try {
       await edit.mutateAsync({ commentId: comment.id, text: draft.trim() });
-      toast({ variant: 'success', title: 'Comment updated', description: 'The earlier version is kept - anyone can view it.' });
+      toast({
+        variant: 'success',
+        title: 'Comment updated',
+        description: 'The earlier version is kept - anyone can view it.',
+      });
       setEditing(false);
     } catch (err) {
-      toast({ variant: 'error', title: 'Could not update the comment', description: err instanceof ApiError ? err.message : 'Please try again.' });
+      toast({
+        variant: 'error',
+        title: 'Could not update the comment',
+        description: err instanceof ApiError ? err.message : 'Please try again.',
+      });
     }
   }
 
@@ -160,13 +175,17 @@ function DiscussionComment({ bugId, comment, tagsEnabled }: { bugId: number; com
         <div className="flex items-center justify-between gap-3 rounded-t-xl border-b border-white/40 bg-white/40 px-4 py-2">
           <span className="text-sm font-medium text-slate-900">
             {comment.author}
-            {comment.isPrivate && <span className="ml-2 rounded bg-amber-100 px-1.5 py-px text-[0.6667rem] font-semibold uppercase text-amber-800">Private</span>}
+            {comment.isPrivate && (
+              <span className="ml-2 rounded bg-amber-100 px-1.5 py-px text-[0.6667rem] font-semibold uppercase text-amber-800">
+                Private
+              </span>
+            )}
           </span>
           <span className="flex items-center gap-2 text-xs text-slate-600">
             {comment.edited && (
               <button
                 type="button"
-                onClick={() => setShowVersions((v) => !v)}
+                onClick={() => setShowVersions((currentShowVersions) => !currentShowVersions)}
                 aria-expanded={showVersions}
                 title={`Edited ${comment.edited.count} time${comment.edited.count === 1 ? '' : 's'}, last on ${formatDateTime(comment.edited.lastEditedAt)}`}
                 className="focus-ring rounded italic text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
@@ -195,12 +214,12 @@ function DiscussionComment({ bugId, comment, tagsEnabled }: { bugId: number; com
             <textarea
               autoFocus
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                  e.preventDefault();
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                  event.preventDefault();
                   void save();
-                } else if (e.key === 'Escape') {
+                } else if (event.key === 'Escape') {
                   setEditing(false);
                 }
               }}
@@ -209,11 +228,25 @@ function DiscussionComment({ bugId, comment, tagsEnabled }: { bugId: number; com
               className="focus-ring w-full resize-y rounded-xl border border-hairline bg-white px-3 py-2 text-sm leading-6 text-slate-900"
             />
             <div className="flex items-center justify-end gap-2">
-              <span className="mr-auto text-xs text-slate-500">The earlier version stays visible under "edited". No email is sent.</span>
-              <Button type="button" size="sm" variant="secondary" onClick={() => setEditing(false)} disabled={edit.isPending}>
+              <span className="mr-auto text-xs text-slate-500">
+                The earlier version stays visible under "edited". No email is sent.
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => setEditing(false)}
+                disabled={edit.isPending}
+              >
                 Cancel
               </Button>
-              <Button type="button" size="sm" onClick={() => void save()} loading={edit.isPending} disabled={!changed || !draft.trim()}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void save()}
+                loading={edit.isPending}
+                disabled={!changed || !draft.trim()}
+              >
                 Save comment
               </Button>
             </div>
@@ -228,11 +261,13 @@ function DiscussionComment({ bugId, comment, tagsEnabled }: { bugId: number; com
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Earlier versions</p>
             {history.isLoading && <p className="text-xs text-slate-500">Loading…</p>}
             {history.isError && <p className="text-xs text-rose-600">Could not load the earlier versions.</p>}
-            {history.data?.versions.map((v, i) => (
+            {history.data?.versions.map((version, i) => (
               <div key={i} className="border-t border-hairline pt-2 first:border-t-0 first:pt-0">
-                <p className="text-xs text-slate-500">Until {formatDateTime(v.replacedAt)} (changed by {v.editor})</p>
+                <p className="text-xs text-slate-500">
+                  Until {formatDateTime(version.replacedAt)} (changed by {version.editor})
+                </p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600 [overflow-wrap:anywhere]">
-                  <Linkify text={v.text} />
+                  <Linkify text={version.text} />
                 </p>
               </div>
             ))}
@@ -244,11 +279,6 @@ function DiscussionComment({ bugId, comment, tagsEnabled }: { bugId: number; com
   );
 }
 
-/**
- * A saved version of the bug report. Shown as one line in the thread rather than
- * a wall of text - the current version is already the Description above - with
- * the full version a click away, so "what did the report say before?" is answerable.
- */
 function ReportRevisionEntry({ comment }: { comment: Comment }) {
   const [open, setOpen] = useState(false);
   const note = /\n\nEdit note: (.+)$/.exec(comment.text)?.[1];
@@ -268,7 +298,7 @@ function ReportRevisionEntry({ comment }: { comment: Comment }) {
         {note && <p className="mt-0.5 text-sm italic text-slate-600">“{note}”</p>}
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpen((currentOpen) => !currentOpen)}
           aria-expanded={open}
           className="focus-ring mt-1 rounded text-xs font-medium text-brand-700 hover:underline"
         >

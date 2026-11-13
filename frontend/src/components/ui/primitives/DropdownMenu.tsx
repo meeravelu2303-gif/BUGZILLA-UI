@@ -3,13 +3,6 @@ import { Check } from 'lucide-react';
 import { forwardRef, type ComponentPropsWithoutRef, type ElementRef } from 'react';
 import { cn } from '../../../lib/utils';
 
-/**
- * Dropdown menu, on Radix - row actions, the account menu, column toggles.
- *
- * Typeahead, arrow keys, Escape and correct `menuitem` roles come from the
- * primitive. The checkbox variant is what the bug table's column picker uses,
- * where the menu must stay open across several toggles.
- */
 const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 const DropdownMenuGroup = DropdownMenuPrimitive.Group;
@@ -30,7 +23,7 @@ const DropdownMenuContent = forwardRef<
       className={cn(
         'z-50 min-w-[11rem] rounded-xl border border-hairline bg-white p-1 shadow-float',
         'data-[state=open]:animate-pop-in',
-        className
+        className,
       )}
       {...props}
     />
@@ -57,9 +50,7 @@ const DropdownMenuCheckboxItem = forwardRef<
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     checked={checked}
-    // Without this a column toggle closes the menu, so turning three columns
-    // off means reopening it three times.
-    onSelect={(e) => e.preventDefault()}
+    onSelect={(event) => event.preventDefault()}
     className={cn(itemStyles, 'pl-7', className)}
     {...props}
   >
@@ -93,7 +84,6 @@ const DropdownMenuSeparator = forwardRef<
 ));
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
-/** The keyboard hint on the right of an item (e.g. ⌘K). */
 function DropdownMenuShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
   return <span className={cn('ml-auto text-2xs tracking-widest text-slate-400', className)} {...props} />;
 }

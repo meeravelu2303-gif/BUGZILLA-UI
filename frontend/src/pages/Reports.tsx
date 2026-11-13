@@ -10,30 +10,35 @@ import { CategoryPill, SeverityPill } from '../components/ui/Pill';
 import { Skeleton } from '../components/ui/Skeleton';
 import { CATEGORIES, CATEGORY_MEANING, SEVERITIES, SEVERITY_MEANING, type Category, type Severity } from '../types';
 
-/**
- * Reports read entirely from GET /api/bugs/stats.
- *
- * The previous version tallied a 200-bug sample, which silently understated
- * every number once the product outgrew one page. These counts are computed
- * server-side over the whole product.
- */
+/** Reports read entirely from GET /api/bugs/stats. */
 export function Reports() {
   const { data: stats, isLoading, isError, error } = useBugStats();
 
-  const severityItems: BarListItem[] = SEVERITIES.filter((s) => (stats?.bySeverity[s] ?? 0) > 0).map((s) => ({
-    label: s,
-    value: stats?.bySeverity[s] ?? 0,
-    tone: s === 'Critical' ? 'rose' : s === 'Major' ? 'orange' : s === 'Minor' ? 'sky' : 'slate',
-  }));
+  const severityItems: BarListItem[] = SEVERITIES.filter((severity) => (stats?.bySeverity[severity] ?? 0) > 0).map(
+    (severity) => ({
+      label: severity,
+      value: stats?.bySeverity[severity] ?? 0,
+      tone: severity === 'Critical' ? 'rose' : severity === 'Major' ? 'orange' : severity === 'Minor' ? 'sky' : 'slate',
+    }),
+  );
 
-  const categoryItems: BarListItem[] = CATEGORIES.filter((c) => (stats?.byCategory[c] ?? 0) > 0).map((c) => ({
-    label: c,
-    value: stats?.byCategory[c] ?? 0,
-    tone: c === 'Security' ? 'violet' : c === 'Functional' ? 'blue' : c === 'Performance' ? 'amber' : 'emerald',
-  }));
+  const categoryItems: BarListItem[] = CATEGORIES.filter((category) => (stats?.byCategory[category] ?? 0) > 0).map(
+    (category) => ({
+      label: category,
+      value: stats?.byCategory[category] ?? 0,
+      tone:
+        category === 'Security'
+          ? 'violet'
+          : category === 'Functional'
+            ? 'blue'
+            : category === 'Performance'
+              ? 'amber'
+              : 'emerald',
+    }),
+  );
 
   const componentItems: BarListItem[] = Object.entries(stats?.byComponent ?? {})
-    .sort((a, b) => b[1] - a[1])
+    .sort((left, right) => right[1] - left[1])
     .slice(0, 12)
     .map(([label, value]) => ({ label, value, tone: 'slate' as const }));
 
@@ -72,12 +77,12 @@ export function Reports() {
               <CardBody>
                 <BarListChart title="" items={severityItems} />
                 <dl className="mt-4 flex flex-col gap-2 border-t border-white/40 pt-3">
-                  {SEVERITIES.filter((s) => (stats.bySeverity[s] ?? 0) > 0).map((s) => (
-                    <div key={s} className="flex items-start gap-3">
+                  {SEVERITIES.filter((severity) => (stats.bySeverity[severity] ?? 0) > 0).map((severity) => (
+                    <div key={severity} className="flex items-start gap-3">
                       <dt className="shrink-0">
-                        <SeverityPill severity={s as Severity} />
+                        <SeverityPill severity={severity as Severity} />
                       </dt>
-                      <dd className="text-xs text-slate-600">{SEVERITY_MEANING[s]}</dd>
+                      <dd className="text-xs text-slate-600">{SEVERITY_MEANING[severity]}</dd>
                     </div>
                   ))}
                 </dl>
@@ -91,12 +96,12 @@ export function Reports() {
               <CardBody>
                 <BarListChart title="" items={categoryItems} />
                 <dl className="mt-4 flex flex-col gap-2 border-t border-white/40 pt-3">
-                  {CATEGORIES.filter((c) => (stats.byCategory[c] ?? 0) > 0).map((c) => (
-                    <div key={c} className="flex items-start gap-3">
+                  {CATEGORIES.filter((category) => (stats.byCategory[category] ?? 0) > 0).map((category) => (
+                    <div key={category} className="flex items-start gap-3">
                       <dt className="shrink-0">
-                        <CategoryPill category={c as Category} />
+                        <CategoryPill category={category as Category} />
                       </dt>
-                      <dd className="text-xs text-slate-600">{CATEGORY_MEANING[c]}</dd>
+                      <dd className="text-xs text-slate-600">{CATEGORY_MEANING[category]}</dd>
                     </div>
                   ))}
                 </dl>

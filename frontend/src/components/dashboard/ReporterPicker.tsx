@@ -2,25 +2,15 @@ import { UserRound } from 'lucide-react';
 import { useReporters } from '../../api/hooks';
 import { Select } from '../ui/Field';
 
-/**
- * Whose reported bugs the QA board shows - for admins.
- *
- * Filters on Bugzilla's own reporter field. Bugs filed in this app carry the
- * signed-in person as reporter; bugs filed by the test bench carry the account
- * whose API key the bench uses, so those all sit under that one person until
- * the bench files as the tester who ran it.
- *
- * `value` is an email, or '' for everyone.
- */
+/** Whose reported bugs the QA board shows - for admins. */
 export function ReporterPicker({ value, onChange }: { value: string; onChange: (email: string) => void }) {
   const { data, isLoading } = useReporters();
   const people = data?.users ?? [];
-  const testers = people.filter((p) => p.role === 'tester');
-  const admins = people.filter((p) => p.role === 'admin');
-  const staff = people.filter((p) => p.role === 'reporter');
-  // Developers appear only if they have actually filed a bug (the BFF reads that from the bugs).
-  const developers = people.filter((p) => p.role === 'developer');
-  const selected = people.find((p) => p.email === value);
+  const testers = people.filter((person) => person.role === 'tester');
+  const admins = people.filter((person) => person.role === 'admin');
+  const staff = people.filter((person) => person.role === 'reporter');
+  const developers = people.filter((person) => person.role === 'developer');
+  const selected = people.find((person) => person.email === value);
 
   return (
     <div className="mb-5 flex flex-wrap items-end gap-3">
@@ -29,42 +19,42 @@ export function ReporterPicker({ value, onChange }: { value: string; onChange: (
           label="Reporter"
           value={value}
           disabled={isLoading}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(event) => onChange(event.target.value)}
           hint={isLoading ? 'Loading reporters…' : 'Bugs reported by this person'}
         >
           <option value="">Everyone</option>
           {testers.length > 0 && (
             <optgroup label="Testers">
-              {testers.map((p) => (
-                <option key={p.email} value={p.email}>
-                  {p.name}
+              {testers.map((tester) => (
+                <option key={tester.email} value={tester.email}>
+                  {tester.name}
                 </option>
               ))}
             </optgroup>
           )}
           {staff.length > 0 && (
             <optgroup label="Reporters (office staff)">
-              {staff.map((p) => (
-                <option key={p.email} value={p.email}>
-                  {p.name}
+              {staff.map((item) => (
+                <option key={item.email} value={item.email}>
+                  {item.name}
                 </option>
               ))}
             </optgroup>
           )}
           {developers.length > 0 && (
             <optgroup label="Developers (who have filed bugs)">
-              {developers.map((p) => (
-                <option key={p.email} value={p.email}>
-                  {p.name}
+              {developers.map((developer) => (
+                <option key={developer.email} value={developer.email}>
+                  {developer.name}
                 </option>
               ))}
             </optgroup>
           )}
           {admins.length > 0 && (
             <optgroup label="Admins">
-              {admins.map((p) => (
-                <option key={p.email} value={p.email}>
-                  {p.name}
+              {admins.map((admin) => (
+                <option key={admin.email} value={admin.email}>
+                  {admin.name}
                 </option>
               ))}
             </optgroup>

@@ -1,29 +1,27 @@
 import { Check, ChevronDown, Plus, Search, X } from 'lucide-react';
 import { RequiredMark } from '../ui/Field';
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../lib/utils';
-
-/**
- * A searchable, grouped picker for the bug classification.
- *
- * Replaces a <datalist>: that one cannot be searched by anything but a prefix, cannot show group
- * headings, and its styling belongs to the browser. Here the search matches anywhere in the value
- * ("idor" finds security.idor), results are grouped under their family, and a value that matches
- * nothing can still be used as-is - the list is a guide to consistency, not a cage.
- */
 
 interface Props {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  /** Ordered most relevant first; grouped by the part before the first dot. */
   options: string[];
   placeholder?: string;
   error?: string;
   hint?: string;
   id?: string;
-  /** Shows the mandatory-field star after the label. */
   required?: boolean;
 }
 
@@ -32,7 +30,7 @@ interface Row {
   value: string;
 }
 
-const familyOf = (v: string) => v.split('.')[0];
+const familyOf = (value: string) => value.split('.')[0];
 
 function Highlight({ text, query }: { text: string; query: string }) {
   if (!query) return <>{text}</>;
@@ -47,7 +45,17 @@ function Highlight({ text, query }: { text: string; query: string }) {
   );
 }
 
-export function ClassificationPicker({ label, value, onChange, options, placeholder, error, hint, id, required }: Props) {
+export function ClassificationPicker({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  error,
+  hint,
+  id,
+  required,
+}: Props) {
   const generated = useId();
   const baseId = id ?? generated;
   const listId = `${baseId}-list`;
@@ -61,72 +69,64 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
 
-  const q = query.trim().toLowerCase();
+  const normalizedQuery = query.trim().toLowerCase();
 
-  /** Matches grouped by family, families in the order they first appear in `options`. */
   const groups = useMemo(() => {
     const out = new Map<string, string[]>();
-    for (const o of options) {
-      if (q && !o.toLowerCase().includes(q)) continue;
-      const f = familyOf(o);
-      out.set(f, [...(out.get(f) ?? []), o]);
+    for (const option of options) {
+      if (normalizedQuery && !option.toLowerCase().includes(normalizedQuery)) continue;
+      const family = familyOf(option);
+      out.set(family, [...(out.get(family) ?? []), option]);
     }
     return [...out.entries()];
-  }, [options, q]);
+  }, [options, normalizedQuery]);
 
-  const canUseCustom = q !== '' && !options.some((o) => o.toLowerCase() === q);
+  const canUseCustom = normalizedQuery !== '' && !options.some((option) => option.toLowerCase() === normalizedQuery);
 
-  /** Flat, navigable rows in display order - what the arrow keys walk. */
   const rows = useMemo<Row[]>(() => {
-    const r: Row[] = groups.flatMap(([, items]) => items.map((v) => ({ kind: 'option' as const, value: v })));
-    if (canUseCustom) r.push({ kind: 'custom', value: query.trim() });
-    return r;
+    const optionRows: Row[] = groups.flatMap(([, items]) =>
+      items.map((optionValue) => ({ kind: 'option' as const, value: optionValue })),
+    );
+    if (canUseCustom) optionRows.push({ kind: 'custom', value: query.trim() });
+    return optionRows;
   }, [groups, canUseCustom, query]);
 
-  const matchCount = groups.reduce((n, [, items]) => n + items.length, 0);
+  const matchCount = groups.reduce((total, [, items]) => total + items.length, 0);
 
   useEffect(() => {
     if (!open) return;
-    // Start on the current value if it is listed, so reopening shows where you are.
-    const i = rows.findIndex((r) => r.value === value);
-    setActive(i >= 0 && !q ? i : 0);
+    const i = rows.findIndex((row) => row.value === value);
+    setActive(i >= 0 && !normalizedQuery ? i : 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, q]);
+  }, [open, normalizedQuery]);
 
   useEffect(() => {
     if (!open) return;
-    function onDown(e: MouseEvent) {
-      const t = e.target as Node;
-      if (!rootRef.current?.contains(t) && !panelRef.current?.contains(t)) close(false);
+    function onDown(event: MouseEvent) {
+      const clickTarget = event.target as Node;
+      if (!rootRef.current?.contains(clickTarget) && !panelRef.current?.contains(clickTarget)) close(false);
     }
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /*
-   * The panel is portalled to <body> and positioned against the trigger. Rendered inside the form it
-   * was clipped: every glass card is its own stacking context (backdrop-filter), so the next card
-   * painted over the open list. Opens upward when there is not room below.
-   */
   useLayoutEffect(() => {
     if (!open) return;
     function place() {
-      const r = triggerRef.current?.getBoundingClientRect();
-      if (!r) return;
+      const domRect = triggerRef.current?.getBoundingClientRect();
+      if (!domRect) return;
       const panelHeight = 400;
-      const below = window.innerHeight - r.bottom;
-      const up = below < panelHeight && r.top > below;
+      const below = window.innerHeight - domRect.bottom;
+      const up = below < panelHeight && domRect.top > below;
       setPanelStyle({
         position: 'fixed',
-        left: r.left,
-        width: r.width,
-        ...(up ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
+        left: domRect.left,
+        width: domRect.width,
+        ...(up ? { bottom: window.innerHeight - domRect.top + 6 } : { top: domRect.bottom + 6 }),
       });
     }
     place();
-    // Not autoFocus: on its first frame the panel is unpositioned at the end of <body>, and
-    // focusing it there scrolls the whole page down to it.
     searchRef.current?.focus({ preventScroll: true });
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
@@ -136,14 +136,12 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
     };
   }, [open]);
 
-  // Keep the keyboard-highlighted row in view.
   useEffect(() => {
     if (!open) return;
-    // Scrolls the list only - scrollIntoView would also scroll the page behind it.
     const list = listRef.current;
     const row = list?.querySelector<HTMLElement>(`[data-index="${active}"]`);
     if (!list || !row) return;
-    const header = 28; // the sticky family heading sits over the top of the list
+    const header = 28;
     if (row.offsetTop - header < list.scrollTop) list.scrollTop = row.offsetTop - header;
     else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) {
       list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
@@ -156,31 +154,31 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
     if (refocus) triggerRef.current?.focus();
   }
 
-  function choose(v: string) {
-    onChange(v);
+  function choose(chosenValue: string) {
+    onChange(chosenValue);
     close();
   }
 
-  function onSearchKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActive((a) => Math.min(a + 1, rows.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActive((a) => Math.max(a - 1, 0));
-    } else if (e.key === 'Home') {
-      e.preventDefault();
+  function onSearchKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActive((currentActive) => Math.min(currentActive + 1, rows.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActive((currentActive) => Math.max(currentActive - 1, 0));
+    } else if (event.key === 'Home') {
+      event.preventDefault();
       setActive(0);
-    } else if (e.key === 'End') {
-      e.preventDefault();
+    } else if (event.key === 'End') {
+      event.preventDefault();
       setActive(rows.length - 1);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
       if (rows[active]) choose(rows[active].value);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
       close();
-    } else if (e.key === 'Tab') {
+    } else if (event.key === 'Tab') {
       close(false);
     }
   }
@@ -202,9 +200,9 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => (open ? close() : setOpen(true))}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
             setOpen(true);
           }
         }}
@@ -223,15 +221,17 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
             </span>
           </>
         ) : (
-          <span className="min-w-0 flex-1 truncate font-mono text-[0.8667rem] text-slate-500">{placeholder ?? 'Select…'}</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[0.8667rem] text-slate-500">
+            {placeholder ?? 'Select…'}
+          </span>
         )}
         {value && (
           <span
             role="button"
             tabIndex={-1}
             aria-label="Clear classification"
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={(event) => {
+              event.stopPropagation();
               onChange('');
             }}
             className="rounded p-0.5 text-slate-400 hover:bg-slate-900/5 hover:text-slate-700"
@@ -239,12 +239,19 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
             <X className="h-3.5 w-3.5" />
           </span>
         )}
-        <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-500 transition-transform', open && 'rotate-180')} aria-hidden />
+        <ChevronDown
+          className={cn('h-4 w-4 shrink-0 text-slate-500 transition-transform', open && 'rotate-180')}
+          aria-hidden
+        />
       </button>
 
       {open &&
         createPortal(
-          <div ref={panelRef} style={panelStyle} className="z-[60] overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-slate-900/10">
+          <div
+            ref={panelRef}
+            style={panelStyle}
+            className="z-[60] overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-slate-900/10"
+          >
             <div className="flex items-center gap-2 border-b border-hairline px-3">
               <Search className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
               <input
@@ -258,7 +265,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
                 autoComplete="off"
                 spellCheck={false}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={onSearchKey}
                 placeholder="Search, e.g. idor, token, status…"
                 className="h-11 min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
@@ -275,27 +282,33 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
               )}
             </div>
 
-            <div ref={listRef} id={listId} role="listbox" aria-label={label} className="max-h-72 overflow-y-auto overscroll-contain py-1">
+            <div
+              ref={listRef}
+              id={listId}
+              role="listbox"
+              aria-label={label}
+              className="max-h-72 overflow-y-auto overscroll-contain py-1"
+            >
               {groups.map(([family, items]) => (
                 <div key={family} role="group" aria-label={family}>
                   <div className="sticky top-0 z-10 flex items-center justify-between bg-white/95 px-3 pb-1 pt-2 text-[0.7333rem] font-semibold uppercase tracking-wider text-slate-500 backdrop-blur">
                     <span>{family}</span>
                     <span className="font-medium normal-case tracking-normal text-slate-400">{items.length}</span>
                   </div>
-                  {items.map((v) => {
+                  {items.map((item) => {
                     index += 1;
                     const i = index;
-                    const selected = v === value;
+                    const selected = item === value;
                     return (
                       <div
-                        key={v}
+                        key={item}
                         id={`${baseId}-row-${i}`}
                         data-index={i}
                         role="option"
                         aria-selected={selected}
                         onMouseEnter={() => setActive(i)}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => choose(v)}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => choose(item)}
                         className={cn(
                           'mx-1 flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 font-mono text-[0.8667rem]',
                           i === active ? 'bg-brand-600/10 text-brand-900' : 'text-slate-700',
@@ -303,7 +316,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
                       >
                         <span className="min-w-0 flex-1 truncate">
                           <span className="text-slate-400">{family}.</span>
-                          <Highlight text={v.slice(family.length + 1)} query={q} />
+                          <Highlight text={item.slice(family.length + 1)} query={normalizedQuery} />
                         </span>
                         {selected && <Check className="h-4 w-4 shrink-0 text-brand-600" aria-hidden />}
                       </div>
@@ -312,11 +325,15 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
                 </div>
               ))}
 
-              {matchCount === 0 && !canUseCustom && <p className="px-3 py-6 text-center text-sm text-slate-500">No classifications.</p>}
+              {matchCount === 0 && !canUseCustom && (
+                <p className="px-3 py-6 text-center text-sm text-slate-500">No classifications.</p>
+              )}
 
               {canUseCustom && (
                 <div className={cn(matchCount > 0 && 'mt-1 border-t border-hairline pt-1')}>
-                  {matchCount === 0 && <p className="px-3 pb-1 pt-2 text-xs text-slate-500">No match in the bench's list.</p>}
+                  {matchCount === 0 && (
+                    <p className="px-3 pb-1 pt-2 text-xs text-slate-500">No match in the bench's list.</p>
+                  )}
                   {(() => {
                     const i = rows.length - 1;
                     return (
@@ -326,7 +343,7 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
                         role="option"
                         aria-selected={false}
                         onMouseEnter={() => setActive(i)}
-                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseDown={(event) => event.preventDefault()}
                         onClick={() => choose(query.trim())}
                         className={cn(
                           'mx-1 flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm',
@@ -354,7 +371,13 @@ export function ClassificationPicker({ label, value, onChange, options, placehol
           document.body,
         )}
 
-      {error ? <p role="alert" className="text-xs font-medium text-rose-600">{error}</p> : hint ? <p className="text-xs text-slate-600">{hint}</p> : null}
+      {error ? (
+        <p role="alert" className="text-xs font-medium text-rose-600">
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="text-xs text-slate-600">{hint}</p>
+      ) : null}
     </div>
   );
 }

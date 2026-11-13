@@ -1,4 +1,15 @@
-import { AlertCircle, ArchiveRestore, ArrowLeft, ArrowRightLeft, CheckCheck, ImagePlus, Layers, Pencil, Trash2, User } from 'lucide-react';
+import {
+  AlertCircle,
+  ArchiveRestore,
+  ArrowLeft,
+  ArrowRightLeft,
+  CheckCheck,
+  ImagePlus,
+  Layers,
+  Pencil,
+  Trash2,
+  User,
+} from 'lucide-react';
 import { TransferBugDialog } from '../components/bugs/TransferBugDialog';
 import { AttachmentUploader } from '../components/bugs/AttachmentUploader';
 import { ReportEditor } from '../components/bugs/ReportEditor';
@@ -68,24 +79,46 @@ export function BugDetail() {
   );
 }
 
-/** Bugzilla field names (as returned in `changes`) -> the labels this UI uses. */
 const CHANGE_LABELS: Record<string, string> = {
-  summary: 'Summary', status: 'Status', resolution: 'Resolution', priority: 'Priority', severity: 'Severity',
-  product: 'Product', component: 'Component', version: 'Version', target_milestone: 'Milestone', op_sys: 'OS',
-  platform: 'Platform', assigned_to: 'Assignee', qa_contact: 'QA contact', cc: 'CC', depends_on: 'Depends on',
-  blocks: 'Blocks', see_also: 'See also', url: 'URL', alias: 'Alias', keywords: 'Keywords', groups: 'Visibility',
-  deadline: 'Deadline', estimated_time: 'Estimate', remaining_time: 'Remaining', work_time: 'Hours worked',
-  is_cc_accessible: 'CC access', is_creator_accessible: 'Reporter access', whiteboard: 'Whiteboard', dupe_of: 'Duplicate of',
+  summary: 'Summary',
+  status: 'Status',
+  resolution: 'Resolution',
+  priority: 'Priority',
+  severity: 'Severity',
+  product: 'Product',
+  component: 'Component',
+  version: 'Version',
+  target_milestone: 'Milestone',
+  op_sys: 'OS',
+  platform: 'Platform',
+  assigned_to: 'Assignee',
+  qa_contact: 'QA contact',
+  cc: 'CC',
+  depends_on: 'Depends on',
+  blocks: 'Blocks',
+  see_also: 'See also',
+  url: 'URL',
+  alias: 'Alias',
+  keywords: 'Keywords',
+  groups: 'Visibility',
+  deadline: 'Deadline',
+  estimated_time: 'Estimate',
+  remaining_time: 'Remaining',
+  work_time: 'Hours worked',
+  is_cc_accessible: 'CC access',
+  is_creator_accessible: 'Reporter access',
+  whiteboard: 'Whiteboard',
+  dupe_of: 'Duplicate of',
   flagtypes: 'Flags',
 };
 
 function describeChanges(changes: BugChanges): string {
-  const parts = Object.entries(changes).map(([field, c]) => {
+  const parts = Object.entries(changes).map(([field, value]) => {
     const label = CHANGE_LABELS[field] ?? field.replace(/_/g, ' ');
-    const short = (s: string) => (s.length > 28 ? `${s.slice(0, 27)}…` : s);
-    if (c.added && c.removed) return `${label}: ${short(c.removed)} → ${short(c.added)}`;
-    if (c.added) return `${label}: +${short(c.added)}`;
-    return `${label}: −${short(c.removed)}`;
+    const short = (text: string) => (text.length > 28 ? `${text.slice(0, 27)}…` : text);
+    if (value.added && value.removed) return `${label}: ${short(value.removed)} → ${short(value.added)}`;
+    if (value.added) return `${label}: +${short(value.added)}`;
+    return `${label}: −${short(value.removed)}`;
   });
   return parts.length > 4 ? `${parts.slice(0, 4).join(' · ')} · and ${parts.length - 4} more` : parts.join(' · ');
 }
@@ -111,11 +144,6 @@ function BugDetailView({
   const restore = useRestoreBugs();
   const { toast } = useToast();
   const navigate = useNavigate();
-  /*
-   * After a successful save, return to the list the reader came from (My Bugs,
-   * All Bugs or Advanced Search), filters, sort and page intact - the next bug
-   * to work on is there, not on this page. The success toast stays on screen.
-   */
   const backToList = useCallback(() => navigate(lastListView()), [navigate]);
   const [conflict, setConflict] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -123,34 +151,17 @@ function BugDetailView({
   const [editingReport, setEditingReport] = useState(false);
   const [addingFiles, setAddingFiles] = useState(false);
   const isDeleted = Boolean(bug.isDeleted);
-  /*
-   * Offered on the same terms the server enforces (backend/src/services/productTransfer.service.ts), so
-   * the button never leads to a refusal: an open bug, its assignee or a tester,
-   * Any other active product is a destination, including ones the user has no
-   * access to - a developer hands bugs to other teams (the server lists them).
-   */
   const canTransfer =
     !isDeleted &&
     bug.isOpen &&
     (canTriage || (!!currentUser && bug.assignedTo?.email.toLowerCase() === currentUser.toLowerCase()));
 
-  /*
-   * The one-click end of the re-test loop.
-   *
-   * Offered only when the workflow really allows it: `editor.allowedStatuses`
-   * is Bugzilla's own `status_workflow` for this bug's stored status, so this
-   * button can never lead to a refusal on save. That same check is why there is
-   * the final step: QA re-tested the fix, it passed, and the bug becomes CLOSED
-   * (renamed from VERIFIED on 2026-10-23 - bugzilla/setup/rename-status.pl).
-   */
   const canVerify = !isDeleted && canTriage && bug.status === 'RESOLVED' && editor.allowedStatuses.includes('CLOSED');
 
   async function onVerify() {
     try {
       await updateBug.mutateAsync({
         status: 'CLOSED',
-        // A status alone does not say who re-tested it or when; six months on,
-        // the comment is the part a reader sees without opening the history.
         comment: {
           body: `Verified by QA on ${formatDateTime(new Date().toISOString())} - re-test passed, closing.`,
         },
@@ -174,9 +185,17 @@ function BugDetailView({
   async function onRestore() {
     try {
       await restore.mutateAsync({ ids: [bug.id] });
-      toast({ variant: 'success', title: `Restored ${bugDisplayId(bug)}`, description: 'It is back in every list, as it was before deletion.' });
+      toast({
+        variant: 'success',
+        title: `Restored ${bugDisplayId(bug)}`,
+        description: 'It is back in every list, as it was before deletion.',
+      });
     } catch (err) {
-      toast({ variant: 'error', title: 'Could not restore', description: err instanceof ApiError ? err.message : 'Please try again.' });
+      toast({
+        variant: 'error',
+        title: 'Could not restore',
+        description: err instanceof ApiError ? err.message : 'Please try again.',
+      });
     }
   }
 
@@ -197,18 +216,24 @@ function BugDetailView({
         setConflict(true);
         return;
       }
-      toast({ variant: 'error', title: 'Update failed', description: err instanceof ApiError ? err.message : 'Please try again.' });
+      toast({
+        variant: 'error',
+        title: 'Update failed',
+        description: err instanceof ApiError ? err.message : 'Please try again.',
+      });
     }
   }, [editor, updateBug, toast, backToList]);
 
   async function reloadLatest() {
     await onReload();
     setConflict(false);
-    toast({ variant: 'info', title: 'Loaded the latest version', description: 'Your edits were kept. Review them, then save.' });
+    toast({
+      variant: 'info',
+      title: 'Loaded the latest version',
+      description: 'Your edits were kept. Review them, then save.',
+    });
   }
 
-  // Read once per render, before any navigation away, so the link always points at the list the
-  // reader actually arrived from.
   const backTo = lastListView();
   const backLabel = lastListLabel();
   const triage = bug.triage;
@@ -217,16 +242,18 @@ function BugDetailView({
 
   return (
     <div className="mx-auto max-w-[128rem] animate-page-in overflow-x-clip px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
-      {/* Returns to the list the reader came from, filters, sort and page intact. Resolved at
-          render rather than held in state: this page is reached from BugList, MyBugs, Advanced
-          Search and the dashboard matrix, and a plain `/bugs` discarded the filtering that found
-          the bug in the first place. Falls back to `/bugs` on a deep link or a fresh tab. */}
-      <Link to={backTo} className="focus-ring inline-flex items-center gap-1.5 rounded text-sm font-medium text-slate-500 transition-colors hover:text-slate-800">
+      <Link
+        to={backTo}
+        className="focus-ring inline-flex items-center gap-1.5 rounded text-sm font-medium text-slate-500 transition-colors hover:text-slate-800"
+      >
         <ArrowLeft className="h-3.5 w-3.5" /> {backLabel}
       </Link>
 
       {isDeleted && (
-        <div role="status" className="mt-4 flex flex-wrap items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-900">
+        <div
+          role="status"
+          className="mt-4 flex flex-wrap items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-900"
+        >
           <Trash2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <div className="min-w-0 flex-1">
             <p className="font-semibold">This bug is deleted.</p>
@@ -250,12 +277,16 @@ function BugDetailView({
         </div>
       )}
 
-      {/* Classification leads: what kind of defect this is, and how urgent. An elevated hero
-          so the id, title and the severity/category pills read as one clear header. */}
       <header className="glass-surface relative mt-4 overflow-hidden rounded-2xl p-6">
-        <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-ueducate-accent to-brand-700" />
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-ueducate-accent to-brand-700"
+        />
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <span className="rounded-md bg-slate-900/[0.04] px-2 py-0.5 font-mono font-semibold text-slate-700 ring-1 ring-inset ring-slate-900/10" title={`Bug #${bug.id}`}>
+          <span
+            className="rounded-md bg-slate-900/[0.04] px-2 py-0.5 font-mono font-semibold text-slate-700 ring-1 ring-inset ring-slate-900/10"
+            title={`Bug #${bug.id}`}
+          >
             {bugDisplayId(bug)}
           </span>
           {bug.mantisRef && (
@@ -273,12 +304,13 @@ function BugDetailView({
           {bug.subcomponentName && (
             <>
               <span className="text-slate-400">/</span>
-              <span className="font-medium text-slate-600" title="Sub-component">{bug.subcomponentName}</span>
+              <span className="font-medium text-slate-600" title="Sub-component">
+                {bug.subcomponentName}
+              </span>
             </>
           )}
           {!isDeleted && (
             <span className="ml-auto flex items-center gap-1">
-              {/* The whole bug in one form, laid out like "New bug" (pages/EditBug.tsx). */}
               <Link
                 to={`/bugs/${bug.id}/edit`}
                 title="Edit everything about this bug on one page"
@@ -330,19 +362,8 @@ function BugDetailView({
         )}
       </header>
 
-      {/*
-        Three columns, main spanning two. `min-w-0` on the main column is what
-        lets its children (tables, code blocks, long titles) shrink rather than
-        forcing the grid wider than the viewport - a grid track's default
-        `min-width:auto` otherwise sizes to the widest unbreakable content.
-      */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
-          {/*
-           * The blast radius. This is what makes one grouped ticket worth more
-           * than the many per-endpoint tickets it replaces, so it sits above the
-           * reproduction detail rather than buried under it.
-           */}
           {grouping?.isGrouped && (
             <Card>
               <CardHeader>
@@ -360,7 +381,9 @@ function BugDetailView({
                     <p className="text-xs text-slate-600">test cases observed this defect</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-semibold tabular-nums text-slate-900">{grouping.endpointCount ?? '—'}</p>
+                    <p className="text-2xl font-semibold tabular-nums text-slate-900">
+                      {grouping.endpointCount ?? '—'}
+                    </p>
                     <p className="text-xs text-slate-600">endpoints affected</p>
                   </div>
                 </div>
@@ -369,21 +392,39 @@ function BugDetailView({
                   <table className="w-full border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-white/40 text-xs uppercase tracking-wide text-slate-600">
-                        <th scope="col" className="py-2 pr-3 font-medium">Method</th>
-                        <th scope="col" className="py-2 pr-3 font-medium">Endpoint</th>
-                        <th scope="col" className="py-2 pr-3 font-medium">Module</th>
-                        <th scope="col" className="py-2 text-right font-medium">Occurrences</th>
+                        <th scope="col" className="py-2 pr-3 font-medium">
+                          Method
+                        </th>
+                        <th scope="col" className="py-2 pr-3 font-medium">
+                          Endpoint
+                        </th>
+                        <th scope="col" className="py-2 pr-3 font-medium">
+                          Module
+                        </th>
+                        <th scope="col" className="py-2 text-right font-medium">
+                          Occurrences
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {grouping.affectedEndpoints.map((e) => (
-                        <tr key={`${e.method} ${e.path}`} className="border-b border-white/25 last:border-0">
-                          <td className="py-2 pr-3 font-mono text-xs font-semibold text-slate-900">{e.method}</td>
-                          <td className="max-w-0 truncate py-2 pr-3 font-mono text-xs text-slate-700" title={e.path}>
-                            {e.path}
+                      {grouping.affectedEndpoints.map((affectedEndpoint) => (
+                        <tr
+                          key={`${affectedEndpoint.method} ${affectedEndpoint.path}`}
+                          className="border-b border-white/25 last:border-0"
+                        >
+                          <td className="py-2 pr-3 font-mono text-xs font-semibold text-slate-900">
+                            {affectedEndpoint.method}
                           </td>
-                          <td className="py-2 pr-3 text-xs text-slate-600">{e.module}</td>
-                          <td className="py-2 text-right font-mono text-xs tabular-nums text-slate-700">{e.occurrences}</td>
+                          <td
+                            className="max-w-0 truncate py-2 pr-3 font-mono text-xs text-slate-700"
+                            title={affectedEndpoint.path}
+                          >
+                            {affectedEndpoint.path}
+                          </td>
+                          <td className="py-2 pr-3 text-xs text-slate-600">{affectedEndpoint.module}</td>
+                          <td className="py-2 text-right font-mono text-xs tabular-nums text-slate-700">
+                            {affectedEndpoint.occurrences}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -392,8 +433,8 @@ function BugDetailView({
 
                 {grouping.truncated && (
                   <p className="mt-3 text-xs text-slate-600">
-                    Showing {grouping.affectedEndpoints.length} of {grouping.endpointCount}. The full list is in the attached
-                    reproduction text.
+                    Showing {grouping.affectedEndpoints.length} of {grouping.endpointCount}. The full list is in the
+                    attached reproduction text.
                   </p>
                 )}
               </CardBody>
@@ -408,7 +449,8 @@ function BugDetailView({
                   <p className="mt-0.5 text-xs text-slate-500">
                     Edited by {bug.reportHistory.lastEditedBy}
                     {bug.reportHistory.lastEditedAt && <> · {formatDateTime(bug.reportHistory.lastEditedAt)}</>}
-                    {bug.reportHistory.revisions > 1 && <> · {bug.reportHistory.revisions} revisions</>} - earlier versions are in the comments.
+                    {bug.reportHistory.revisions > 1 && <> · {bug.reportHistory.revisions} revisions</>} - earlier
+                    versions are in the comments.
                   </p>
                 )}
               </div>
@@ -427,12 +469,9 @@ function BugDetailView({
             </CardBody>
           </Card>
 
-          {/* Always shown: a bug filed without proof is exactly the one that needs a way to add it. */}
           <Card>
             <CardHeader>
-              <CardTitle>
-                Attachments{attachments.length > 0 && ` (${attachments.length})`}
-              </CardTitle>
+              <CardTitle>Attachments{attachments.length > 0 && ` (${attachments.length})`}</CardTitle>
               {!isDeleted && attachments.length > 0 && !addingFiles && (
                 <Button size="sm" variant="secondary" onClick={() => setAddingFiles(true)}>
                   <ImagePlus className="h-3.5 w-3.5" /> Add files
@@ -440,12 +479,18 @@ function BugDetailView({
               )}
             </CardHeader>
             {attachments.length > 0 && (
-              <AttachmentList bugId={bug.id} attachments={attachments} privateAllowed={meta?.features.privateComments} />
+              <AttachmentList
+                bugId={bug.id}
+                attachments={attachments}
+                privateAllowed={meta?.features.privateComments}
+              />
             )}
             {!isDeleted && (attachments.length === 0 || addingFiles) && (
               <CardBody className={attachments.length > 0 ? 'border-t border-white/30' : undefined}>
                 {attachments.length === 0 && (
-                  <p className="mb-3 text-sm text-slate-600">No screenshots or videos yet. Add the proof a developer needs to see the problem.</p>
+                  <p className="mb-3 text-sm text-slate-600">
+                    No screenshots or videos yet. Add the proof a developer needs to see the problem.
+                  </p>
                 )}
                 <AttachmentUploader
                   bugId={bug.id}
@@ -455,7 +500,9 @@ function BugDetailView({
                 />
               </CardBody>
             )}
-            {isDeleted && attachments.length === 0 && <CardBody className="text-sm text-slate-500">No attachments.</CardBody>}
+            {isDeleted && attachments.length === 0 && (
+              <CardBody className="text-sm text-slate-500">No attachments.</CardBody>
+            )}
           </Card>
 
           <Card>
@@ -468,7 +515,6 @@ function BugDetailView({
             </CardBody>
           </Card>
 
-          {/* Every recorded change - status journey and timeline (components/bugs/BugActivity.tsx). */}
           <BugActivity bugId={bug.id} />
         </div>
 
@@ -479,12 +525,6 @@ function BugDetailView({
               <p className="mt-1 text-[0.8667rem] leading-snug text-slate-500">
                 The fix is in. Verify it and this bug leaves the QA queue.
               </p>
-              {/*
-                Disabled while there are unsaved edits, rather than silently
-                dropping them: this sends status + comment only, so a half-typed
-                severity change beside it would survive the save and read as
-                lost work. Save or discard first, then verify.
-              */}
               <Button
                 className="mt-3 w-full"
                 onClick={() => void onVerify()}
@@ -502,7 +542,6 @@ function BugDetailView({
             </div>
           )}
 
-          {/* A disabled fieldset turns every control inside read-only in one place. */}
           <fieldset disabled={isDeleted} className="min-w-0">
             <MetadataSidebar
               bug={bug}
@@ -530,10 +569,13 @@ function BugDetailView({
 
       <DeleteBugsDialog open={confirmDelete} ids={[bug.id]} onClose={() => setConfirmDelete(false)} />
       {canTransfer && (
-        <TransferBugDialog open={transferring} bugId={bug.id} onClose={() => setTransferring(false)} onTransferred={() => void onReload()} />
+        <TransferBugDialog
+          open={transferring}
+          bugId={bug.id}
+          onClose={() => setTransferring(false)}
+          onTransferred={() => void onReload()}
+        />
       )}
-
-      {/* Save / discard lives in the Details panel, under "Created" (SaveBar inline). */}
     </div>
   );
 }

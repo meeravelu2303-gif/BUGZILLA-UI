@@ -2,23 +2,9 @@ import type { BugzillaClient } from '../clients/bugzilla.client';
 import { displayNameFor, resolveDisplayNames } from './displayNames.service';
 import { subcomponentName } from './subcomponents.service';
 
-/**
- * A bug's activity: every recorded change (Bugzilla's Bug.history - the
- * bugs_activity table), shaped for reading.
- *
- * Bugzilla records every field change with who and when; the Bug Tracker UI
- * simply never showed it. This turns it into:
- *
- *   - `entries`: one per save, newest first, each change with a readable field
- *     label, people as real names, and a `kind` the UI styles by;
- *   - `journey`: the status story alone - Filed, then every status change with
- *     its resolution - so "fixed, reopened by QA, fixed again" reads at a glance.
- *
- * Bugs imported from Mantis carry their Mantis history in the same table
- * (bugzilla/migration/mantis-import-history.pl), so they read the same way.
- */
-
-export type ChangeKind = 'status' | 'resolution' | 'assignee' | 'placement' | 'priority' | 'people' | 'text' | 'link' | 'visibility' | 'other';
+/** A bug's activity: every recorded change (Bugzilla's Bug.history - the bugs_activity table), shaped. */
+export type ChangeKind =
+  'status' | 'resolution' | 'assignee' | 'placement' | 'priority' | 'people' | 'text' | 'link' | 'visibility' | 'other';
 
 export interface ActivityChange {
   field: string;
@@ -88,10 +74,6 @@ const FIELDS: Record<string, { label: string; kind: ChangeKind; people?: boolean
   reporter_accessible: { label: 'Reporter can see', kind: 'visibility' },
 };
 
-/*
- * Bugzilla's API reports history under its API field names (status, summary,
- * depends_on ...), not the database names above; both spellings are accepted.
- */
 const API_ALIASES: Record<string, string> = {
   status: 'bug_status',
   severity: 'bug_severity',
@@ -115,32 +97,37 @@ const isPeople = (name: string) => Boolean(FIELDS[canonical(name)]?.people);
 interface RawHistory {
   bugs?: {
     id: number;
-    history?: { when: string; who: string; changes: { field_name: string; removed: string; added: string; attachment_id?: number }[] }[];
+    history?: {
+      when: string;
+      who: string;
+      changes: { field_name: string; removed: string; added: string; attachment_id?: number }[];
+    }[];
   }[];
 }
 
-/**
- * Read on the CALLER's own session: Bugzilla only returns history for a bug
- * they can see, and hides changes to fields they may not see (time tracking,
- * private attachments) - so this never shows more than the bug page itself.
- */
+/** Read on the CALLER's own session. */
 export async function loadBugActivity(client: BugzillaClient, id: number): Promise<BugActivity> {
-  const [historyResp, bugResp] = await Promise.all([
+  const [historyResponse, bugResponse] = await Promise.all([
     client.get<RawHistory>(`/bug/${id}/history`),
-    client.get<{ bugs: { creation_time: string; creator: string; status: string; resolution: string }[] }>(`/bug/${id}`, {
-      include_fields: 'creation_time,creator,status,resolution',
-    }),
+    client.get<{ bugs: { creation_time: string; creator: string; status: string; resolution: string }[] }>(
+      `/bug/${id}`,
+      {
+        include_fields: 'creation_time,creator,status,resolution',
+      },
+    ),
   ]);
-  const bug = bugResp.bugs[0];
-  const history = (historyResp.bugs?.[0]?.history ?? []).slice().sort((a, b) => a.when.localeCompare(b.when));
+  const bug = bugResponse.bugs[0];
+  const history = (historyResponse.bugs?.[0]?.history ?? [])
+    .slice()
+    .sort((left, right) => left.when.localeCompare(right.when));
 
-  // Everyone named anywhere, resolved to real names in one call.
   const logins = new Set<string>([bug.creator]);
-  for (const h of history) {
-    logins.add(h.who);
-    for (const c of h.changes) {
-      if (!isPeople(c.field_name)) continue;
-      for (const v of [c.removed, c.added]) for (const p of v.split(/,\s*/)) if (p) logins.add(p);
+  for (const historyEntry of history) {
+    logins.add(historyEntry.who);
+    for (const change of historyEntry.changes) {
+      if (!isPeople(change.field_name)) continue;
+      for (const value of [change.removed, change.added])
+        for (const login of value.split(/,\s*/)) if (login) logins.add(login);
     }
   }
   const names = await resolveDisplayNames(client, [...logins]).catch(() => new Map<string, string>());
@@ -153,37 +140,43 @@ export async function loadBugActivity(client: BugzillaClient, id: number): Promi
     return value;
   };
 
-  const entries: ActivityEntry[] = history.map((h) => ({
-    when: h.when,
-    who: h.who,
-    whoName: nameOf(h.who),
-    changes: h.changes.map((c) => {
-      const info = fieldInfo(c.field_name);
+  const entries: ActivityEntry[] = history.map((item) => ({
+    when: item.when,
+    who: item.who,
+    whoName: nameOf(item.who),
+    changes: item.changes.map((change) => {
+      const info = fieldInfo(change.field_name);
       return {
-        field: canonical(c.field_name),
-        label: c.attachment_id ? `${info.label} (attachment ${c.attachment_id})` : info.label,
+        field: canonical(change.field_name),
+        label: change.attachment_id ? `${info.label} (attachment ${change.attachment_id})` : info.label,
         kind: info.kind,
-        removed: show(c.field_name, c.removed),
-        added: show(c.field_name, c.added),
+        removed: show(change.field_name, change.removed),
+        added: show(change.field_name, change.added),
       };
     }),
   }));
 
-  /*
-   * The journey. The first status is what the first status change removed - or,
-   * for a bug never moved, the status it still has.
-   */
-  const statusChanges = history.filter((h) => h.changes.some((c) => canonical(c.field_name) === 'bug_status'));
-  const firstStatus = statusChanges[0]?.changes.find((c) => canonical(c.field_name) === 'bug_status')?.removed ?? bug.status;
+  const statusChanges = history.filter((item) =>
+    item.changes.some((change) => canonical(change.field_name) === 'bug_status'),
+  );
+  const firstStatus =
+    statusChanges[0]?.changes.find((change) => canonical(change.field_name) === 'bug_status')?.removed ?? bug.status;
   const journey: JourneyStep[] = [
     { status: firstStatus, resolution: '', when: bug.creation_time, who: bug.creator, whoName: nameOf(bug.creator) },
   ];
   let resolution = '';
-  for (const h of history) {
-    const r = h.changes.find((c) => canonical(c.field_name) === 'resolution');
-    if (r) resolution = r.added;
-    const s = h.changes.find((c) => canonical(c.field_name) === 'bug_status');
-    if (s) journey.push({ status: s.added, resolution, when: h.when, who: h.who, whoName: nameOf(h.who) });
+  for (const historyEntry of history) {
+    const resolutionChange = historyEntry.changes.find((change) => canonical(change.field_name) === 'resolution');
+    if (resolutionChange) resolution = resolutionChange.added;
+    const statusChange = historyEntry.changes.find((change) => canonical(change.field_name) === 'bug_status');
+    if (statusChange)
+      journey.push({
+        status: statusChange.added,
+        resolution,
+        when: historyEntry.when,
+        who: historyEntry.who,
+        whoName: nameOf(historyEntry.who),
+      });
   }
 
   return {

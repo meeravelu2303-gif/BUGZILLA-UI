@@ -8,7 +8,16 @@ import { ClassificationPicker } from '../components/bugs/ClassificationPicker';
 import { DescriptionReport } from '../components/bugs/DescriptionReport';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { BugKindPicker, CurlField, LEVEL_DOT, MONO, Section, Segmented, TickGroup, UiPlatformPicker } from '../components/bugs/BugFormParts';
+import {
+  BugKindPicker,
+  CurlField,
+  LEVEL_DOT,
+  MONO,
+  Section,
+  Segmented,
+  TickGroup,
+  UiPlatformPicker,
+} from '../components/bugs/BugFormParts';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Input, RequiredMark, Select, Textarea } from '../components/ui/Field';
 import { useToast } from '../context/ToastContext';
@@ -40,24 +49,18 @@ import {
 import { uploadAttachment } from '../lib/uploadAttachment';
 import { cn } from '../lib/utils';
 
-/** Each attachment goes up as its own request, as raw bytes; Bugzilla's own cap is 50 MB a file. */
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
-/** "20261026-104512-1": when a screenshot was pasted, numbered so two in one second never collide. */
 let pasteCount = 0;
-const pastedStamp = () => `${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}-${++pasteCount}`;
+const pastedStamp = () =>
+  `${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}-${++pasteCount}`;
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/**
- * What each validated field is called on screen - used in the error toast and
- * the jump list. Written in the order the fields appear on the page, so the
- * list reads top to bottom and "first missing" means the one nearest the top.
- */
 const FIELD_LABELS: Partial<Record<keyof BugReportInput, string>> = {
   product: 'Product',
   component: 'Component',
@@ -75,7 +78,6 @@ const FIELD_LABELS: Partial<Record<keyof BugReportInput, string>> = {
   environment: 'Environment',
 };
 
-/** Scrolls to a field and puts the cursor in it, so fixing it is one keystroke away. */
 function focusField(key: string) {
   const wrap = document.querySelector<HTMLElement>(`[data-field="${key}"]`);
   if (!wrap) return;
@@ -86,37 +88,27 @@ function focusField(key: string) {
 export function CreateBug() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  /*
-   * `forFiling` - every product Bugzilla will accept a bug into, not just the
-   * ones matching this user's same-named groups. Finding a defect in another
-   * team's product is normal, and the narrower list refused to report it.
-   */
   const { data: productsData, isLoading: productsLoading } = useProducts({ forFiling: true });
   const { data: me } = useMe();
   const createBug = useCreateBug();
 
-  // Minted once, so the summary in the preview is the summary that gets filed.
   const [tag] = useState(mintTag);
   const [product, setProduct] = useState('');
   const [component, setComponent] = useState('');
-  /** Stored sub-component value; '' = none. Reset whenever the component changes. */
   const [subcomponent, setSubcomponent] = useState('');
   const [version, setVersion] = useState('');
   const [kind, setKind] = useState<BugKind>('api');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<string>('Functional');
   const [level, setLevel] = useState<SeverityLevel>('HIGH');
-  /** Bugzilla priority. Follows the severity until the tester picks one themselves. */
   const [priority, setPriority] = useState<string>(SEVERITY_LEVELS.HIGH.priority);
   const [priorityManual, setPriorityManual] = useState(false);
-  /** Empty = let Bugzilla apply the component's default owner. */
   const [assignee, setAssignee] = useState('');
   const [classification, setClassification] = useState('');
   const [method, setMethod] = useState<string>('POST');
   const [path, setPath] = useState('');
   const [page, setPage] = useState('');
   const [browsers, setBrowsers] = useState<string[]>(['chromium']);
-  /** UI bugs: the web app or the mobile app. */
   const [uiPlatform, setUiPlatform] = useState<UiPlatform>('web');
   const [devices, setDevices] = useState<string[]>(['android']);
   const [summary, setSummary] = useState('');
@@ -139,80 +131,95 @@ export function CreateBug() {
   const [rawPreview, setRawPreview] = useState(false);
   const [runDate, setRunDate] = useState(runDateNow);
 
-  // The run date in the preview follows the clock; the filed one is stamped again at submit.
   useEffect(() => {
-    const t = setInterval(() => setRunDate(runDateNow()), 30_000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setRunDate(runDateNow()), 30_000);
+    return () => clearInterval(timer);
   }, []);
 
   const products = productsData?.products ?? [];
-  const selectedProduct = useMemo(() => products.find((p) => p.name === product), [products, product]);
+  const selectedProduct = useMemo(
+    () => products.find((productItem) => productItem.name === product),
+    [products, product],
+  );
   const { data: assignable } = useAssignableUsers(product || undefined);
-  // Ownership comes from the BFF (component `initialowner`), so this view and
-  // the quick-file dialog cannot disagree about who owns a product.
-  const ownerSet = new Set((assignable?.owners ?? []).map((e) => e.toLowerCase()));
-  const ownerUsers = (assignable?.users ?? []).filter((u) => ownerSet.has(u.email.toLowerCase()));
-  const otherUsers = (assignable?.users ?? []).filter((u) => !ownerSet.has(u.email.toLowerCase()));
+  const ownerSet = new Set((assignable?.owners ?? []).map((owner) => owner.toLowerCase()));
+  const ownerUsers = (assignable?.users ?? []).filter((user) => ownerSet.has(user.email.toLowerCase()));
+  const otherUsers = (assignable?.users ?? []).filter((user) => !ownerSet.has(user.email.toLowerCase()));
 
-  const selectedComponent = selectedProduct?.components.find((c) => c.name === component);
+  const selectedComponent = selectedProduct?.components.find((productComponent) => productComponent.name === component);
   const ownerEmail = selectedComponent?.defaultAssignee ?? '';
-  // Only live sub-components are offered for a new bug.
-  const subOptions = (selectedComponent?.subcomponents ?? []).filter((sc) => sc.isActive);
-  const ownerName = assignable?.users.find((u) => u.email === ownerEmail)?.name ?? '';
+  const subcomponentOptions = (selectedComponent?.subcomponents ?? []).filter(
+    (subcomponentItem) => subcomponentItem.isActive,
+  );
+  const ownerName = assignable?.users.find((user) => user.email === ownerEmail)?.name ?? '';
 
   function onSelectProduct(name: string) {
     setProduct(name);
-    const p = products.find((x) => x.name === name);
-    // Inactive components are closed for new bugs (Bugzilla refuses them).
-    setComponent(p?.components.find((c) => c.isActive !== false)?.name ?? '');
+    const matchedProduct = products.find((x) => x.name === name);
+    setComponent(
+      matchedProduct?.components.find((productComponent) => productComponent.isActive !== false)?.name ?? '',
+    );
     setSubcomponent('');
-    setVersion(p?.versions.includes('unspecified') ? 'unspecified' : (p?.versions[0] ?? ''));
+    setVersion(matchedProduct?.versions.includes('unspecified') ? 'unspecified' : (matchedProduct?.versions[0] ?? ''));
     if (name) changeKind(kindForProduct(name));
   }
 
   function changeKind(next: BugKind) {
     setKind(next);
-    // Swap the environment only while it is still the other kind's default - never over an edit.
-    setEnvironment((env) => (Object.values(DEFAULT_ENVIRONMENT).includes(env) || !env.trim() ? DEFAULT_ENVIRONMENT[next] : env));
+    setEnvironment((env) =>
+      Object.values(DEFAULT_ENVIRONMENT).includes(env) || !env.trim() ? DEFAULT_ENVIRONMENT[next] : env,
+    );
   }
 
-  function toggleDevice(d: string) {
-    setDevices((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : BUG_DEVICES.filter((x) => x === d || prev.includes(x))));
+  function toggleDevice(device: string) {
+    setDevices((previous) =>
+      previous.includes(device)
+        ? previous.filter((x) => x !== device)
+        : BUG_DEVICES.filter((x) => x === device || previous.includes(x)),
+    );
   }
 
-  function toggleBrowser(b: string) {
-    setBrowsers((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...BUG_BROWSERS.filter((x) => x === b || prev.includes(x))]));
+  function toggleBrowser(browser: string) {
+    setBrowsers((previous) =>
+      previous.includes(browser)
+        ? previous.filter((x) => x !== browser)
+        : [...BUG_BROWSERS.filter((x) => x === browser || previous.includes(x))],
+    );
   }
 
   function addFiles(list: FileList | File[] | null) {
     if (!list) return;
     const incoming = Array.from(list);
-    const tooBig = incoming.filter((f) => f.size > MAX_FILE_BYTES);
-    setFileError(tooBig.length ? `${tooBig.map((f) => f.name).join(', ')} exceed${tooBig.length === 1 ? 's' : ''} the 50 MB limit.` : '');
-    setFiles((prev) => [...prev, ...incoming.filter((f) => f.size <= MAX_FILE_BYTES && !prev.some((p) => p.name === f.name))]);
+    const tooBig = incoming.filter((file) => file.size > MAX_FILE_BYTES);
+    setFileError(
+      tooBig.length
+        ? `${tooBig.map((file) => file.name).join(', ')} exceed${tooBig.length === 1 ? 's' : ''} the 50 MB limit.`
+        : '',
+    );
+    setFiles((previous) => [
+      ...previous,
+      ...incoming.filter(
+        (file) => file.size <= MAX_FILE_BYTES && !previous.some((fileItem) => fileItem.name === file.name),
+      ),
+    ]);
   }
 
-  /*
-   * Ctrl+V anywhere on the form attaches what is on the clipboard - a
-   * screenshot from the Snipping Tool, or files copied in Explorer. A plain
-   * text paste (into the title, steps, ...) is left alone. Clipboard images all
-   * arrive as "image.png", so each gets its own numbered name.
-   */
   useEffect(() => {
-    function onPaste(e: ClipboardEvent) {
-      const pasted = Array.from(e.clipboardData?.files ?? []);
+    function onPaste(event: ClipboardEvent) {
+      const pasted = Array.from(event.clipboardData?.files ?? []);
       if (!pasted.length) return;
-      e.preventDefault();
+      event.preventDefault();
       addFiles(
-        pasted.map((f) => {
-          const image = /^image\.(png|jpe?g|gif|webp)$/i.exec(f.name);
-          return image ? new File([f], `screenshot-${pastedStamp()}.${image[1].toLowerCase()}`, { type: f.type }) : f;
-        })
+        pasted.map((file) => {
+          const image = /^image\.(png|jpe?g|gif|webp)$/i.exec(file.name);
+          return image
+            ? new File([file], `screenshot-${pastedStamp()}.${image[1].toLowerCase()}`, { type: file.type })
+            : file;
+        }),
       );
     }
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
-    // addFiles only calls state setters, which never change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -250,21 +257,20 @@ export function CreateBug() {
     ownerEmail: ownerEmail || 'component default assignee',
     filedByName: me?.user.realName ?? '',
     filedByEmail: me?.user.email ?? '',
-    evidence: files.map((f) => f.name),
+    evidence: files.map((file) => file.name),
     runDate,
   };
 
   const allErrors = validateReport(report);
   const errors = showErrors ? allErrors : {};
   const errorCount = Object.keys(allErrors).length;
-  /** Fields with an error, in page order. */
   const missingKeys = (Object.keys(FIELD_LABELS) as (keyof BugReportInput)[]).filter((k) => allErrors[k]);
   const composedSummary = buildSummary(report);
   const whiteboard = buildWhiteboard(report);
   const description = buildDescription(report);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     setSubmitError(null);
     setShowErrors(true);
     if (errorCount > 0) {
@@ -273,8 +279,6 @@ export function CreateBug() {
         title: `${errorCount} required field${errorCount === 1 ? '' : 's'} need${errorCount === 1 ? 's' : ''} attention`,
         description: missingKeys.map((k) => FIELD_LABELS[k]).join(', '),
       });
-      // Known from state, not read back from the DOM: the error marks only render
-      // after this handler returns, so querying for them here finds nothing.
       if (missingKeys[0]) focusField(missingKeys[0]);
       return;
     }
@@ -291,16 +295,10 @@ export function CreateBug() {
         description: buildDescription(final),
         whiteboard: buildWhiteboard(final),
         version: version || undefined,
-        // The bench always files with All/All - the browser lives in the whiteboard tag instead.
         opSys: 'All',
         platform: 'All',
         severity: levelFields.severity,
         priority,
-        /*
-         * Sent only when a person was chosen. Left blank, Bugzilla applies the
-         * component's default owner - the same routing the automated bench
-         * depends on, so filing by hand and filing by bench stay consistent.
-         */
         ...(assignee ? { assignedTo: assignee } : {}),
       });
       bugId = result.bug.id;
@@ -309,7 +307,6 @@ export function CreateBug() {
       return;
     }
 
-    // The bug exists from here on: an upload failure is reported, never a reason to lose the bug.
     const failed: string[] = [];
     for (const file of files) {
       setUploading(file.name);
@@ -345,13 +342,21 @@ export function CreateBug() {
         description="Uses the same structure as test-bench bugs, so every ticket reads the same way."
         actions={
           <span className="inline-flex h-9 items-center gap-2 rounded-full bg-white/70 px-3.5 font-mono text-xs font-semibold text-slate-700 shadow-card ring-1 ring-inset ring-white/80 backdrop-blur-xl">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-500 shadow-[0_0_0_3px_rgb(58_178_204_/_0.25)]" aria-hidden />
+            <span
+              className="h-1.5 w-1.5 rounded-full bg-brand-500 shadow-[0_0_0_3px_rgb(58_178_204_/_0.25)]"
+              aria-hidden
+            />
             {tag}
           </span>
         }
       />
 
-      <form onSubmit={onSubmit} noValidate autoComplete="off" className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
+      <form
+        onSubmit={onSubmit}
+        noValidate
+        autoComplete="off"
+        className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]"
+      >
         <div className="flex min-w-0 flex-col gap-6">
           <p className="-mb-2 text-xs text-slate-600">
             Fields marked <RequiredMark /> are required.
@@ -363,13 +368,13 @@ export function CreateBug() {
                   label="Product"
                   placeholder={productsLoading ? 'Loading…' : 'Select a product'}
                   value={product}
-                  onChange={(e) => onSelectProduct(e.target.value)}
+                  onChange={(event) => onSelectProduct(event.target.value)}
                   error={errors.product}
                   required
                 >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.name}>
-                      {p.name}
+                  {products.map((productItem) => (
+                    <option key={productItem.id} value={productItem.name}>
+                      {productItem.name}
                     </option>
                   ))}
                 </Select>
@@ -379,8 +384,8 @@ export function CreateBug() {
                   label="Component (module)"
                   placeholder={product ? 'Select a component' : 'Select a product first'}
                   value={component}
-                  onChange={(e) => {
-                    setComponent(e.target.value);
+                  onChange={(event) => {
+                    setComponent(event.target.value);
                     setSubcomponent('');
                   }}
                   error={errors.component}
@@ -388,45 +393,37 @@ export function CreateBug() {
                   hint={ownerEmail ? `Assigned to ${ownerName || ownerEmail}` : undefined}
                   required
                 >
-                  {selectedProduct?.components.filter((c) => c.isActive !== false).map((c) => (
-                    <option key={c.name} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
+                  {selectedProduct?.components
+                    .filter((productComponent) => productComponent.isActive !== false)
+                    .map((productComponent) => (
+                      <option key={productComponent.name} value={productComponent.name}>
+                        {productComponent.name}
+                      </option>
+                    ))}
                 </Select>
               </div>
-              {/* Optional, and only shown when the chosen component has sub-components. */}
-              {subOptions.length > 0 && (
+              {subcomponentOptions.length > 0 && (
                 <div data-field="subcomponent">
                   <Select
                     label="Sub-component"
                     value={subcomponent}
-                    onChange={(e) => setSubcomponent(e.target.value)}
+                    onChange={(event) => setSubcomponent(event.target.value)}
                     hint={`Narrows the bug within ${component}. Optional.`}
                   >
                     <option value="">None</option>
-                    {subOptions.map((sc) => (
-                      <option key={sc.id} value={sc.value}>
-                        {sc.name}
+                    {subcomponentOptions.map((subcomponentOption) => (
+                      <option key={subcomponentOption.id} value={subcomponentOption.value}>
+                        {subcomponentOption.name}
                       </option>
                     ))}
                   </Select>
                 </div>
               )}
-              {/*
-                Assignee, chosen at filing time.
-                
-                The module's maintainer is still the DEFAULT - leaving this
-                alone reproduces the old behaviour exactly, and is what the
-                automated bench does. Choosing a person here is what moves a
-                bug out of a component queue and onto someone's plate, which is
-                what the dashboard's "Picked up" tile measures.
-              */}
               <div data-field="assignee">
                 <Select
                   label="Assign to"
                   value={assignee}
-                  onChange={(e) => setAssignee(e.target.value)}
+                  onChange={(event) => setAssignee(event.target.value)}
                   disabled={!product}
                   hint={
                     assignee
@@ -437,22 +434,20 @@ export function CreateBug() {
                   }
                 >
                   <option value="">Module maintainer (default)</option>
-                  {/* Owners of the selected product first; everyone in
-                      engineering stays reachable below. */}
                   {ownerUsers.length > 0 && (
                     <optgroup label={`Owns ${product}`}>
-                      {ownerUsers.map((u) => (
-                        <option key={u.email} value={u.email}>
-                          {assigneeLabel(u)}
+                      {ownerUsers.map((ownerUser) => (
+                        <option key={ownerUser.email} value={ownerUser.email}>
+                          {assigneeLabel(ownerUser)}
                         </option>
                       ))}
                     </optgroup>
                   )}
                   {otherUsers.length > 0 && (
                     <optgroup label="Other engineers">
-                      {otherUsers.map((u) => (
-                        <option key={u.email} value={u.email}>
-                          {assigneeLabel(u)}
+                      {otherUsers.map((otherUser) => (
+                        <option key={otherUser.email} value={otherUser.email}>
+                          {assigneeLabel(otherUser)}
                         </option>
                       ))}
                     </optgroup>
@@ -460,18 +455,17 @@ export function CreateBug() {
                 </Select>
               </div>
             </div>
-            <BugKindPicker value={kind} onChange={changeKind} hint="Set from the product - change it if this bug is the other kind." />
+            <BugKindPicker
+              value={kind}
+              onChange={changeKind}
+              hint="Set from the product - change it if this bug is the other kind."
+            />
             <div className="grid grid-cols-1 empty:hidden gap-4 sm:grid-cols-2">
-              {/*
-                Bugzilla requires a version on every bug, but each product here has exactly one
-                ("unspecified", or "5.0" for KMail API) - so it is chosen automatically and the
-                field only appears for a product that actually has several to pick from.
-              */}
               {selectedProduct && selectedProduct.versions.length > 1 && (
-                <Select label="Version" value={version} onChange={(e) => setVersion(e.target.value)}>
-                  {selectedProduct.versions.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
+                <Select label="Version" value={version} onChange={(event) => setVersion(event.target.value)}>
+                  {selectedProduct.versions.map((versionItem) => (
+                    <option key={versionItem} value={versionItem}>
+                      {versionItem}
                     </option>
                   ))}
                 </Select>
@@ -479,21 +473,31 @@ export function CreateBug() {
             </div>
           </Section>
 
-          <Section step={2} title="The defect" subtitle="How it is titled, tagged and prioritised - the same fields the bench sets.">
+          <Section
+            step={2}
+            title="The defect"
+            subtitle="How it is titled, tagged and prioritised - the same fields the bench sets."
+          >
             {kind === 'api' ? (
-              <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3" data-field="path" data-invalid={invalid('path')}>
-                <Select label="Method" value={method} onChange={(e) => setMethod(e.target.value)}>
-                  {HTTP_METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+              <div
+                className="grid grid-cols-[110px_minmax(0,1fr)] gap-3"
+                data-field="path"
+                data-invalid={invalid('path')}
+              >
+                <Select label="Method" value={method} onChange={(event) => setMethod(event.target.value)}>
+                  {HTTP_METHODS.map((httpMethod) => (
+                    <option key={httpMethod} value={httpMethod}>
+                      {httpMethod}
                     </option>
                   ))}
                 </Select>
                 <Input
-                  id="new-bug-endpoint" autoComplete="off" label="Endpoint"
+                  id="new-bug-endpoint"
+                  autoComplete="off"
+                  label="Endpoint"
                   required
                   value={path}
-                  onChange={(e) => setPath(e.target.value.trim())}
+                  onChange={(event) => setPath(event.target.value.trim())}
                   placeholder="/v2/kmail/inboxMails/"
                   className={MONO}
                   error={errors.path}
@@ -501,48 +505,52 @@ export function CreateBug() {
               </div>
             ) : (
               <>
-              <UiPlatformPicker value={uiPlatform} onChange={setUiPlatform} />
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Input
-                  id="new-bug-page"
-                  autoComplete="off"
-                  label={uiPlatform === 'mobile' ? 'Screen' : 'Page / screen'}
-                  value={page}
-                  onChange={(e) => setPage(e.target.value)}
-                  placeholder={uiPlatform === 'mobile' ? 'Inbox, Write Mail, Settings…' : '/kmail/inbox or Write Mail'}
-                  hint="Where in the app it happens."
-                />
-                {uiPlatform === 'mobile' ? (
-                  <TickGroup
-                    id="devices"
-                    label="Devices affected"
-                    options={BUG_DEVICES.map((d) => ({ value: d, label: DEVICE_LABELS[d] }))}
-                    selected={devices}
-                    onToggle={toggleDevice}
-                    error={errors.devices}
-                    hint="Tick every device platform it happens on."
+                <UiPlatformPicker value={uiPlatform} onChange={setUiPlatform} />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Input
+                    id="new-bug-page"
+                    autoComplete="off"
+                    label={uiPlatform === 'mobile' ? 'Screen' : 'Page / screen'}
+                    value={page}
+                    onChange={(event) => setPage(event.target.value)}
+                    placeholder={
+                      uiPlatform === 'mobile' ? 'Inbox, Write Mail, Settings…' : '/kmail/inbox or Write Mail'
+                    }
+                    hint="Where in the app it happens."
                   />
-                ) : (
-                  <TickGroup
-                    id="browsers"
-                    label="Browsers affected"
-                    options={BUG_BROWSERS.map((b) => ({ value: b, label: b }))}
-                    selected={browsers}
-                    onToggle={toggleBrowser}
-                    error={errors.browsers}
-                    hint="Tick every browser it happens in."
-                  />
-                )}
-              </div>
+                  {uiPlatform === 'mobile' ? (
+                    <TickGroup
+                      id="devices"
+                      label="Devices affected"
+                      options={BUG_DEVICES.map((bugDevice) => ({ value: bugDevice, label: DEVICE_LABELS[bugDevice] }))}
+                      selected={devices}
+                      onToggle={toggleDevice}
+                      error={errors.devices}
+                      hint="Tick every device platform it happens on."
+                    />
+                  ) : (
+                    <TickGroup
+                      id="browsers"
+                      label="Browsers affected"
+                      options={BUG_BROWSERS.map((bugBrowser) => ({ value: bugBrowser, label: bugBrowser }))}
+                      selected={browsers}
+                      onToggle={toggleBrowser}
+                      error={errors.browsers}
+                      hint="Tick every browser it happens in."
+                    />
+                  )}
+                </div>
               </>
             )}
 
             <div data-field="title" data-invalid={invalid('title')}>
               <Input
-                id="new-bug-title" autoComplete="off" label="Title"
+                id="new-bug-title"
+                autoComplete="off"
+                label="Title"
                 required
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(event) => setTitle(event.target.value)}
                 error={errors.title}
                 placeholder={
                   kind === 'api'
@@ -555,10 +563,10 @@ export function CreateBug() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
-                {BUG_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
+              <Select label="Category" value={category} onChange={(event) => setCategory(event.target.value)}>
+                {BUG_CATEGORIES.map((bugCategory) => (
+                  <option key={bugCategory} value={bugCategory}>
+                    {bugCategory}
                   </option>
                 ))}
               </Select>
@@ -582,15 +590,13 @@ export function CreateBug() {
               value={level}
               onChange={(next: SeverityLevel) => {
                 setLevel(next);
-                // Priority follows severity until the tester has chosen one deliberately.
                 if (!priorityManual) setPriority(SEVERITY_LEVELS[next].priority);
-                // A manual choice that now equals this severity's default is no longer an override.
                 else if (priority === SEVERITY_LEVELS[next].priority) setPriorityManual(false);
               }}
-              options={(Object.keys(SEVERITY_LEVELS) as SeverityLevel[]).map((l) => ({
-                value: l,
-                label: l[0] + l.slice(1).toLowerCase(),
-                dot: LEVEL_DOT[l],
+              options={(Object.keys(SEVERITY_LEVELS) as SeverityLevel[]).map((severityLevel) => ({
+                value: severityLevel,
+                label: severityLevel[0] + severityLevel.slice(1).toLowerCase(),
+                dot: LEVEL_DOT[severityLevel],
               }))}
               hint={
                 <>
@@ -602,7 +608,6 @@ export function CreateBug() {
               }
             />
 
-            {/* Priority: how soon to fix it - separate from how bad it is. Starts from the severity. */}
             <Segmented
               label="Priority"
               value={priority}
@@ -610,12 +615,16 @@ export function CreateBug() {
                 setPriority(next);
                 setPriorityManual(next !== SEVERITY_LEVELS[level].priority);
               }}
-              options={PRIORITY_OPTIONS.map((p) => ({ value: p.value, label: p.label }))}
+              options={PRIORITY_OPTIONS.map((priorityOption) => ({
+                value: priorityOption.value,
+                label: priorityOption.label,
+              }))}
               hint={
                 priorityManual ? (
                   <>
-                    <span className="font-medium text-amber-700">Priority set manually</span> - {priorityLabel(priority)} instead of{' '}
-                    {priorityLabel(SEVERITY_LEVELS[level].priority)} for this severity.{' '}
+                    <span className="font-medium text-amber-700">Priority set manually</span> -{' '}
+                    {priorityLabel(priority)} instead of {priorityLabel(SEVERITY_LEVELS[level].priority)} for this
+                    severity.{' '}
                     <button
                       type="button"
                       className="font-medium text-brand-700 underline-offset-2 hover:underline"
@@ -629,30 +638,38 @@ export function CreateBug() {
                   </>
                 ) : (
                   <>
-                    {PRIORITY_OPTIONS.find((p) => p.value === priority)?.hint} - set from the severity. Change it if this bug is more or less
-                    urgent than its severity suggests.
+                    {PRIORITY_OPTIONS.find((priorityOption) => priorityOption.value === priority)?.hint} - set from the
+                    severity. Change it if this bug is more or less urgent than its severity suggests.
                   </>
                 )
               }
             />
           </Section>
 
-          <Section step={3} title="Report" subtitle="What a developer needs to understand and reproduce it without asking.">
+          <Section
+            step={3}
+            title="Report"
+            subtitle="What a developer needs to understand and reproduce it without asking."
+          >
             <div data-field="summary" data-invalid={invalid('summary')}>
               <Textarea
-                id="new-bug-summary" autoComplete="off" label="Summary"
+                id="new-bug-summary"
+                autoComplete="off"
+                label="Summary"
                 required
                 value={summary}
-                onChange={(e) => setSummary(e.target.value)}
+                onChange={(event) => setSummary(event.target.value)}
                 error={errors.summary}
                 rows={3}
                 placeholder="In plain words: what you did, what went wrong, and who it affects."
               />
             </div>
             <Input
-              id="new-bug-preconditions" autoComplete="off" label="Preconditions"
+              id="new-bug-preconditions"
+              autoComplete="off"
+              label="Preconditions"
               value={preconditions}
-              onChange={(e) => setPreconditions(e.target.value)}
+              onChange={(event) => setPreconditions(event.target.value)}
               placeholder={
                 kind === 'api'
                   ? 'A valid, authenticated test account calling the endpoint below with a live session token.'
@@ -662,10 +679,12 @@ export function CreateBug() {
             />
             <div data-field="steps" data-invalid={invalid('steps')}>
               <Textarea
-                id="new-bug-steps" autoComplete="off" label="Steps to reproduce"
+                id="new-bug-steps"
+                autoComplete="off"
+                label="Steps to reproduce"
                 required={stepsRequired(level)}
                 value={steps}
-                onChange={(e) => setSteps(e.target.value)}
+                onChange={(event) => setSteps(event.target.value)}
                 error={errors.steps}
                 rows={4}
                 className={MONO}
@@ -682,61 +701,113 @@ export function CreateBug() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div data-field="expected" data-invalid={invalid('expected')}>
                 <Textarea
-                  id="new-bug-expected" autoComplete="off" label="Expected"
+                  id="new-bug-expected"
+                  autoComplete="off"
+                  label="Expected"
                   value={expected}
-                  onChange={(e) => setExpected(e.target.value)}
+                  onChange={(event) => setExpected(event.target.value)}
                   error={errors.expected}
-                  hint={expected.trim() ? undefined : "Optional - say what should happen if it isn't obvious from the title."}
+                  hint={
+                    expected.trim()
+                      ? undefined
+                      : "Optional - say what should happen if it isn't obvious from the title."
+                  }
                   rows={4}
                   className={MONO}
-                  placeholder={kind === 'api' ? 'empty subject → 400\nbody: {"status":"error","message":…}' : 'All unread mails are marked as read.'}
+                  placeholder={
+                    kind === 'api'
+                      ? 'empty subject → 400\nbody: {"status":"error","message":…}'
+                      : 'All unread mails are marked as read.'
+                  }
                 />
               </div>
               <div data-field="actual" data-invalid={invalid('actual')}>
                 <Textarea
-                  id="new-bug-actual" autoComplete="off" label="Actual"
+                  id="new-bug-actual"
+                  autoComplete="off"
+                  label="Actual"
                   value={actual}
-                  onChange={(e) => setActual(e.target.value)}
+                  onChange={(event) => setActual(event.target.value)}
                   error={errors.actual}
-                  hint={actual.trim() ? undefined : 'Optional - the Summary already says what goes wrong; add detail if it helps.'}
+                  hint={
+                    actual.trim()
+                      ? undefined
+                      : 'Optional - the Summary already says what goes wrong; add detail if it helps.'
+                  }
                   rows={4}
                   className={MONO}
-                  placeholder={kind === 'api' ? 'empty subject → 500' : 'Nothing happens; the unread count stays the same.'}
+                  placeholder={
+                    kind === 'api' ? 'empty subject → 500' : 'Nothing happens; the unread count stays the same.'
+                  }
                 />
               </div>
             </div>
             <details className="group rounded-xl bg-white/40 ring-1 ring-inset ring-white/60">
               <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-slate-700">
-                Developer notes <span className="font-normal text-slate-500">(optional) - why it matters, how to fix</span>
+                Developer notes{' '}
+                <span className="font-normal text-slate-500">(optional) - why it matters, how to fix</span>
               </summary>
               <div className="flex flex-col gap-4 px-4 pb-4">
-                <Textarea id="new-bug-why" autoComplete="off" label="Why it matters" value={whyItMatters} onChange={(e) => setWhyItMatters(e.target.value)} rows={2} placeholder="User or business impact." />
-                <Textarea id="new-bug-fix" autoComplete="off" label="How to fix" value={howToFix} onChange={(e) => setHowToFix(e.target.value)} rows={2} placeholder="A suggested fix, if you know one." />
+                <Textarea
+                  id="new-bug-why"
+                  autoComplete="off"
+                  label="Why it matters"
+                  value={whyItMatters}
+                  onChange={(event) => setWhyItMatters(event.target.value)}
+                  rows={2}
+                  placeholder="User or business impact."
+                />
+                <Textarea
+                  id="new-bug-fix"
+                  autoComplete="off"
+                  label="How to fix"
+                  value={howToFix}
+                  onChange={(event) => setHowToFix(event.target.value)}
+                  rows={2}
+                  placeholder="A suggested fix, if you know one."
+                />
               </div>
             </details>
           </Section>
 
           {kind === 'api' && (
             <Section step={4} title="Reproduce" subtitle="A runnable command and the response it returned.">
-              <CurlField value={curl} onChange={setCurl} onGenerate={() => setCurl(curlTemplate(method, path))} error={errors.curl} />
+              <CurlField
+                value={curl}
+                onChange={setCurl}
+                onGenerate={() => setCurl(curlTemplate(method, path))}
+                error={errors.curl}
+              />
               <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
                 <div data-field="responseStatus" data-invalid={invalid('responseStatus')}>
                   <Input
-                    id="new-bug-http-status" autoComplete="off" label="HTTP status"
+                    id="new-bug-http-status"
+                    autoComplete="off"
+                    label="HTTP status"
                     value={responseStatus}
-                    onChange={(e) => setResponseStatus(e.target.value.trim())}
+                    onChange={(event) => setResponseStatus(event.target.value.trim())}
                     inputMode="numeric"
                     maxLength={3}
                     placeholder="500"
                     error={errors.responseStatus}
                   />
                 </div>
-                <Input id="new-bug-correlation-id" autoComplete="off" label="Correlation ID" value={correlationId} onChange={(e) => setCorrelationId(e.target.value)} placeholder="Optional - from the X-Correlation-ID header" className={MONO} />
+                <Input
+                  id="new-bug-correlation-id"
+                  autoComplete="off"
+                  label="Correlation ID"
+                  value={correlationId}
+                  onChange={(event) => setCorrelationId(event.target.value)}
+                  placeholder="Optional - from the X-Correlation-ID header"
+                  className={MONO}
+                />
               </div>
               <Textarea
-                id="new-bug-response-body" autoComplete="off" label="Response body"
+                id="new-bug-response-body"
+                autoComplete="off"
+                label="Response body"
                 value={responseBody}
-                onChange={(e) => setResponseBody(e.target.value)}
+                onChange={(event) => setResponseBody(event.target.value)}
                 rows={3}
                 spellCheck={false}
                 className={MONO}
@@ -745,59 +816,79 @@ export function CreateBug() {
             </Section>
           )}
 
-          <Section step={kind === 'api' ? 5 : 4} title="Context & evidence" subtitle="Where it was seen, and the proof - screenshots, videos, logs.">
+          <Section
+            step={kind === 'api' ? 5 : 4}
+            title="Context & evidence"
+            subtitle="Where it was seen, and the proof - screenshots, videos, logs."
+          >
             <div data-field="environment" data-invalid={invalid('environment')}>
-              <Input id="new-bug-environment" autoComplete="off" label="Environment" required value={environment} onChange={(e) => setEnvironment(e.target.value)} error={errors.environment} />
+              <Input
+                id="new-bug-environment"
+                autoComplete="off"
+                label="Environment"
+                required
+                value={environment}
+                onChange={(event) => setEnvironment(event.target.value)}
+                error={errors.environment}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-slate-700">Evidence</span>
               <label
-                onDragOver={(e) => {
-                  e.preventDefault();
+                onDragOver={(event) => {
+                  event.preventDefault();
                   setDragging(true);
                 }}
                 onDragLeave={() => setDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
+                onDrop={(event) => {
+                  event.preventDefault();
                   setDragging(false);
-                  addFiles(e.dataTransfer.files);
+                  addFiles(event.dataTransfer.files);
                 }}
                 className={cn(
                   'focus-within:ring-brand-600 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-4 py-5 text-center text-sm text-slate-600 transition-colors hover:border-brand-500 hover:bg-white/70',
-                  dragging ? 'border-brand-500 bg-brand-50' : 'border-line bg-white/50'
+                  dragging ? 'border-brand-500 bg-brand-50' : 'border-line bg-white/50',
                 )}
               >
                 <Paperclip className="h-4 w-4 text-slate-500" aria-hidden />
                 <span>
                   <span className="font-medium text-brand-700">Choose files</span>, drop them here, or paste with{' '}
-                  <kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">Ctrl</kbd>+
-                  <kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">V</kbd>
+                  <kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">
+                    Ctrl
+                  </kbd>
+                  +
+                  <kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">
+                    V
+                  </kbd>
                 </span>
                 <span className="text-xs text-slate-500">Screenshot, video, HAR or log - up to 50 MB each</span>
                 <input
                   type="file"
                   multiple
                   className="sr-only"
-                  onChange={(e) => {
-                    addFiles(e.target.files);
-                    e.target.value = '';
+                  onChange={(event) => {
+                    addFiles(event.target.files);
+                    event.target.value = '';
                   }}
                 />
               </label>
               {fileError && <p className="text-xs text-rose-600">{fileError}</p>}
               {files.length > 0 && (
                 <ul className="flex flex-col gap-1.5">
-                  {files.map((f) => (
-                    <li key={f.name} className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-sm ring-1 ring-inset ring-white/60">
+                  {files.map((file) => (
+                    <li
+                      key={file.name}
+                      className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-sm ring-1 ring-inset ring-white/60"
+                    >
                       <span className="flex min-w-0 items-center gap-2">
                         <FileText className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
-                        <span className="truncate text-slate-800">{f.name}</span>
-                        <span className="shrink-0 text-xs text-slate-500">{formatBytes(f.size)}</span>
+                        <span className="truncate text-slate-800">{file.name}</span>
+                        <span className="shrink-0 text-xs text-slate-500">{formatBytes(file.size)}</span>
                       </span>
                       <button
                         type="button"
-                        aria-label={`Remove ${f.name}`}
-                        onClick={() => setFiles((prev) => prev.filter((p) => p !== f))}
+                        aria-label={`Remove ${file.name}`}
+                        onClick={() => setFiles((previous) => previous.filter((fileItem) => fileItem !== file))}
                         className="focus-ring rounded p-0.5 text-slate-500 hover:text-rose-600"
                       >
                         <X className="h-4 w-4" />
@@ -810,7 +901,10 @@ export function CreateBug() {
           </Section>
 
           {submitError && (
-            <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-inset ring-rose-200">
+            <p
+              role="alert"
+              className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-inset ring-rose-200"
+            >
               {submitError}
             </p>
           )}
@@ -843,7 +937,6 @@ export function CreateBug() {
           </div>
         </div>
 
-        {/* What will be filed, rendered the way the bug page will show it. */}
         <aside className="min-w-0 xl:sticky xl:top-20">
           <Card>
             <div className="flex items-center justify-between gap-3 border-b border-hairline px-6 py-4">
@@ -851,19 +944,26 @@ export function CreateBug() {
                 <Eye className="h-4 w-4 text-brand-700" aria-hidden />
                 <h2 className="text-[1rem] font-semibold text-slate-900">Preview</h2>
               </div>
-              <div role="tablist" aria-label="Preview format" className="grid grid-cols-2 gap-0.5 rounded-lg bg-slate-900/[0.06] p-0.5 text-xs">
-                {(['Report', 'Raw text'] as const).map((m) => {
-                  const active = (m === 'Raw text') === rawPreview;
+              <div
+                role="tablist"
+                aria-label="Preview format"
+                className="grid grid-cols-2 gap-0.5 rounded-lg bg-slate-900/[0.06] p-0.5 text-xs"
+              >
+                {(['Report', 'Raw text'] as const).map((value) => {
+                  const active = (value === 'Raw text') === rawPreview;
                   return (
                     <button
-                      key={m}
+                      key={value}
                       type="button"
                       role="tab"
                       aria-selected={active}
-                      onClick={() => setRawPreview(m === 'Raw text')}
-                      className={cn('focus-ring rounded-md px-2.5 py-1 font-medium', active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900')}
+                      onClick={() => setRawPreview(value === 'Raw text')}
+                      className={cn(
+                        'focus-ring rounded-md px-2.5 py-1 font-medium',
+                        active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+                      )}
                     >
-                      {m}
+                      {value}
                     </button>
                   );
                 })}
@@ -876,7 +976,8 @@ export function CreateBug() {
                     composedSummary
                   ) : (
                     <>
-                      <span className="font-mono">[{tag}]</span> <span className="font-normal italic text-slate-400">Your title appears here</span>
+                      <span className="font-mono">[{tag}]</span>{' '}
+                      <span className="font-normal italic text-slate-400">Your title appears here</span>
                     </>
                   )}
                 </p>
@@ -885,8 +986,18 @@ export function CreateBug() {
                     <span className={cn('h-1.5 w-1.5 rounded-full', LEVEL_DOT[level])} aria-hidden />
                     {SEVERITY_LEVELS[level].severity} · {SEVERITY_LEVELS[level].priority}
                   </span>
-                  <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-800 ring-1 ring-inset ring-slate-900/10">{category}</span>
-                  {product && <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-800 ring-1 ring-inset ring-slate-900/10">{product}{component ? ` / ${component}` : ''}{subcomponent ? ` / ${subOptions.find((sc) => sc.value === subcomponent)?.name ?? ''}` : ''}</span>}
+                  <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-800 ring-1 ring-inset ring-slate-900/10">
+                    {category}
+                  </span>
+                  {product && (
+                    <span className="rounded-md bg-white px-2 py-0.5 font-medium text-slate-800 ring-1 ring-inset ring-slate-900/10">
+                      {product}
+                      {component ? ` / ${component}` : ''}
+                      {subcomponent
+                        ? ` / ${subcomponentOptions.find((subcomponentOption) => subcomponentOption.value === subcomponent)?.name ?? ''}`
+                        : ''}
+                    </span>
+                  )}
                 </div>
                 <p className="font-mono text-[0.7333rem] text-slate-500">whiteboard {whiteboard}</p>
               </div>
@@ -895,7 +1006,9 @@ export function CreateBug() {
                 <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-white/40 px-6 py-10 text-center">
                   <FileText className="h-6 w-6 text-slate-400" aria-hidden />
                   <p className="text-sm font-medium text-slate-700">The filed bug will appear here</p>
-                  <p className="max-w-xs text-xs leading-5 text-slate-500">Choose a product and give it a title - the report builds itself as you fill in the form.</p>
+                  <p className="max-w-xs text-xs leading-5 text-slate-500">
+                    Choose a product and give it a title - the report builds itself as you fill in the form.
+                  </p>
                 </div>
               ) : rawPreview ? (
                 <pre className="whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-3 font-mono text-[0.8rem] leading-relaxed text-slate-800 ring-1 ring-inset ring-slate-200">

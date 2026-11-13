@@ -10,15 +10,11 @@ export interface ChipSuggestion {
 
 interface ChipInputProps<T extends string | number> {
   label: string;
-  /** The draft value - what will be saved. */
   values: T[];
-  /** The stored value, so removals can be shown struck through and undone. */
   baseline: T[];
   onChange: (next: T[]) => void;
-  /** Turns typed text into a value, or returns an error message. */
   parse: (raw: string) => { value: T } | { error: string };
   renderLabel?: (value: T) => ReactNode;
-  /** Makes each chip a link - an in-app route or an external URL. */
   hrefFor?: (value: T) => string | undefined;
   placeholder?: string;
   suggestions?: ChipSuggestion[];
@@ -27,20 +23,14 @@ interface ChipInputProps<T extends string | number> {
   disabled?: boolean;
 }
 
-/**
- * Editable list of values (CC, dependencies, aliases, links...).
- *
- * Removing a stored value does not make it vanish: it stays as a struck-through
- * chip with an undo until the bug is saved, so an accidental click on the wrong
- * "x" is visible and reversible rather than a silent change waiting in the save.
- */
+/** Editable list of values (CC, dependencies, aliases, links...). */
 export function ChipInput<T extends string | number>({
   label,
   values,
   baseline,
   onChange,
   parse,
-  renderLabel = (v) => String(v),
+  renderLabel = (item) => String(item),
   hrefFor,
   placeholder = 'Add…',
   suggestions,
@@ -55,10 +45,12 @@ export function ChipInput<T extends string | number>({
 
   const current = new Set(values.map(String));
   const stored = new Set(baseline.map(String));
-  // Stored order first, then additions in the order they were made.
   const chips: { value: T; state: 'kept' | 'added' | 'removed' }[] = [
-    ...baseline.map((v) => ({ value: v, state: current.has(String(v)) ? ('kept' as const) : ('removed' as const) })),
-    ...values.filter((v) => !stored.has(String(v))).map((v) => ({ value: v, state: 'added' as const })),
+    ...baseline.map((item) => ({
+      value: item,
+      state: current.has(String(item)) ? ('kept' as const) : ('removed' as const),
+    })),
+    ...values.filter((value) => !stored.has(String(value))).map((value) => ({ value: value, state: 'added' as const })),
   ];
 
   function commit(raw: string) {
@@ -78,11 +70,11 @@ export function ChipInput<T extends string | number>({
     setError('');
   }
 
-  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
       commit(text);
-    } else if (e.key === 'Backspace' && !text && values.length) {
+    } else if (event.key === 'Backspace' && !text && values.length) {
       onChange(values.slice(0, -1));
     }
   }
@@ -106,9 +98,15 @@ export function ChipInput<T extends string | number>({
                   'group inline-flex max-w-full items-center gap-1 rounded-lg py-0.5 pl-2 pr-1 text-xs font-medium ring-1 ring-inset transition-colors',
                   state === 'kept' && 'bg-white/80 text-slate-700 ring-slate-300/70',
                   state === 'added' && 'bg-emerald-50 text-emerald-800 ring-emerald-600/30',
-                  state === 'removed' && 'bg-slate-100/60 text-slate-400 line-through ring-slate-200'
+                  state === 'removed' && 'bg-slate-100/60 text-slate-400 line-through ring-slate-200',
                 )}
-                title={state === 'added' ? 'Added - not saved yet' : state === 'removed' ? 'Removed - not saved yet' : undefined}
+                title={
+                  state === 'added'
+                    ? 'Added - not saved yet'
+                    : state === 'removed'
+                      ? 'Removed - not saved yet'
+                      : undefined
+                }
               >
                 {href && state !== 'removed' ? (
                   isExternal ? (
@@ -136,7 +134,7 @@ export function ChipInput<T extends string | number>({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => onChange(values.filter((v) => String(v) !== String(value)))}
+                      onClick={() => onChange(values.filter((item) => String(item) !== String(value)))}
                       className="focus-ring rounded p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                       aria-label={`Remove ${String(value)}`}
                     >
@@ -156,8 +154,8 @@ export function ChipInput<T extends string | number>({
           <input
             id={inputId}
             value={text}
-            onChange={(e) => {
-              setText(e.target.value);
+            onChange={(event) => {
+              setText(event.target.value);
               if (error) setError('');
             }}
             onKeyDown={onKeyDown}
@@ -167,7 +165,7 @@ export function ChipInput<T extends string | number>({
             aria-invalid={error ? true : undefined}
             className={cn(
               'focus-ring w-full rounded-lg border border-white/60 bg-white/80 px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-500',
-              error && 'border-rose-400'
+              error && 'border-rose-400',
             )}
           />
           <button
@@ -182,17 +180,21 @@ export function ChipInput<T extends string | number>({
           {suggestions?.length ? (
             <datalist id={listId}>
               {suggestions
-                .filter((s) => !current.has(s.value))
-                .map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
+                .filter((suggestion) => !current.has(suggestion.value))
+                .map((suggestion) => (
+                  <option key={suggestion.value} value={suggestion.value}>
+                    {suggestion.label}
                   </option>
                 ))}
             </datalist>
           ) : null}
         </div>
       )}
-      {error ? <p className="text-xs text-rose-600">{error}</p> : hint ? <p className="text-xs text-slate-600">{hint}</p> : null}
+      {error ? (
+        <p className="text-xs text-rose-600">{error}</p>
+      ) : hint ? (
+        <p className="text-xs text-slate-600">{hint}</p>
+      ) : null}
     </div>
   );
 }

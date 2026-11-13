@@ -23,12 +23,12 @@ export function Preferences() {
   const user = me?.user;
   const [tab, setTab] = useState<string | null>(null);
 
-  const active = PREFERENCE_TABS.find((t) => t.tab === tab) ?? null;
+  const active = PREFERENCE_TABS.find((preferenceTab) => preferenceTab.tab === tab) ?? null;
   const location = useLocation();
 
-  // /preferences#password (the profile card's shortcut, or a bookmark) lands on the form.
   useEffect(() => {
-    if (location.hash === '#password') document.getElementById('password')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (location.hash === '#password')
+      document.getElementById('password')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [location.hash]);
 
   return (
@@ -77,22 +77,22 @@ export function Preferences() {
         </CardHeader>
         <CardBody>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {PREFERENCE_TABS.map((t) => {
-              const Icon = TAB_ICON[t.tab] ?? SlidersHorizontal;
+            {PREFERENCE_TABS.map((preferenceTab) => {
+              const Icon = TAB_ICON[preferenceTab.tab] ?? SlidersHorizontal;
               return (
                 <button
-                  key={t.tab}
-                  onClick={() => setTab(t.tab)}
+                  key={preferenceTab.tab}
+                  onClick={() => setTab(preferenceTab.tab)}
                   className={cn(
                     'focus-ring flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors',
-                    tab === t.tab
+                    tab === preferenceTab.tab
                       ? 'border-brand-400 bg-brand-50/60 ring-1 ring-inset ring-brand-500/30'
-                      : 'border-white/60 bg-white/60 hover:bg-white/90'
+                      : 'border-white/60 bg-white/60 hover:bg-white/90',
                   )}
                 >
                   <Icon className="h-5 w-5 text-brand-600" />
-                  <span className="text-sm font-semibold text-slate-900">{t.title}</span>
-                  <span className="text-xs text-slate-600">{t.blurb}</span>
+                  <span className="text-sm font-semibold text-slate-900">{preferenceTab.title}</span>
+                  <span className="text-xs text-slate-600">{preferenceTab.blurb}</span>
                 </button>
               );
             })}

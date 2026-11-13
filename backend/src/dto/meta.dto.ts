@@ -25,7 +25,6 @@ export interface WorkflowTransition {
   status: string;
   isOpen: boolean;
   canChangeTo: string[];
-  /** Targets Bugzilla refuses to move to without a comment (e.g. REOPENED: why is it still broken?). */
   commentRequiredTo: string[];
 }
 
@@ -36,35 +35,27 @@ export interface BugMeta {
   priorities: string[];
   opSystems: string[];
   platforms: string[];
-  /** Defined keywords. Empty on an instance that has none - the editor then hides the field. */
   keywords: string[];
   workflow: WorkflowTransition[];
 }
 
 function valuesOf(fields: z.infer<typeof fieldSchema>[], name: string): string[] {
-  const field = fields.find((f) => f.name === name);
+  const field = fields.find((candidate) => candidate.name === name);
   if (!field?.values) return [];
-  const names = field.values.map((v) => v.name).filter((n): n is string => Boolean(n));
+  const names = field.values.map((value) => value.name).filter((value): value is string => Boolean(value));
   return Array.from(new Set(names));
 }
 
-/**
- * Builds the status transition graph from the bug_status field. Bugzilla's
- * /field/bug returns, for each status value, an `is_open` flag and the set of
- * statuses it may transition to (`can_change_to`) — exactly the data behind
- * editworkflow.cgi, so we can render the workflow natively instead of embedding
- * the Perl page.
- */
 function extractWorkflow(fields: z.infer<typeof fieldSchema>[]): WorkflowTransition[] {
-  const statusField = fields.find((f) => f.name === 'bug_status');
+  const statusField = fields.find((field) => field.name === 'bug_status');
   if (!statusField?.values) return [];
   return statusField.values
-    .filter((v) => v.name)
-    .map((v) => ({
-      status: v.name as string,
-      isOpen: Boolean(v.is_open),
-      canChangeTo: (v.can_change_to ?? []).map((c) => c.name),
-      commentRequiredTo: (v.can_change_to ?? []).filter((c) => c.comment_required).map((c) => c.name),
+    .filter((value) => value.name)
+    .map((value) => ({
+      status: value.name as string,
+      isOpen: Boolean(value.is_open),
+      canChangeTo: (value.can_change_to ?? []).map((item) => item.name),
+      commentRequiredTo: (value.can_change_to ?? []).filter((item) => item.comment_required).map((item) => item.name),
     }));
 }
 
@@ -72,8 +63,7 @@ export function extractBugMeta(raw: unknown): BugMeta {
   const parsed = fieldBugResponseSchema.parse(raw);
   return {
     statuses: valuesOf(parsed.fields, 'bug_status'),
-    // DELETED is reached only through Delete, never chosen from a dropdown.
-    resolutions: valuesOf(parsed.fields, 'resolution').filter((r) => r !== '' && r !== 'DELETED'),
+    resolutions: valuesOf(parsed.fields, 'resolution').filter((value) => value !== '' && value !== 'DELETED'),
     severities: valuesOf(parsed.fields, 'bug_severity'),
     priorities: valuesOf(parsed.fields, 'priority'),
     opSystems: valuesOf(parsed.fields, 'op_sys'),

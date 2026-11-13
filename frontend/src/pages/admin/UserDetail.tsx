@@ -21,14 +21,11 @@ export function UserDetail() {
   const { data, isLoading, isError, error } = useAdminUser(userId);
   const updateUser = useUpdateUser(userId);
   const { data: productsData } = useProducts();
-  // The set of product-access group names, so a user's groups can be split into
-  // 'products' and 'everything else' without hard-coding any product name.
   const productNames = useMemo(
-    () => new Set((productsData?.products ?? []).map((p) => p.name)),
-    [productsData]
+    () => new Set((productsData?.products ?? []).map((product) => product.name)),
+    [productsData],
   );
   const { toast } = useToast();
-  // Testers open accounts read-only; editing and deleting stay with canManageUsers.
   const { data: me } = useMe();
   const canManage = Boolean(me?.user.permissions.canManageUsers);
   const sendWelcome = useSendWelcome(userId);
@@ -36,9 +33,17 @@ export function UserDetail() {
   async function onSendWelcome() {
     try {
       const { welcome } = await sendWelcome.mutateAsync();
-      toast({ variant: 'success', title: 'Welcome email sent', description: `${welcome.sentTo} - the set-password link is valid for 3 days.` });
+      toast({
+        variant: 'success',
+        title: 'Welcome email sent',
+        description: `${welcome.sentTo} - the set-password link is valid for 3 days.`,
+      });
     } catch (err) {
-      toast({ variant: 'error', title: 'Could not send the welcome email', description: err instanceof ApiError ? err.message : 'Please try again.' });
+      toast({
+        variant: 'error',
+        title: 'Could not send the welcome email',
+        description: err instanceof ApiError ? err.message : 'Please try again.',
+      });
     }
   }
 
@@ -60,10 +65,8 @@ export function UserDetail() {
     setDisabled(!data.user.isEnabled);
     setDisabledReason(data.user.disabledReason);
     setNewPassword('');
-    // Prefilled from the groups the account actually holds, so the form opens
-    // showing the truth rather than a default that would silently demote on save.
     setRole(roleFromGroups(data.user.groups));
-    setProducts(data.user.groups.filter((g) => productNames.has(g)));
+    setProducts(data.user.groups.filter((group) => productNames.has(group)));
   }, [data, productNames]);
 
   if (isLoading) {
@@ -93,9 +96,10 @@ export function UserDetail() {
     disabled: !user.isEnabled,
     disabledReason: user.disabledReason,
     role: roleFromGroups(user.groups),
-    // Compared as a sorted string so re-ticking the same two products in a
-    // different order does not read as a change.
-    products: user.groups.filter((g) => productNames.has(g)).sort().join('|'),
+    products: user.groups
+      .filter((group) => productNames.has(group))
+      .sort()
+      .join('|'),
   };
   const emailChanged = email.trim().toLowerCase() !== original.email.toLowerCase();
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -108,7 +112,11 @@ export function UserDetail() {
     (disabled && disabledReason !== original.disabledReason) ||
     role !== original.role ||
     [...products].sort().join('|') !== original.products;
-  const canSave = isDirty && emailValid && (!disabled || disabledReason.trim().length > 0) && (newPassword === '' || newPassword.length >= 6);
+  const canSave =
+    isDirty &&
+    emailValid &&
+    (!disabled || disabledReason.trim().length > 0) &&
+    (newPassword === '' || newPassword.length >= 6);
 
   async function onSave() {
     const payload: UpdateUserInput = {};
@@ -120,12 +128,6 @@ export function UserDetail() {
       payload.disabled = disabled;
       if (disabled) payload.disabledReason = disabledReason.trim();
     }
-    /*
-     * Role and products travel together, and only when one of them moved.
-     * Sending a role on every save would make the backend recompute group
-     * membership for a rename - harmless today, but it would quietly "repair"
-     * any group a person had been given by hand outside the role model.
-     */
     if (role !== original.role || [...products].sort().join('|') !== original.products) {
       payload.role = role;
       payload.products = products;
@@ -153,7 +155,10 @@ export function UserDetail() {
 
   return (
     <div className="mx-auto max-w-2xl px-8 py-8">
-      <Link to="/admin/users" className="focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-700">
+      <Link
+        to="/admin/users"
+        className="focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-700"
+      >
         <ArrowLeft className="h-3.5 w-3.5" /> Back to users
       </Link>
 
@@ -181,7 +186,12 @@ export function UserDetail() {
               <Mail className="h-3.5 w-3.5" /> Send welcome email
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={() => setDeleting(true)} className="text-rose-600 hover:bg-rose-50 hover:text-rose-700">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setDeleting(true)}
+            className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+          >
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </Button>
         </div>
@@ -199,13 +209,13 @@ export function UserDetail() {
         </CardHeader>
         <CardBody className="flex flex-col gap-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+            <Input label="Full name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
             <Input
               label="Email (login)"
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               error={!emailValid ? 'Enter a valid email address' : undefined}
               hint={emailChanged && emailValid ? 'They will sign in with this address from now on.' : undefined}
             />
@@ -214,18 +224,20 @@ export function UserDetail() {
             <input
               type="checkbox"
               checked={emailEnabled}
-              onChange={(e) => setEmailEnabled(e.target.checked)}
+              onChange={(event) => setEmailEnabled(event.target.checked)}
               className="focus-ring mt-0.5 h-4 w-4 rounded border-line text-brand-600"
             />
             <span className="text-sm">
               <span className="font-medium text-slate-900">Send bug mail</span>
-              <p className="mt-0.5 text-slate-600">Email this person when bugs they are involved in change. Password reset mail is always sent.</p>
+              <p className="mt-0.5 text-slate-600">
+                Email this person when bugs they are involved in change. Password reset mail is always sent.
+              </p>
             </span>
           </label>
           <PasswordInput
             label="Reset password"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            onChange={(event) => setNewPassword(event.target.value)}
             placeholder="Leave blank to keep current password"
             hint={newPassword && newPassword.length < 6 ? 'Password must be at least 6 characters long' : undefined}
           />
@@ -235,12 +247,15 @@ export function UserDetail() {
               <input
                 type="checkbox"
                 checked={disabled}
-                onChange={(e) => setDisabled(e.target.checked)}
+                onChange={(event) => setDisabled(event.target.checked)}
                 className="focus-ring mt-0.5 h-4 w-4 rounded border-line text-brand-600"
               />
               <span className="text-sm">
                 <span className="font-medium text-slate-900">Disable this account</span>
-                <p className="mt-0.5 text-slate-600">Blocks login. The account and its history are preserved - the right choice for anyone who has worked on bugs.</p>
+                <p className="mt-0.5 text-slate-600">
+                  Blocks login. The account and its history are preserved - the right choice for anyone who has worked
+                  on bugs.
+                </p>
               </span>
             </label>
 
@@ -248,7 +263,7 @@ export function UserDetail() {
               <Input
                 label="Reason shown to the user"
                 value={disabledReason}
-                onChange={(e) => setDisabledReason(e.target.value)}
+                onChange={(event) => setDisabledReason(event.target.value)}
                 placeholder="e.g. Account disabled by administrator"
                 className="mt-3"
                 error={disabled && !disabledReason.trim() ? 'A reason is required to disable a user' : undefined}
@@ -256,35 +271,34 @@ export function UserDetail() {
             )}
           </div>
 
-          {/* ------------------------------------------------ role & access -- */}
           <fieldset className="flex flex-col gap-2 border-t border-white/30 pt-5">
             <legend className="mb-1 text-sm font-medium text-slate-700">Role</legend>
             <p className="mb-1 text-xs text-slate-500">
-              Changing this adds and removes only the groups behind the role and its products.
-              Anything else the account holds is left alone.
+              Changing this adds and removes only the groups behind the role and its products. Anything else the account
+              holds is left alone.
             </p>
-            {ROLES.map((r) => (
+            {ROLES.map((roleItem) => (
               <label
-                key={r}
+                key={roleItem}
                 className={cn(
                   'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
-                  role === r ? 'border-brand-500 bg-brand-50/50' : 'border-hairline hover:bg-slate-50'
+                  role === roleItem ? 'border-brand-500 bg-brand-50/50' : 'border-hairline hover:bg-slate-50',
                 )}
               >
                 <input
                   type="radio"
                   name="user-role"
-                  value={r}
-                  checked={role === r}
-                  onChange={() => setRole(r)}
-                  aria-label={ROLE_LABELS[r]}
-                  aria-describedby={`user-role-${r}-desc`}
+                  value={roleItem}
+                  checked={role === roleItem}
+                  onChange={() => setRole(roleItem)}
+                  aria-label={ROLE_LABELS[roleItem]}
+                  aria-describedby={`user-role-${roleItem}-desc`}
                   className="mt-0.5 h-4 w-4 text-brand-600 focus-ring"
                 />
                 <span className="min-w-0">
-                  <span className="block text-sm font-medium text-slate-800">{ROLE_LABELS[r]}</span>
-                  <span id={`user-role-${r}-desc`} className="block text-xs leading-relaxed text-slate-500">
-                    {ROLE_DESCRIPTIONS[r]}
+                  <span className="block text-sm font-medium text-slate-800">{ROLE_LABELS[roleItem]}</span>
+                  <span id={`user-role-${roleItem}-desc`} className="block text-xs leading-relaxed text-slate-500">
+                    {ROLE_DESCRIPTIONS[roleItem]}
                   </span>
                 </span>
               </label>
@@ -293,22 +307,24 @@ export function UserDetail() {
 
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-1 text-sm font-medium text-slate-700">Product access</legend>
-            {(productsData?.products ?? []).map((p) => (
+            {(productsData?.products ?? []).map((product) => (
               <label
-                key={p.name}
+                key={product.name}
                 className="flex cursor-pointer items-center gap-3 rounded-lg border border-hairline p-3 text-sm transition-colors hover:bg-slate-50"
               >
                 <input
                   type="checkbox"
-                  checked={products.includes(p.name)}
+                  checked={products.includes(product.name)}
                   onChange={() =>
-                    setProducts((prev) =>
-                      prev.includes(p.name) ? prev.filter((x) => x !== p.name) : [...prev, p.name]
+                    setProducts((previous) =>
+                      previous.includes(product.name)
+                        ? previous.filter((x) => x !== product.name)
+                        : [...previous, product.name],
                     )
                   }
                   className="h-4 w-4 rounded border-line text-brand-600 focus-ring"
                 />
-                <span className="text-slate-800">{p.name}</span>
+                <span className="text-slate-800">{product.name}</span>
               </label>
             ))}
           </fieldset>
@@ -324,24 +340,31 @@ export function UserDetail() {
   );
 }
 
-/**
- * The same account, for someone who may look but not change anything (testers).
- * Shows what the edit form would - name, login, status, role, product access -
- * as plain facts, with no inputs that would only be refused on save.
- */
 function ReadOnlyUser({
   user,
   productNames,
 }: {
-  user: { fullName: string; email: string; isEnabled: boolean; disabledReason: string; emailEnabled?: boolean; groups: string[] };
+  user: {
+    fullName: string;
+    email: string;
+    isEnabled: boolean;
+    disabledReason: string;
+    emailEnabled?: boolean;
+    groups: string[];
+  };
   productNames: Set<string>;
 }) {
   const role = roleFromGroups(user.groups);
-  const products = user.groups.filter((g) => productNames.has(g)).sort((a, b) => a.localeCompare(b));
+  const products = user.groups
+    .filter((group) => productNames.has(group))
+    .sort((left, right) => left.localeCompare(right));
 
   return (
     <div className="mx-auto max-w-2xl px-8 py-8">
-      <Link to="/admin/users" className="focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-700">
+      <Link
+        to="/admin/users"
+        className="focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-700"
+      >
         <ArrowLeft className="h-3.5 w-3.5" /> Back to users
       </Link>
 
@@ -394,9 +417,9 @@ function ReadOnlyUser({
               <p className="text-sm text-slate-600">No product access.</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {products.map((p) => (
-                  <Pill key={p} tone="slate">
-                    {p}
+                {products.map((product) => (
+                  <Pill key={product} tone="slate">
+                    {product}
                   </Pill>
                 ))}
               </div>

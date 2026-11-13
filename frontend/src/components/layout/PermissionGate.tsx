@@ -4,13 +4,7 @@ import { useMe } from '../../api/hooks';
 import type { Permissions } from '../../types';
 import { EmptyState } from '../ui/EmptyState';
 
-/**
- * Gates admin-only UI on the current user's real Bugzilla permissions
- * (computed server-side from their own group membership at login - see
- * derivePermissions in the BFF). Unlike RequireAuth, this never redirects:
- * the user IS authenticated, just not privileged, so a clean in-page denial
- * is correct - never a crash, never a bounce back to the login screen.
- */
+/** Gates admin-only UI on the current user's real Bugzilla permissions (computed server-side from their. */
 export function PermissionGate({ permission, children }: { permission: keyof Permissions; children: ReactNode }) {
   const { data } = useMe();
   const allowed = data?.user.permissions[permission] ?? false;

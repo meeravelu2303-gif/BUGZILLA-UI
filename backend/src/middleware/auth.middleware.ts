@@ -1,22 +1,17 @@
 import type { NextFunction, Request, Response } from 'express';
 import { BugzillaClient } from '../clients/bugzilla.client';
-import { AppError } from '../helpers/errors.helper';
+import { unauthenticated, forbidden } from '../helpers/errors.helper';
 import { ensureTracked, touchSession } from '../services/sessionRegistry.service';
 import { derivePermissions, userDetailSchema, type Permissions } from '../dto/common.dto';
 import type { Env } from '../config/app.config';
 
-/**
- * Requires an active Bugzilla-backed session (see controllers/auth.controller.ts). Attaches
- * req.bugzilla, a BugzillaClient authenticated with the *user's own* session
- * token - never the service API key - so Bugzilla's native per-user group
- * permissions are respected end to end.
- */
+/** Requires an active Bugzilla-backed session (see controllers/auth.controller.ts). */
 export function requireAuth(env: Env) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const session = req.session;
 
     if (!session || !session.bzToken || !session.bzUserId) {
-      next(new AppError(401, 'UNAUTHENTICATED', 'Please log in to continue.'));
+      next(unauthenticated('Please log in to continue.'));
       return;
     }
 
@@ -25,12 +20,6 @@ export function requireAuth(env: Env) {
       bzToken: session.bzToken,
       email: String(session.email ?? ''),
       realName: String(session.realName ?? ''),
-      /*
-       * Defensive default for sessions issued before a permission existed.
-       * Every flag defaults to FALSE, including `canTriage` - a session
-       * predating that field must not be treated as able to reassign other
-       * people's bugs. Signing in again refreshes it from the real groups.
-       */
       permissions: {
         canManageUsers: false,
         canManageProducts: false,
@@ -45,14 +34,6 @@ export function requireAuth(env: Env) {
     };
     req.bugzilla = new BugzillaClient(env.BUGZILLA_URL, { kind: 'token', token: session.bzToken });
 
-    /*
-     * Mark this session used, so the LRU ordering in sessionRegistry reflects
-     * actual activity. Without this the "least recently used" session would
-     * really be the least recently *logged in*, and a device someone uses daily
-     * could be evicted in favour of one they signed into last week and
-     * abandoned.
-     */
-    // A session restored from the durable store after a restart is adopted here.
     ensureTracked({
       sessionId: req.sessionID,
       userId: session.bzUserId,
@@ -62,12 +43,6 @@ export function requireAuth(env: Env) {
     });
     touchSession(req.sessionID);
 
-    /*
-     * A session signed in before a permission was added lacks that flag, and
-     * the default above reads it as "no". Rather than make everyone sign in
-     * again, re-read the person's groups once and store the full set. If the
-     * lookup fails, the safe default stands and the request goes on.
-     */
     if (session.permissions && session.permissions.canReassignAny === undefined) {
       void refreshPermissions(req).finally(() => next());
       return;
@@ -78,27 +53,19 @@ export function requireAuth(env: Env) {
 
 async function refreshPermissions(req: Request): Promise<void> {
   try {
-    const resp = await req.bugzilla!.get<{ users: unknown[] }>(`/user/${req.session.bzUserId}`);
-    const permissions = derivePermissions(userDetailSchema.parse(resp.users[0]).groups);
+    const response = await req.bugzilla!.get<{ users: unknown[] }>(`/user/${req.session.bzUserId}`);
+    const permissions = derivePermissions(userDetailSchema.parse(response.users[0]).groups);
     req.session.permissions = permissions;
     req.sessionUser!.permissions = permissions;
     await new Promise<void>((resolve) => req.session.save(() => resolve()));
-  } catch {
-    // Keep the defaults; the next request tries again.
-  }
+  } catch {}
 }
 
-/**
- * Gates admin-only routes on the permission computed at login time (see
- * derivePermissions in dto/common.dto.ts). This is a fast local UX gate only
- * - the real security backstop is Bugzilla itself, which independently
- * rejects the underlying REST call with error code 304 (mapped to the same
- * 403 FORBIDDEN shape) if this has somehow gone stale mid-session.
- */
+/** Gates admin-only routes on the permission computed at login time (see derivePermissions in dto/common.dto.ts). */
 export function requirePermission(key: keyof Permissions) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.sessionUser?.permissions[key]) {
-      next(new AppError(403, 'FORBIDDEN', 'You do not have permission to perform this action.'));
+      next(forbidden('You do not have permission to perform this action.'));
       return;
     }
     next();

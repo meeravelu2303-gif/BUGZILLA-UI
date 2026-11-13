@@ -29,17 +29,17 @@ export function SanityCheck() {
           <div>
             <p className="text-sm font-semibold text-slate-900">What it verifies</p>
             <ul className="mt-2 space-y-1.5">
-              {CHECKS.map((c) => (
-                <li key={c} className="flex items-start gap-2 text-sm text-slate-600">
+              {CHECKS.map((check) => (
+                <li key={check} className="flex items-start gap-2 text-sm text-slate-600">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" />
-                  {c}
+                  {check}
                 </li>
               ))}
             </ul>
           </div>
           <p className="text-sm text-slate-600">
-            A full sanity check can be slow on large instances and may make repair changes, so it runs in Bugzilla’s admin with its
-            own confirmation — not silently over the API.
+            A full sanity check can be slow on large instances and may make repair changes, so it runs in Bugzilla’s
+            admin with its own confirmation — not silently over the API.
           </p>
           {meta?.bugzillaWebUrl && (
             <a

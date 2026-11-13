@@ -35,40 +35,8 @@ import {
 
 export type Tone = 'slate' | 'teal' | 'amber' | 'emerald' | 'purple' | 'violet' | 'indigo' | 'rose' | 'orange' | 'sky';
 
-/*
- * Every tone is AA against its own background at this text size, per the
- * contrast work recorded in docs/BRANDING.md. Severity colours stay semantic - the
- * brand palette themes the chrome, never the signals.
- *
- * The `teal` tone is now ROYAL BLUE: it resolves through the `brand-*` scale,
- * which was re-based when the accent system changed, so it followed the new
- * palette without a call-site edit (brand-800 on brand-50 measures 8.01:1).
- * The tone KEEPS its old name on purpose - renaming it would touch every
- * component that passes `tone="teal"` to achieve an identical render.
- *
- * Tones are assigned by AXIS, not per value, so a row reads as several distinct
- * kinds of information rather than a stripe of interchangeable blue chips:
- *
- *   Test type  teal / indigo  - which bench filed it
- *   Category   purple         - the flaw's kind
- *   Browser    neutral slate  - a mono-set label, read not scanned
- *   Status     amber -> sky -> emerald, tracking a bug's progress to done
- *   Severity   rose / orange  - the only axis allowed to shout
- *
- * LIGHT THEME ONLY. There is deliberately no `dark:` variant anywhere in this
- * file: tailwind.config.js declares no `darkMode` key, so Tailwind falls back
- * to `media` and any `dark:` class here would fire off the viewer's OS setting
- * alone - turning these pills dark inside a card, sidebar and page background
- * that have no dark styling of their own and stay light. One component
- * following the OS while the app around it does not is worse than no dark mode
- * at all. If the app ever gains a real theme toggle, add `darkMode: 'class'`
- * to the config and theme the whole shell in one pass, not this file alone.
- */
 const TONE_STYLES: Record<Tone, string> = {
   slate: 'bg-slate-100 text-slate-700 border-hairline',
-  // The app's own accent scale, not Tailwind's stock `teal-*`: the brand scale
-  // in tailwind.config.js is the one with measured AA contrast. Now Royal Blue
-  // (8.01:1) - see the note above on why the key is still called `teal`.
   teal: 'bg-brand-50 text-brand-800 border-brand-200',
   amber: 'bg-amber-50 text-amber-700 border-amber-200/70',
   emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200/70',
@@ -97,20 +65,9 @@ export function Pill({
     <span
       title={title}
       className={cn(
-        /*
-         * Roomier than it was: px-1.5/py-px squeezed the text against the
-         * border, which is what made a row of them read as cramped stickers
-         * rather than finished labels. The extra horizontal room does the most
-         * work here - a badge is scanned by its WORD, and that word needs space
-         * either side of it to register as one.
-         *
-         * Still deliberately not button-sized: five of these sit on one table
-         * row, and matching a control's height would make the row read as a
-         * toolbar.
-         */
         'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1 text-[0.7333rem] font-semibold leading-[14px] tracking-[0.01em]',
         TONE_STYLES[tone],
-        className
+        className,
       )}
     >
       {Icon && <Icon className="h-3 w-3 shrink-0" aria-hidden />}
@@ -119,16 +76,6 @@ export function Pill({
   );
 }
 
-/* ------------------------------------------------------------------ severity */
-
-/**
- * Colour is never the only signal.
- *
- * Each band carries a distinct glyph and its word, so the pill still reads
- * correctly in greyscale and for the ~8% of men with a colour-vision
- * deficiency - red/green alone sits exactly at the separation floor those
- * palettes fail on.
- */
 const SEVERITY_STYLE: Record<Severity, { tone: Tone; icon: ComponentType<{ className?: string }> }> = {
   Critical: { tone: 'rose', icon: AlertOctagon },
   Major: { tone: 'orange', icon: AlertTriangle },
@@ -146,8 +93,6 @@ export function SeverityPill({ severity, className }: { severity: Severity; clas
   );
 }
 
-/* ------------------------------------------------------------------ priority */
-
 const PRIORITY_STYLE: Record<Priority, Tone> = {
   P0: 'rose',
   P1: 'orange',
@@ -156,7 +101,6 @@ const PRIORITY_STYLE: Record<Priority, Tone> = {
   Unclassified: 'slate',
 };
 
-/** P0 is also written "Showstopper" in the model; the tooltip carries that. */
 const PRIORITY_TITLE: Record<Priority, string> = {
   P0: 'P0 / Showstopper - fix before anything else',
   P1: 'P1 - significant loss of core functionality',
@@ -167,23 +111,16 @@ const PRIORITY_TITLE: Record<Priority, string> = {
 
 export function PriorityPill({ priority, className }: { priority: Priority; className?: string }) {
   return (
-    <Pill tone={PRIORITY_STYLE[priority] ?? 'slate'} className={cn('font-mono', className)} title={PRIORITY_TITLE[priority]}>
+    <Pill
+      tone={PRIORITY_STYLE[priority] ?? 'slate'}
+      className={cn('font-mono', className)}
+      title={PRIORITY_TITLE[priority]}
+    >
       {priority}
     </Pill>
   );
 }
 
-/* ------------------------------------------------------------------ category */
-
-/*
- * Category sits on ONE hue - purple - so the axis reads as a single kind of
- * fact rather than four unrelated colours competing with Status and Severity,
- * the two axes a triager actually scans. The glyph carries the value, so the
- * four are still told apart at a glance and in greyscale.
- *
- * Unclassified is the exception: it is the absence of a category, not one of
- * them, and slate says so without claiming a place in the set.
- */
 const CATEGORY_STYLE: Record<Category, { tone: Tone; icon: ComponentType<{ className?: string }> }> = {
   Functional: { tone: 'purple', icon: Workflow },
   Performance: { tone: 'purple', icon: Gauge },
@@ -202,19 +139,6 @@ export function CategoryPill({ category, className }: { category: Category; clas
   );
 }
 
-/* -------------------------------------------------------------- browser */
-
-/**
- * Which browser a defect was seen on, from the `[browser:x]` whiteboard tag the
- * UI bench writes.
- *
- * Neutral slate and monospaced, deliberately: a bug commonly names two or three
- * browsers, so this is the one cell that can hold a row of chips. Giving each
- * engine its own hue turned that row into the loudest thing on the line, over
- * Severity and Status. The engine is identified by its glyph and its name -
- * which is what a reader actually reads here - while the colour budget goes to
- * the axes that rank work.
- */
 const BROWSER_STYLE: Record<string, { label: string; icon: ComponentType<{ className?: string }> }> = {
   chromium: { label: 'Chromium', icon: Monitor },
   'mobile-chrome': { label: 'Mobile Chrome', icon: Smartphone },
@@ -223,8 +147,6 @@ const BROWSER_STYLE: Record<string, { label: string; icon: ComponentType<{ class
 };
 
 export function BrowserPill({ browser, className }: { browser: string; className?: string }) {
-  // An unrecognised project name still renders, under its own raw name — a new
-  // Playwright project should show up rather than silently vanish.
   const style = BROWSER_STYLE[browser] ?? { label: browser, icon: MonitorSmartphone };
   return (
     <Pill tone="slate" icon={style.icon} className={cn('font-mono', className)} title={`Observed on ${style.label}`}>
@@ -233,22 +155,27 @@ export function BrowserPill({ browser, className }: { browser: string; className
   );
 }
 
-/**
- * The Browser cell for a bug that has no browser: a pill like every other
- * cell, not a bare dash. An API bug says so - no browser was involved - and a
- * UI bug filed without the tag (Mantis imports, hand-filed bugs) says the
- * browser was not recorded, which is different from "none".
- */
+/** The Browser cell for a bug that has no browser: a pill like every other cell, not a bare dash. */
 export function NoBrowserPill({ testType, className }: { testType?: TestType; className?: string }) {
   if (testType === 'API') {
     return (
-      <Pill tone="slate" icon={Workflow} className={cn('font-mono text-slate-500', className)} title="API test - no browser involved">
+      <Pill
+        tone="slate"
+        icon={Workflow}
+        className={cn('font-mono text-slate-500', className)}
+        title="API test - no browser involved"
+      >
         API
       </Pill>
     );
   }
   return (
-    <Pill tone="slate" icon={MonitorSmartphone} className={cn('font-mono text-slate-500', className)} title="No browser recorded on this bug">
+    <Pill
+      tone="slate"
+      icon={MonitorSmartphone}
+      className={cn('font-mono text-slate-500', className)}
+      title="No browser recorded on this bug"
+    >
       Not recorded
     </Pill>
   );
@@ -256,34 +183,20 @@ export function NoBrowserPill({ testType, className }: { testType?: TestType; cl
 
 /** A mobile-app UI bug, with the device platforms it was seen on - shown where browsers are. */
 export function MobilePill({ devices, className }: { devices?: string[]; className?: string }) {
-  const names = (devices ?? []).map((d) => ({ android: 'Android', ios: 'iOS' })[d.toLowerCase()] ?? d);
+  const names = (devices ?? []).map((device) => ({ android: 'Android', ios: 'iOS' })[device.toLowerCase()] ?? device);
   return (
-    <Pill tone="indigo" icon={Smartphone} className={className} title={names.length ? `Mobile app - ${names.join(', ')}` : 'Mobile app'}>
+    <Pill
+      tone="indigo"
+      icon={Smartphone}
+      className={className}
+      title={names.length ? `Mobile app - ${names.join(', ')}` : 'Mobile app'}
+    >
       {names.length ? `Mobile · ${names.join(', ')}` : 'Mobile'}
     </Pill>
   );
 }
 
-/* ------------------------------------------------------------- test type */
-
-/**
- * Which bench filed the bug — "UI Automation" or "API Automation".
- *
- * This is NOT a field Bugzilla stores, and it is not the `Category` axis
- * (Functional / Performance / Security / Compatibility) despite both being
- * asked for under that name. The bench a bug came from IS its product: the UI
- * bench files into "KPost UI", the API bench into "KPost API". So the label is
- * derived from the product rather than invented as a fifth category.
- *
- * Matching is on the product NAME, which is fine for a display badge and would
- * not be fine for a filter — an unrecognised product falls back to showing its
- * own name in neutral slate rather than being mislabelled as one of the two.
- * That is why the Browser *filter* is gated on browser data instead of on this.
- *
- * "KPost Admin" is an API bench too (it drives APIRequestContext, no browser),
- * but its name carries neither "API" nor "UI", so it is matched explicitly.
- * The UI test runs first, so a hypothetical "Admin UI" bench still reads as UI.
- */
+/** Which bench filed the bug — "UI Automation" or "API Automation". */
 export function TestTypePill({
   product,
   source,
@@ -291,85 +204,69 @@ export function TestTypePill({
   className,
 }: {
   product: string;
-  /** From the backend's triage; when absent (older backend) the product name alone decides. */
   source?: Source;
   testType?: TestType;
   className?: string;
 }) {
-  /*
-   * Four badges, two axes: WHO filed it (a bench, or a person) and WHAT was
-   * tested (UI or API). The backend derives both - source from the
-   * `[source:…]` tag, test type from the product - so the list, the detail
-   * page and the Excel export all say the same thing. Only the fallback below
-   * still guesses from the name, for a backend that predates `source`.
-   */
-  const kind: TestType = testType ?? (/\bUI\b/i.test(product) ? 'UI' : /\bAPI\b/i.test(product) || /\bAdmin\b/i.test(product) ? 'API' : 'UI');
+  const kind: TestType =
+    testType ??
+    (/\bUI\b/i.test(product) ? 'UI' : /\bAPI\b/i.test(product) || /\bAdmin\b/i.test(product) ? 'API' : 'UI');
   const by: Source = source ?? 'Automation';
   const label = by === 'Automation' ? `${kind} Automation` : `Manual ${kind} test`;
   const what = kind === 'UI' ? 'the user interface' : 'the API';
   const who = by === 'Automation' ? 'filed by the test bench' : 'filed by a tester';
   if (kind === 'UI') {
     return (
-      <Pill tone={by === 'Automation' ? 'teal' : 'amber'} icon={MonitorSmartphone} className={className} title={`${product} — ${what}, ${who}`}>
+      <Pill
+        tone={by === 'Automation' ? 'teal' : 'amber'}
+        icon={MonitorSmartphone}
+        className={className}
+        title={`${product} — ${what}, ${who}`}
+      >
         {label}
       </Pill>
     );
   }
   return (
-    <Pill tone={by === 'Automation' ? 'indigo' : 'violet'} icon={Workflow} className={className} title={`${product} — ${what}, ${who}`}>
+    <Pill
+      tone={by === 'Automation' ? 'indigo' : 'violet'}
+      icon={Workflow}
+      className={className}
+      title={`${product} — ${what}, ${who}`}
+    >
       {label}
     </Pill>
   );
 }
 
-/**
- * Every browser a bug was seen on. Renders nothing when the list is empty —
- * API-bench bugs carry no browser tag, and a blank chip would read as "browser
- * unknown" rather than "not applicable to this product".
- */
+/** Every browser a bug was seen on. */
 export function BrowserPills({ browsers, className }: { browsers: string[]; className?: string }) {
   if (browsers.length === 0) return null;
   return (
     <span className={cn('inline-flex flex-wrap items-center gap-1', className)}>
-      {browsers.map((b) => (
-        <BrowserPill key={b} browser={b} />
+      {browsers.map((browser) => (
+        <BrowserPill key={browser} browser={browser} />
       ))}
     </span>
   );
 }
 
-/* --------------------------------------------------- status */
-
-/**
- * Status is the one axis with a natural ORDER, so its colours track progress
- * toward done rather than labelling each value independently:
- *
- *   needs attention (amber) -> being worked (sky) -> finished (emerald)
- *
- * UNCONFIRMED stays slate because it is the absence of triage, not a stage of
- * it. CLOSED (formerly VERIFIED) shares emerald with RESOLVED - both are "done" to anyone
- * scanning a list, and the word still separates them.
- */
+/** Status is the one axis with a natural ORDER. */
 export const STATUS_TONE: Record<string, Tone> = {
   UNCONFIRMED: 'slate',
   CONFIRMED: 'amber',
   NEW: 'amber',
   IN_PROGRESS: 'sky',
   ASSIGNED: 'sky',
-  // Its own colour: a fix that did not hold is the thing a lead scans the list for.
   REOPENED: 'rose',
-  // Waiting on the project manager: open, but nobody should work on it yet.
   PENDING_APPROVAL: 'violet',
-  // Blocked on a requirement document being raised, not on a developer.
   AWAITING_REQUIREMENT: 'indigo',
-  // Fixed, waiting for the team lead's code review before it goes live.
   IN_REVIEW: 'teal',
   RESOLVED: 'emerald',
   VERIFIED: 'emerald',
   CLOSED: 'emerald',
 };
 
-/** Colour is never the only signal - each stage carries its own glyph too. */
 const STATUS_ICON: Record<string, ComponentType<{ className?: string }>> = {
   UNCONFIRMED: CircleDashed,
   CONFIRMED: AlertTriangle,
@@ -393,10 +290,7 @@ export function StatusPill({ status }: { status: string }) {
   );
 }
 
-/**
- * Severity and priority are one paired axis, so the two pills belong together
- * wherever a bug is summarised.
- */
+/** Severity and priority are one paired axis, so the two pills belong together wherever a bug is summarised. */
 export function ClassificationPills({ severity, priority }: { severity: Severity; priority?: Priority }) {
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -406,20 +300,11 @@ export function ClassificationPills({ severity, priority }: { severity: Severity
   );
 }
 
-/* ------------------------------------------- Bugzilla's own raw vocabulary
- *
- * The admin screens list Bugzilla's native field values (blocker/critical/...,
- * Highest/High/...) rather than our four bands, because that is what an admin
- * is actually editing. These tones exist for those screens only - product
- * surfaces use SeverityPill/PriorityPill above, which speak our vocabulary.
- */
+/** ------------------------------------------- Bugzilla's own raw vocabulary The admin screens list. */
 export const SEVERITY_TONE: Record<string, Tone> = {
   blocker: 'rose',
   critical: 'rose',
   major: 'orange',
-  // `blue` left the palette when the pill tones were reorganised by axis; the
-  // middle band sits on sky, and `minor` steps down to slate so the two stay
-  // distinguishable rather than collapsing onto one colour.
   normal: 'sky',
   minor: 'slate',
   trivial: 'slate',

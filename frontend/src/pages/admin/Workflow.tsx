@@ -9,9 +9,10 @@ import { cn } from '../../lib/utils';
 export function Workflow() {
   const { data: meta, isLoading } = useMeta();
   const workflow = meta?.workflow ?? [];
-  const statuses = workflow.map((w) => w.status);
+  const statuses = workflow.map((workflowTransition) => workflowTransition.status);
 
-  const canGo = (from: string, to: string) => workflow.find((w) => w.status === from)?.canChangeTo.includes(to) ?? false;
+  const canGo = (from: string, to: string) =>
+    workflow.find((workflowTransition) => workflowTransition.status === from)?.canChangeTo.includes(to) ?? false;
 
   return (
     <div className="mx-auto max-w-[80rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
@@ -40,7 +41,11 @@ export function Workflow() {
           </CardBody>
         </Card>
       ) : workflow.length === 0 ? (
-        <EmptyState icon={ArrowRight} title="No workflow data" description="Bugzilla did not return status transition information." />
+        <EmptyState
+          icon={ArrowRight}
+          title="No workflow data"
+          description="Bugzilla did not return status transition information."
+        />
       ) : (
         <>
           <Card className="mb-6 overflow-hidden">
@@ -55,9 +60,9 @@ export function Workflow() {
                     <th className="sticky left-0 z-10 bg-white/70 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       From \ To
                     </th>
-                    {statuses.map((s) => (
-                      <th key={s} className="px-3 py-3 text-center text-[0.7333rem] font-medium text-slate-600">
-                        {s.replace('_', ' ')}
+                    {statuses.map((status) => (
+                      <th key={status} className="px-3 py-3 text-center text-[0.7333rem] font-medium text-slate-600">
+                        {status.replace('_', ' ')}
                       </th>
                     ))}
                   </tr>
@@ -79,7 +84,7 @@ export function Workflow() {
                                   ? 'bg-slate-100 text-slate-300'
                                   : allowed
                                     ? 'bg-emerald-100 text-emerald-700'
-                                    : 'text-slate-200'
+                                    : 'text-slate-200',
                               )}
                               aria-label={allowed ? `${from} can change to ${to}` : `${from} cannot change to ${to}`}
                             >
@@ -96,21 +101,26 @@ export function Workflow() {
           </Card>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {workflow.map((w) => (
-              <Card key={w.status}>
+            {workflow.map((workflowTransition) => (
+              <Card key={workflowTransition.status}>
                 <CardBody>
                   <div className="mb-2 flex items-center gap-2">
-                    <StatusPill status={w.status} />
-                    <span className={cn('text-xs font-medium', w.isOpen ? 'text-amber-600' : 'text-emerald-600')}>
-                      {w.isOpen ? 'Open' : 'Closed'}
+                    <StatusPill status={workflowTransition.status} />
+                    <span
+                      className={cn(
+                        'text-xs font-medium',
+                        workflowTransition.isOpen ? 'text-amber-600' : 'text-emerald-600',
+                      )}
+                    >
+                      {workflowTransition.isOpen ? 'Open' : 'Closed'}
                     </span>
                   </div>
                   <p className="mb-1.5 text-xs text-slate-500">Can change to</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {w.canChangeTo.length === 0 ? (
+                    {workflowTransition.canChangeTo.length === 0 ? (
                       <span className="text-xs text-slate-400">— (terminal)</span>
                     ) : (
-                      w.canChangeTo.map((to) => <StatusPill key={to} status={to} />)
+                      workflowTransition.canChangeTo.map((to) => <StatusPill key={to} status={to} />)
                     )}
                   </div>
                 </CardBody>

@@ -1,9 +1,7 @@
 import { BugJourney, type JourneyStation } from './BugJourney';
 
-// The lifecycle path, in a 1600x900 frame. One gentle S-curve, left to right.
-// Routed through the free margins: up the left edge, along the top, down the gap
-// between the showcase and the form, under the form, then up the right edge.
-const PATH = 'M -60 640 C 40 640, 120 600, 120 560 C 120 400, 60 120, 300 60 S 700 40, 850 170 C 950 260, 760 440, 850 560 S 1200 720, 1480 620 C 1620 570, 1560 400, 1500 262';
+const PATH =
+  'M -60 640 C 40 640, 120 600, 120 560 C 120 400, 60 120, 300 60 S 700 40, 850 170 C 950 260, 760 440, 850 560 S 1200 720, 1480 620 C 1620 570, 1560 400, 1500 262';
 const STATIONS: JourneyStation[] = [
   { x: 120, y: 560, label: 'Filed', tone: '#64748b' },
   { x: 850, y: 170, label: 'Confirmed', tone: '#d97706' },
@@ -12,36 +10,16 @@ const STATIONS: JourneyStation[] = [
   { x: 1500, y: 262, label: 'Verified', tone: '#059669' },
 ];
 
-/**
- * The sign-in page's background: the life of a bug, drawn as weather.
- *
- * Three layers, all behind the content and all well below text contrast:
- *
- *   1. Light - a pale sky with three slow-drifting pools of blue, cyan and
- *      indigo, so the page is lit rather than flat.
- *   2. The flow - one long path curving across the page through five faint
- *      stations (Filed, Confirmed, In progress, Fixed, Verified): the lifecycle
- *      every bug follows, drawn still so nothing competes with the form.
- *   3. Tickets - a handful of translucent bug-card silhouettes floating near
- *      the edges, each with a coloured status bar, the way cards sit on the
- *      boards inside.
- *
- * Everything is CSS and inline SVG: no image to load, nothing to license, and
- * it repaints cheaply. On top, BugJourney acts out one bug's life along the
- * line (see BugJourney.tsx). All movement is skipped for reduced motion.
- */
+/** The sign-in page's background: the life of a bug, drawn as weather. */
 export function LoginBackdrop() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      {/* 1. light */}
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#EEF4FF_0%,#F8FAFE_55%,#FFFFFF_100%)]" />
       <div className="absolute -left-48 -top-48 h-[48rem] w-[48rem] rounded-full bg-[radial-gradient(circle,rgba(37,99,235,0.20)_0%,transparent_62%)] blur-2xl animate-blob-slow motion-reduce:animate-none" />
       <div className="absolute -bottom-56 -right-40 h-[50rem] w-[50rem] rounded-full bg-[radial-gradient(circle,rgba(6,182,212,0.18)_0%,transparent_62%)] blur-2xl animate-blob motion-reduce:animate-none" />
       <div className="absolute left-[45%] top-[30%] h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.14)_0%,transparent_62%)] blur-2xl animate-blob-slow motion-reduce:animate-none" />
-      {/* a fine dot grid, fading toward the edges */}
       <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(37,99,235,0.28)_1px,transparent_1px)] [background-size:28px_28px] [mask-image:radial-gradient(ellipse_at_center,black_25%,transparent_72%)]" />
 
-      {/* 2. the flow */}
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
         <defs>
           <linearGradient id="lb-path" x1="0" x2="1" y1="0" y2="0">
@@ -50,7 +28,6 @@ export function LoginBackdrop() {
             <stop offset="1" stopColor="#10b981" />
           </linearGradient>
         </defs>
-        {/* the path: a soft wide band, then a crisp dashed line */}
         <path d={PATH} fill="none" stroke="url(#lb-path)" strokeWidth="26" strokeOpacity="0.07" strokeLinecap="round" />
         <path
           d={PATH}
@@ -61,29 +38,41 @@ export function LoginBackdrop() {
           strokeLinecap="round"
           strokeDasharray="10 14"
         />
-        {/* stations */}
-        {STATIONS.map((s) => (
-          <g key={s.label} transform={`translate(${s.x} ${s.y})`}>
-            <circle r="30" fill={s.tone} fillOpacity="0.06" />
-            <circle r="14" fill="#ffffff" fillOpacity="0.9" stroke={s.tone} strokeOpacity="0.5" strokeWidth="2" />
-            <circle r="5" fill={s.tone} fillOpacity="0.85" />
-            <text y="52" textAnchor="middle" fontSize="12" fontWeight="600" fill={s.tone} fillOpacity="0.7" fontFamily="Inter, system-ui, sans-serif" letterSpacing="0.08em">
-              {s.label.toUpperCase()}
+        {STATIONS.map((station) => (
+          <g key={station.label} transform={`translate(${station.x} ${station.y})`}>
+            <circle r="30" fill={station.tone} fillOpacity="0.06" />
+            <circle r="14" fill="#ffffff" fillOpacity="0.9" stroke={station.tone} strokeOpacity="0.5" strokeWidth="2" />
+            <circle r="5" fill={station.tone} fillOpacity="0.85" />
+            <text
+              y="52"
+              textAnchor="middle"
+              fontSize="12"
+              fontWeight="600"
+              fill={station.tone}
+              fillOpacity="0.7"
+              fontFamily="Inter, system-ui, sans-serif"
+              letterSpacing="0.08em"
+            >
+              {station.label.toUpperCase()}
             </text>
           </g>
         ))}
-        {/* one bug living its lifecycle along the line */}
         <BugJourney path={PATH} stations={STATIONS} />
       </svg>
 
-      {/* 3. tickets */}
-      {TICKETS.map((t, i) => (
+      {TICKETS.map((ticket, i) => (
         <div
           key={i}
-          className={`absolute rounded-2xl border border-white/80 bg-white/55 shadow-[0_18px_40px_-18px_rgba(37,99,235,0.35)] backdrop-blur-sm ${t.motion} motion-reduce:animate-none`}
-          style={{ left: t.x, top: t.y, width: t.w, transform: `rotate(${t.rot}deg)`, opacity: t.o }}
+          className={`absolute rounded-2xl border border-white/80 bg-white/55 shadow-[0_18px_40px_-18px_rgba(37,99,235,0.35)] backdrop-blur-sm ${ticket.motion} motion-reduce:animate-none`}
+          style={{
+            left: ticket.x,
+            top: ticket.y,
+            width: ticket.w,
+            transform: `rotate(${ticket.rot}deg)`,
+            opacity: ticket.o,
+          }}
         >
-          <div className="h-1.5 w-full rounded-t-2xl" style={{ background: t.bar }} />
+          <div className="h-1.5 w-full rounded-t-2xl" style={{ background: ticket.bar }} />
           <div className="p-3">
             <div className="flex items-center gap-2">
               <span className="h-2 w-12 rounded-full bg-slate-300/80" />
@@ -92,7 +81,7 @@ export function LoginBackdrop() {
             <div className="mt-2.5 h-2.5 w-[82%] rounded-full bg-slate-300/80" />
             <div className="mt-1.5 h-2.5 w-[60%] rounded-full bg-slate-200" />
             <div className="mt-3 flex gap-1.5">
-              <span className="h-4 w-14 rounded-full" style={{ background: t.pill, opacity: 0.55 }} />
+              <span className="h-4 w-14 rounded-full" style={{ background: ticket.pill, opacity: 0.55 }} />
               <span className="h-4 w-10 rounded-full bg-slate-200" />
             </div>
           </div>

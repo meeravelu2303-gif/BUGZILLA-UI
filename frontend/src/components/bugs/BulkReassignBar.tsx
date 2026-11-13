@@ -8,11 +8,7 @@ import { useToast } from '../../context/ToastContext';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Field';
 
-/**
- * Sticky action bar shown when one or more bugs are selected: pick an assignee and reassign
- * them all in a single call. Reassigning is a normal developer action, so this is available
- * wherever the bug list is — the backend enforces the actual Bugzilla permission.
- */
+/** Sticky action bar shown when one or more bugs are selected. */
 export function BulkReassignBar({
   selectedIds,
   onDone,
@@ -23,19 +19,9 @@ export function BulkReassignBar({
 }: {
   selectedIds: Set<number>;
   onDone: () => void;
-  /**
-   * Scopes the assignee list to one product's team.
-   *
-   * Passed only when the list is filtered to a single product — a selection spanning several has
-   * no one team to offer, and narrowing to an arbitrary one would hide the people the other bugs
-   * belong to. Undefined then, which falls back to the full list.
-   */
   product?: string | string[];
-  /** Testers and admins: may delete (or, in the deleted view, restore) the selection. */
   canTriage?: boolean;
-  /** The list is the "Deleted bugs" view - offer Restore instead of Reassign/Delete. */
   deletedView?: boolean;
-  /** How many selected bugs are closed; those cannot be reassigned. */
   closedSelected?: number;
 }) {
   const { data: assignable } = useAssignableUsers(product);
@@ -55,7 +41,11 @@ export function BulkReassignBar({
       toast({ variant: 'success', title: `Restored ${res.restored} bug${res.restored === 1 ? '' : 's'}` });
       onDone();
     } catch (err) {
-      toast({ variant: 'error', title: 'Restore failed', description: err instanceof ApiError ? err.message : 'Please try again.' });
+      toast({
+        variant: 'error',
+        title: 'Restore failed',
+        description: err instanceof ApiError ? err.message : 'Please try again.',
+      });
     }
   }
 
@@ -105,15 +95,15 @@ export function BulkReassignBar({
       <Select
         className="min-w-52"
         value={assignee}
-        onChange={(e) => setAssignee(e.target.value)}
+        onChange={(event) => setAssignee(event.target.value)}
         aria-label="Reassign selected bugs to"
       >
         <option value="" disabled>
           Choose assignee…
         </option>
-        {(assignable?.users ?? []).map((u) => (
-          <option key={u.email} value={u.email} title={u.email}>
-            {assigneeLabel(u)}
+        {(assignable?.users ?? []).map((user) => (
+          <option key={user.email} value={user.email} title={user.email}>
+            {assigneeLabel(user)}
           </option>
         ))}
       </Select>
@@ -123,7 +113,11 @@ export function BulkReassignBar({
         onClick={apply}
         loading={bulk.isPending}
         disabled={!assignee || reassignBlocked}
-        title={reassignBlocked ? `${closedSelected} selected bug${closedSelected === 1 ? ' is' : 's are'} closed and can't be reassigned.` : undefined}
+        title={
+          reassignBlocked
+            ? `${closedSelected} selected bug${closedSelected === 1 ? ' is' : 's are'} closed and can't be reassigned.`
+            : undefined
+        }
       >
         Apply
       </Button>

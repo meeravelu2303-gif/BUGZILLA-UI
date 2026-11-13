@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+coverage
+logs
+package-lock.json
+
+# Formatted by hand or generated - not application code
+docs
+bugzilla
+ops
+*.md
+*.html

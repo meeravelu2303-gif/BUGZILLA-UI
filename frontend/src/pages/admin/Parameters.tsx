@@ -15,7 +15,7 @@ function renderValue(value: unknown): string {
 export function Parameters() {
   const { data, isLoading, error } = useAdminParameters();
   const { data: meta } = useMeta();
-  const entries = Object.entries(data?.parameters ?? {}).sort((a, b) => a[0].localeCompare(b[0]));
+  const entries = Object.entries(data?.parameters ?? {}).sort((left, right) => left[0].localeCompare(right[0]));
 
   return (
     <div className="mx-auto max-w-[60rem] animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
@@ -47,10 +47,16 @@ export function Parameters() {
         <EmptyState
           icon={Lock}
           title="Parameters unavailable"
-          description={error instanceof ApiError ? error.message : 'Bugzilla did not return parameters for this account.'}
+          description={
+            error instanceof ApiError ? error.message : 'Bugzilla did not return parameters for this account.'
+          }
         />
       ) : entries.length === 0 ? (
-        <EmptyState icon={SlidersHorizontal} title="No parameters returned" description="This Bugzilla exposes no parameters over its API." />
+        <EmptyState
+          icon={SlidersHorizontal}
+          title="No parameters returned"
+          description="This Bugzilla exposes no parameters over its API."
+        />
       ) : (
         <Card>
           <div className="divide-y divide-white/40">

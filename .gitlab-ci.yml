@@ -1,0 +1,101 @@
+# CI pipeline for the Bug Tracker (Bugzilla UI).
+#
+# Same shape as the office's other Node services: a security stage that blocks
+# committed secrets, then a build stage that proves both apps compile.
+# Nothing here talks to Bugzilla - the e2e suite (e2e/) needs a live instance
+# and is run by hand, never from CI.
+
+stages:
+  - security
+  - build
+
+default:
+  image: node:24-alpine
+
+variables:
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+
+cache:
+  key:
+    files:
+      - backend/package-lock.json
+      - frontend/package-lock.json
+  paths:
+    - .npm/
+
+# ---------------------------------------------------------------------------
+# Secrets in the current tree. Blocking: a hit fails the pipeline.
+# ---------------------------------------------------------------------------
+secret-scan:
+  stage: security
+  image:
+    name: zricethezav/gitleaks:v8.18.4
+    entrypoint: [""]
+  script:
+    - gitleaks detect --no-git --source . --redact --verbose --exit-code 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------------------
+# Secrets anywhere in history. History still holds a superseded Bugzilla API key
+# (old backend/.env.example) - revoked keys stay in history until it is purged -
+# so this is allow_failure: it tracks the outstanding clean-up, not new mistakes.
+# Remove allow_failure once history is clean.
+# ---------------------------------------------------------------------------
+secret-scan-history:
+  stage: security
+  image:
+    name: zricethezav/gitleaks:v8.18.4
+    entrypoint: [""]
+  script:
+    - gitleaks detect --source . --redact --verbose --exit-code 1
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+# ---------------------------------------------------------------------------
+# Known-vulnerable dependencies. Reported, not blocking.
+# ---------------------------------------------------------------------------
+dependency-audit:
+  stage: security
+  script:
+    - cd backend && npm audit --omit=dev --audit-level=high
+    - cd ../frontend && npm audit --omit=dev --audit-level=high
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------------------
+# Both apps must typecheck and build.
+# ---------------------------------------------------------------------------
+backend-build:
+  stage: build
+  script:
+    - cd backend
+    - npm ci --no-audit --no-fund
+    - npm run typecheck
+    - npm run build
+  artifacts:
+    paths:
+      - backend/dist/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+frontend-build:
+  stage: build
+  script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/dist/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH

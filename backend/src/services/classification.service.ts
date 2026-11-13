@@ -1,30 +1,3 @@
-/**
- * The single source of truth for the two-axis defect classification.
- *
- * Severity/Priority are one paired axis; Category is independent. Bugzilla has
- * native fields for the first two and nothing for the third, so Category is
- * encoded by the test bench as a `[cat:Xxx]` tag in the Status Whiteboard.
- *
- * Nothing else in the codebase may hard-code a severity, priority or category
- * string: parsing (raw -> ours) and filtering (ours -> a Bugzilla query) both
- * read from here, so the two can never drift apart.
- *
- * ---------------------------------------------------------------------------
- * Two encodings coexist, and both must keep working.
- *
- * The bench was changed to emit `[cat:Xxx]` and the severity vocabulary below,
- * but every bug filed before that change carries neither. Probed against the
- * live instance (1,283 bugs, all pre-change):
- *
- *   whiteboard  `[tier1]` only - no `[cat:]` on any bug, `keywords` empty
- *   severity    critical 130 | major 706 | normal 187 | minor 260
- *   priority    Highest 130 | High 706 | Normal 187 | Low 260  (pairs 1:1)
- *
- * Legacy bugs are still classifiable because all 1,283 carry a
- * `Classification: <value>` line as the first line of their description, and
- * that value maps to a category through the same table the bench uses.
- */
-
 import { normaliseDescription } from './grouping.service';
 
 /** Ordered most severe first; the index doubles as the sort rank. */
@@ -34,23 +7,21 @@ export type Severity = (typeof SEVERITIES)[number];
 export const PRIORITIES = ['P0', 'P1', 'P2', 'P3', 'Unclassified'] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
-export const CATEGORIES = ['Functional', 'Performance', 'Security', 'Compatibility', 'Accessibility', 'Unclassified'] as const;
+export const CATEGORIES = [
+  'Functional',
+  'Performance',
+  'Security',
+  'Compatibility',
+  'Accessibility',
+  'Unclassified',
+] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-/**
- * The Playwright projects the UI bench runs, and therefore the only values that
- * can appear in a `[browser:…]` tag.
- *
- * Listed here for the same reason severities are: the filter dropdown and the
- * query builder must offer and accept exactly the same vocabulary. A project
- * added to the bench and not added here still *renders* (Pill falls back to the
- * raw name) but cannot be filtered on — so keep this in step with
- * `playwright.config.ts` in KPOST-UI-AUTOMATION.
- */
+/** The Playwright projects the UI bench runs, and therefore the only values that can appear in a [browser:…] tag. */
 export const BROWSERS = ['chromium', 'firefox', 'webkit', 'mobile-chrome'] as const;
 export type Browser = (typeof BROWSERS)[number];
 
-/** Lower sorts first. Used wherever severity must rank rather than sort alphabetically. */
+/** Lower sorts first. */
 export const SEVERITY_RANK: Record<Severity, number> = {
   Critical: 0,
   Major: 1,
@@ -85,10 +56,6 @@ export const PRIORITY_FOR_SEVERITY: Record<Severity, Priority> = {
   Unclassified: 'Unclassified',
 };
 
-/**
- * Bugzilla's native `priority` values, which did NOT change between the two
- * encodings - this is the one axis that reads the same in both eras.
- */
 const PRIORITY_FROM_BUGZILLA: Record<string, Priority> = {
   Highest: 'P0',
   High: 'P1',
@@ -97,45 +64,23 @@ const PRIORITY_FROM_BUGZILLA: Record<string, Priority> = {
   Lowest: 'P3',
 };
 
-/**
- * Bugzilla `bug_severity` -> our band, for the values that mean the same thing
- * in both encodings. `minor` is deliberately absent: it is the one overloaded
- * value and is resolved by `severityOf` using the paired priority.
- */
 const SEVERITY_FROM_BUGZILLA: Record<string, Severity> = {
   blocker: 'Critical',
   critical: 'Critical',
   major: 'Major',
-  // Legacy-only value: the old bench used `normal` for the P2 band that the new
-  // bench calls `minor`.
   normal: 'Minor',
   minor: 'Minor',
   trivial: 'Trivial',
 };
 
-/**
- * `minor` means different things in the two encodings, so the pair resolves it:
- *   old bench  minor + Low     -> Trivial (P3)
- *   new bench  minor + Normal  -> Minor   (P2)
- * Severity and priority pair 1:1 in the real data, which is what makes this exact.
- */
 function severityOf(rawSeverity: string, rawPriority: string): Severity {
   const direct = SEVERITY_FROM_BUGZILLA[rawSeverity];
   if (direct) return direct;
-  // Severity and priority are independent (2026-10-23): a tester may file a Minor bug as
-  // P0. Priority no longer decides between Minor and Trivial - `minor` is Minor, and
-  // Trivial is Bugzilla's `trivial`. (rawPriority is kept in the signature for callers.)
   void rawPriority;
   return 'Unclassified';
 }
 
-/**
- * The bench's flaw taxonomy, ported from KPOST-AUTOMATION-v1
- * `src/utils/bugTracker.ts` (CATEGORY_BY_CLASSIFICATION). Every one of these
- * currently resolves to Security or Functional; Performance and Compatibility
- * are real categories with no classification feeding them yet, so those facets
- * are legitimately empty until the taxonomy grows.
- */
+/** The bench's flaw taxonomy, ported from KPOST-AUTOMATION-v1 src/utils/bugTracker.ts. */
 export const CATEGORY_BY_CLASSIFICATION: Record<string, Category> = {
   'Security/XSS': 'Security',
   'Security/SQL Injection': 'Security',
@@ -153,78 +98,53 @@ export const CATEGORY_BY_CLASSIFICATION: Record<string, Category> = {
   'Assertion Failure': 'Functional',
 };
 
-/** `[cat:Security]` in the Status Whiteboard - what the current bench writes. */
 const CATEGORY_TAG = /\[cat:([A-Za-z]+)\]/;
 
-/**
- * `[browser:webkit]` in the Status Whiteboard.
- *
- * The UI bench files one ticket per (defect, browser) — "broken on Safari" and
- * "broken everywhere" are different problems to triage and to close — and tags
- * each ticket with the browser it belongs to. Reading it here makes the browser
- * a real field the list can show and filter on, rather than something a reader
- * has to pick out of the summary text by eye.
- *
- * Hyphens are allowed: `mobile-chrome` is a project name.
- */
 const BROWSER_TAG = /\[browser:([A-Za-z0-9,-]+)\]/;
-/** UI bugs filed by hand say where: `[platform:web]` or `[platform:mobile]`. */
 const PLATFORM_TAG = /\[platform:(web|mobile)\]/i;
-/** Mobile UI bugs name the device platforms instead of browsers: `[device:android,ios]`. */
 const DEVICE_TAG = /\[device:([A-Za-z0-9,-]+)\]/;
 
 export type UiPlatform = 'Web' | 'Mobile';
 
 export function uiPlatformOf(whiteboard: string | undefined): UiPlatform | null {
-  const m = PLATFORM_TAG.exec(whiteboard ?? '');
-  return m ? (m[1].toLowerCase() === 'mobile' ? 'Mobile' : 'Web') : null;
+  const match = PLATFORM_TAG.exec(whiteboard ?? '');
+  return match ? (match[1].toLowerCase() === 'mobile' ? 'Mobile' : 'Web') : null;
 }
 
 export function devicesOf(whiteboard: string | undefined): string[] {
-  const m = DEVICE_TAG.exec(whiteboard ?? '');
-  return m ? m[1].split(',').map((d) => d.trim()).filter(Boolean) : [];
+  const match = DEVICE_TAG.exec(whiteboard ?? '');
+  return match
+    ? match[1]
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+    : [];
 }
 
-/**
- * The browsers a bug was observed on, in order, or an empty list when it
- * carries no tag — every API-bench bug, and any UI bug filed before browser
- * tagging existed.
- *
- * A list rather than a single value: one defect commonly fails on several
- * browsers, and the UI bench files it as ONE ticket naming all of them rather
- * than duplicating the ticket per browser. Empty must render as "not
- * specified"; never guess a browser onto a bug.
- */
+/** The browsers a bug was observed on. */
 export function browsersOf(whiteboard: string | undefined): string[] {
   const tagged = BROWSER_TAG.exec(whiteboard ?? '');
   if (!tagged) return [];
   return tagged[1]
     .split(',')
-    .map((b) => b.trim())
+    .map((value) => value.trim())
     .filter(Boolean);
 }
 
-/** `Classification: <value>` on the first line of the description - every legacy bug has one. */
 const CLASSIFICATION_LINE = /^\s*Classification:\s*(.+?)\s*$/m;
 
-/** The raw `Classification:` value, kept for display - finer grained than Category. */
+/** The raw Classification: value, kept for display - finer grained than Category. */
 export function classificationOf(description: string | undefined): string | null {
   if (!description) return null;
-  const m = CLASSIFICATION_LINE.exec(normaliseDescription(description));
-  return m ? m[1] : null;
+  const match = CLASSIFICATION_LINE.exec(normaliseDescription(description));
+  return match ? match[1] : null;
 }
 
-/**
- * Category, preferring the explicit tag and falling back to the description.
- *
- * The tag is authoritative because a human may set it deliberately; the
- * description fallback is what makes the 1,283 pre-change bugs classifiable at
- * all. An unrecognised value degrades to Unclassified rather than being dropped.
- */
+/** Category, preferring the explicit tag and falling back to the description. */
 export function categoryOf(whiteboard: string | undefined, description: string | undefined): Category {
   const tagged = CATEGORY_TAG.exec(whiteboard ?? '');
   if (tagged) {
-    const match = CATEGORIES.find((c) => c.toLowerCase() === tagged[1].toLowerCase());
+    const match = CATEGORIES.find((category) => category.toLowerCase() === tagged[1].toLowerCase());
     if (match) return match;
   }
   const classification = classificationOf(description);
@@ -232,18 +152,7 @@ export function categoryOf(whiteboard: string | undefined, description: string |
   return 'Unclassified';
 }
 
-/* ------------------------------------------------------------ source axis */
-
-/**
- * HOW a bug was filed: by a test bench, or by a person.
- *
- * Stored as `[source:automation]` / `[source:manual]` in the whiteboard - the
- * benches write the first, the app's filing form and the Mantis import write
- * the second. Bugs filed before the tag existed are classified by the report
- * itself: every bench report signs off with "Filed by: kpost-testbench…", and
- * a human filing never does. The backfill script tags those explicitly, so the
- * fallback only matters until it has run.
- */
+/** HOW a bug was filed: by a test bench, or by a person. */
 export const SOURCES = ['Automation', 'Manual'] as const;
 export type Source = (typeof SOURCES)[number];
 
@@ -255,22 +164,12 @@ export function sourceOf(whiteboard: string | undefined, description: string | u
   return /^Filed by: (?!manual\b)/m.test(description ?? '') ? 'Automation' : 'Manual';
 }
 
-/**
- * Sets the source tag, REPLACING any that is already there: the filing path
- * decides the source, never the text a filer typed into the whiteboard box.
- */
+/** Sets the source tag, REPLACING any that is already there. */
 export function withSourceTag(whiteboard: string, source: Source): string {
   return `${whiteboard.replace(SOURCE_TAG, '').trim()}[source:${source.toLowerCase()}]`;
 }
 
-/**
- * WHAT was tested: the API surface, or a user interface.
- *
- * Not a stored field - it IS the product. The API bench files into "KPost API"
- * / "KPost Admin", the UI bench into "KPost UI", and the manual products are
- * apps and web fronts except "API and SERVER Issue". UI is tested first so a
- * product named "… Admin UI" still reads as UI.
- */
+/** WHAT was tested: the API surface, or a user interface. */
 export const TEST_TYPES = ['UI', 'API'] as const;
 export type TestType = (typeof TEST_TYPES)[number];
 
@@ -290,25 +189,15 @@ export interface Classification {
   severity: Severity;
   priority: Priority;
   category: Category;
-  /** The bench's finer-grained flaw label, e.g. "Security/Access Control". */
   classification: string | null;
-  /** Which browsers the bug was seen on. Empty when the bug carries no tag. */
   browsers: string[];
-  /** UI bugs: Web or Mobile, from `[platform:…]`; null when not recorded. */
   uiPlatform: UiPlatform | null;
-  /** Mobile UI bugs: android / ios, from `[device:…]`. */
   devices: string[];
-  /** Filed by a bench or by a person - see `sourceOf`. */
   source: Source;
-  /** API or UI, from the product - see `testTypeOf`. */
   testType: TestType;
 }
 
-/**
- * Raw Bugzilla fields -> our classification. Total: any unrecognised value
- * lands in an explicit Unclassified bucket. This must never throw - a single
- * odd bug cannot be allowed to fail a whole list request.
- */
+/** Raw Bugzilla fields -> our classification. */
 export function classify(raw: {
   severity?: string;
   priority?: string;
@@ -321,8 +210,6 @@ export function classify(raw: {
     source: sourceOf(raw.whiteboard, raw.description),
     testType: testTypeOf(raw.product),
     severity,
-    // Read the priority Bugzilla actually holds; fall back to the band's paired
-    // priority so a bug with a blank priority still reads consistently.
     priority: PRIORITY_FROM_BUGZILLA[raw.priority ?? ''] ?? PRIORITY_FOR_SEVERITY[severity],
     category: categoryOf(raw.whiteboard, raw.description),
     classification: classificationOf(raw.description),
@@ -332,15 +219,7 @@ export function classify(raw: {
   };
 }
 
-// ---------------------------------------------------------------- filtering
-
-/**
- * Bugzilla `bug_severity` values to search for, per band. `Minor` and `Trivial`
- * both include `minor` because the value is overloaded across the two
- * encodings; a band is additionally pinned by its priority (below) so the two
- * do not bleed into each other.
- */
-/** What "urgent" means: Critical severity or P0 priority (see BugFilters.urgent). */
+/** Bugzilla bug_severity values to search for, per band. */
 export const URGENT_SEVERITIES = ['blocker', 'critical'] as const;
 export const URGENT_PRIORITY = 'Highest';
 export function isUrgent(severity: string, priority: string): boolean {
@@ -365,90 +244,48 @@ export interface BugFilters {
   severity?: Severity[];
   priority?: Priority[];
   category?: Category[];
-  /** Playwright project names from the `[browser:…]` whiteboard tag. */
   browser?: string[];
-  /** Automation (bench-filed) or Manual - the `[source:…]` whiteboard tag. */
   source?: Source[];
   product?: string[];
   component?: string[];
-  /** Stored sub-component values (services/subcomponents.service.ts); `---` matches bugs with none. */
   subcomponent?: string[];
   status?: string[];
-  /** Bugzilla resolutions (FIXED, INVALID, DUPLICATE …). `Unresolved` maps to Bugzilla's `---`. */
   resolution?: string[];
   search?: string;
   assignedTo?: string;
   creator?: string;
   cc?: string;
-  /**
-   * Soft-deleted bugs (resolution DELETED). Hidden unless asked for: testers and
-   * admins can still READ them, so without this every list, count, chart and
-   * export they open would quietly include bugs everyone agreed were gone.
-   */
   deleted?: 'exclude' | 'only' | 'include';
-  /**
-   * "Urgent": severity Critical (blocker / critical) OR priority P0 (Highest).
-   * The one either/or filter - every other facet narrows (AND). Used by the
-   * dashboards' Urgent tiles, now that priority can differ from severity.
-   */
   urgent?: boolean;
-  /** Inclusive day range (`YYYY-MM-DD`) on the filing date or the last-change date. */
   dateField?: 'created' | 'updated';
   from?: string;
   to?: string;
 }
 
-/** The day after `YYYY-MM-DD`, so an inclusive "to" becomes an exclusive upper bound. */
+/** The day after YYYY-MM-DD, so an inclusive "to" becomes an exclusive upper bound. */
 export function nextDay(day: string): string {
-  const d = new Date(`${day}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }
 
-/**
- * A Bugzilla search query. Repeated values on one key are OR'd by Bugzilla;
- * separate keys are AND'd. Category cannot be expressed that way - it lives in
- * two different fields - so it uses a boolean chart, which Bugzilla ANDs
- * against the rest of the query.
- */
+/** A Bugzilla search query. */
 export type BugzillaQuery = Record<string, string | number | string[]>;
 
-/**
- * Chart rows are `fN`/`oN`/`vN`, numbered across the whole query. `fN=OP` opens
- * a parenthesised group and `fN=CP` closes it; `jN=OR` makes the rows *inside*
- * that group alternatives of each other. The top level is left at its default
- * AND, so each group ANDs with the others and with the plain params alongside.
- *
- * Two facets live in the chart because neither is a native Bugzilla field:
- * category (whiteboard tag OR legacy description line) and browser (whiteboard
- * tag). They must AND with each other — "Security bugs on webkit" is one
- * question, not two — which is precisely what a flat `j_top=OR` cannot express.
- *
- * Verified live against this instance: `(cat:Functional) AND (chromium)` returns
- * the tagged bug, `(cat:Security) AND (chromium)` returns none. A flat OR chart
- * would have returned a match for both.
- */
 function chartWriter(query: BugzillaQuery) {
   let row = 0;
   return {
-    /** Opens a group whose rows are OR'd together. */
     open(): void {
       row += 1;
       query[`f${row}`] = 'OP';
       query[`j${row}`] = 'OR';
     },
-    /**
-     * Opens an OR'd group whose result is NEGATED (`nN=1`), i.e. "matches none
-     * of the following". This is the only way to express "has no category at
-     * all", since absence cannot be matched by a substring.
-     */
     openNegated(): void {
       row += 1;
       query[`n${row}`] = '1';
       query[`f${row}`] = 'OP';
       query[`j${row}`] = 'OR';
     },
-    /** Opens a group whose rows are AND'd together (Bugzilla's default join). */
     openAnd(): void {
       row += 1;
       query[`f${row}`] = 'OP';
@@ -459,14 +296,12 @@ function chartWriter(query: BugzillaQuery) {
       query[`o${row}`] = 'substring';
       query[`v${row}`] = value;
     },
-    /** A row with an explicit operator, for fields a substring cannot match (bug_id). */
     pushWith(field: string, operator: string, value: string): void {
       row += 1;
       query[`f${row}`] = field;
       query[`o${row}`] = operator;
       query[`v${row}`] = value;
     },
-    /** A single NOT'd condition, for "does not contain". */
     pushNegated(field: string, value: string): void {
       row += 1;
       query[`n${row}`] = '1';
@@ -481,56 +316,21 @@ function chartWriter(query: BugzillaQuery) {
   };
 }
 
-/**
- * The two whiteboard-backed facets, each as its own OR'd group.
- *
- * Browser matches on the bare project name rather than the whole `[browser:x]`
- * tag, because the bench writes every affected browser into ONE comma-joined
- * tag (`[browser:chromium,firefox]`) and a substring match cannot anchor to a
- * list element. The names are distinctive enough for that to be exact —
- * `chromium` is not a substring of `mobile-chrome`, and no category value
- * contains a browser name — but a project named as a prefix of another would
- * break it, which is the standing reason to keep BROWSERS in step with the
- * bench's Playwright projects.
- */
-/**
- * A search term that names a bug by its id: `KPA-494`, `kpa494`, `#494`,
- * `bug 494` or a bare `494`.
- *
- * `KPA` is required as a prefix when letters are present, and `KP` deliberately
- * is NOT accepted: the bench writes a per-failure hash into every summary as
- * `[KP-024859]`, so treating `KP-…` as an id would parse that hash's digits as
- * a bug number and lose the summary match the user actually wanted.
- */
 const BUG_ID_TERM = /^(?:kpa[-\s]?|#|bug[-\s]?)?0*(\d{1,7})$/i;
 
 export function bugIdFromSearch(term: string): number | null {
-  const m = BUG_ID_TERM.exec(term.trim());
-  if (!m) return null;
-  const id = Number(m[1]);
+  const match = BUG_ID_TERM.exec(term.trim());
+  if (!match) return null;
+  const id = Number(match[1]);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-/**
- * The free-text search box.
- *
- * `KPA-494` is the label the UI shows, derived from the bug id - it appears in
- * no summary, so matching only `summary` meant searching for the id a reader
- * can see on screen returned nothing. Now an id-shaped term ALSO matches that
- * bug directly.
- *
- * Written as an OR group rather than replacing the summary match: a bare `494`
- * is a plausible id and a plausible piece of text (an error code, a count), and
- * silently dropping the text half would hide real matches. The alias is in the
- * group too, for bugs that carry a real Bugzilla alias.
- */
 function searchChart(filters: BugFilters, query: BugzillaQuery, chart: ReturnType<typeof chartWriter>): void {
   const term = filters.search?.trim();
   if (!term) return;
 
   const bugId = bugIdFromSearch(term);
   if (bugId === null) {
-    // Plain text: the native parameter is enough, and keeps the query readable.
     query.summary = term;
     return;
   }
@@ -544,18 +344,9 @@ function searchChart(filters: BugFilters, query: BugzillaQuery, chart: ReturnTyp
 
 function whiteboardCharts(filters: BugFilters, chart: ReturnType<typeof chartWriter>): void {
   const selected = filters.category ?? [];
-  const named = selected.filter((c) => c !== 'Unclassified');
-  /*
-   * "Unclassified" is not a value written anywhere - it is the ABSENCE of both
-   * encodings. It therefore cannot be matched by a substring like the others,
-   * and stripping it out (which this did) left nothing to filter on at all, so
-   * selecting it returned the entire product instead of the handful of bugs
-   * that carry no category. Expressed here as a negated group instead.
-   */
+  const named = selected.filter((value) => value !== 'Unclassified');
   const wantsUnclassified = selected.includes('Unclassified');
   const browsers = filters.browser ?? [];
-  // Both sources selected is no filter at all; one source is a plain tag match
-  // (every bug carries a tag once the backfill has run).
   const sources = [...new Set(filters.source ?? [])];
   const narrowBySource = sources.length > 0 && sources.length < SOURCES.length;
   if (selected.length === 0 && browsers.length === 0 && !narrowBySource) return;
@@ -567,52 +358,17 @@ function whiteboardCharts(filters: BugFilters, chart: ReturnType<typeof chartWri
   }
 
   if (selected.length > 0) {
-    /*
-     * Selecting both a named category and Unclassified means the union of two
-     * conditions that cannot live in one OR'd group - one is positive, the
-     * other negated - so they are wrapped in an outer OR group. Verified
-     * against this instance: (Security) OR (NOT any category) returns 68 where
-     * Security alone returns 67 and Unclassified alone returns 1.
-     *
-     * Skipped when only one side is present, so the common cases emit the same
-     * flat chart they always did.
-     */
     const bothSides = named.length > 0 && wantsUnclassified;
     if (bothSides) chart.open();
 
     if (named.length > 0) {
-      /*
-       * A category matches if it is TAGGED, or - only for bugs carrying no tag
-       * at all - if the legacy description line maps to it.
-       *
-       * The "only when untagged" half is essential, not defensive. The two
-       * encodings contradict each other on real data: 26 bugs here are tagged
-       * `[cat:Security]` while their description still reads `Classification:
-       * Input Validation Gap`, which the legacy table maps to Functional.
-       * Matching the legacy line unconditionally pulled all 26 into the
-       * Functional filter even though the bench had explicitly said Security -
-       * so Functional returned 588 rows against a facet count of 562, and the
-       * same bug was badged Security while appearing under Functional.
-       *
-       * This mirrors `categoryOf` and `categoryIndex` exactly: tag wins,
-       * description is consulted only in its absence. All three now answer the
-       * same question the same way.
-       */
       chart.open();
       for (const category of named) {
         chart.push('status_whiteboard', `[cat:${category}]`);
       }
 
-      /*
-       * `named` is Category[] while the map's values exclude 'Unclassified',
-       * so the membership test is done through a Set of the wider type - the
-       * two never line up structurally, and casting either side would hide a
-       * genuine mismatch if a category were ever added to only one of them.
-       */
       const wanted = new Set<Category>(named);
-      const legacyFor = Object.entries(CATEGORY_BY_CLASSIFICATION).filter(([, mapped]) =>
-        wanted.has(mapped)
-      );
+      const legacyFor = Object.entries(CATEGORY_BY_CLASSIFICATION).filter(([, mapped]) => wanted.has(mapped));
       if (legacyFor.length > 0) {
         chart.openAnd();
         chart.open();
@@ -620,7 +376,6 @@ function whiteboardCharts(filters: BugFilters, chart: ReturnType<typeof chartWri
           chart.push('longdesc', `Classification: ${classification}`);
         }
         chart.close();
-        // ...and only where no tag exists to contradict it.
         chart.pushNegated('status_whiteboard', '[cat:');
         chart.close();
       }
@@ -628,12 +383,6 @@ function whiteboardCharts(filters: BugFilters, chart: ReturnType<typeof chartWri
     }
 
     if (wantsUnclassified) {
-      /*
-       * "Carries neither encoding." Matched on the ENCODING PREFIX rather than
-       * on each known value, so a bug tagged with a category this build has
-       * never heard of still counts as classified - which is the honest answer,
-       * and matches how the stats index treats it.
-       */
       chart.openNegated();
       chart.push('status_whiteboard', '[cat:');
       chart.push('longdesc', 'Classification:');
@@ -650,47 +399,39 @@ function whiteboardCharts(filters: BugFilters, chart: ReturnType<typeof chartWri
   }
 }
 
-/**
- * Our filters -> Bugzilla search params. Everything is validated upstream by the
- * Zod schema, so by the time a value reaches here it is already one of ours.
- */
+/** Our filters -> Bugzilla search params. */
 export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
   const query: BugzillaQuery = {};
 
-  const severities = (filters.severity ?? []).filter((s) => s !== 'Unclassified') as Exclude<Severity, 'Unclassified'>[];
+  const severities = (filters.severity ?? []).filter((severity) => severity !== 'Unclassified') as Exclude<
+    Severity,
+    'Unclassified'
+  >[];
   if (severities.length > 0) {
-    // Severity only. It used to also require the band's paired priority, which hid
-    // every Critical bug not at P0 - wrong once priority can be set independently.
-    query.bug_severity = [...new Set(severities.flatMap((s) => BUGZILLA_SEVERITIES[s]))];
+    query.bug_severity = [...new Set(severities.flatMap((severity) => BUGZILLA_SEVERITIES[severity]))];
   }
 
-  const priorities = (filters.priority ?? []).filter((p) => p !== 'Unclassified') as Exclude<Priority, 'Unclassified'>[];
+  const priorities = (filters.priority ?? []).filter((priority) => priority !== 'Unclassified') as Exclude<
+    Priority,
+    'Unclassified'
+  >[];
   if (priorities.length > 0) {
-    query.priority = [...new Set(priorities.flatMap((p) => BUGZILLA_PRIORITIES[p]))];
+    query.priority = [...new Set(priorities.flatMap((priority) => BUGZILLA_PRIORITIES[priority]))];
   }
 
   if (filters.product?.length) query.product = filters.product;
   if (filters.component?.length) query.component = filters.component;
   if (filters.subcomponent?.length) query.cf_subcomponent = filters.subcomponent;
   if (filters.status?.length) query.bug_status = filters.status;
-  /*
-   * Bugzilla spells "no resolution yet" as the literal `---`, not as an empty string, and a
-   * bare empty value in the query matches nothing. Translating here keeps that quirk out of the
-   * URL contract, so the UI can offer a plain "Unresolved" option.
-   */
   if (filters.resolution?.length) {
-    query.resolution = filters.resolution.map((r) => (r === '' || r === 'Unresolved' ? '---' : r));
+    query.resolution = filters.resolution.map((resolution) =>
+      resolution === '' || resolution === 'Unresolved' ? '---' : resolution,
+    );
   }
   if (filters.assignedTo) query.assigned_to = filters.assignedTo;
   if (filters.creator) query.creator = filters.creator;
   if (filters.cc) query.cc = filters.cc;
 
-  /*
-   * ONE writer for every chart group. Chart rows are numbered across the whole
-   * query, so a second `chartWriter(query)` would restart at row 1 and
-   * overwrite the first group's rows - the category filter would simply vanish
-   * whenever a search was also active.
-   */
   const chart = chartWriter(query);
   if (filters.urgent) {
     chart.open();
@@ -701,11 +442,6 @@ export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
   whiteboardCharts(filters, chart);
   searchChart(filters, query, chart);
 
-  /*
-   * Date range. Bugzilla's own `creation_time` parameter is "on or after" only, so both ends are
-   * chart rows instead. The upper bound is "before the NEXT day": `to=2026-10-31` must include a
-   * bug filed at 23:59 on the 31st, which "<= 2026-10-31" (midnight) would drop.
-   */
   if (filters.from || filters.to) {
     const column = filters.dateField === 'updated' ? 'delta_ts' : 'creation_ts';
     let [from, to] = [filters.from, filters.to];
@@ -716,7 +452,6 @@ export function toBugzillaQuery(filters: BugFilters): BugzillaQuery {
 
   const deleted = filters.deleted ?? 'exclude';
   if (deleted === 'only') query.resolution = ['DELETED'];
-  // A top-level chart row ANDs with everything above it.
   else if (deleted === 'exclude') chart.pushWith('resolution', 'notequals', 'DELETED');
 
   return query;

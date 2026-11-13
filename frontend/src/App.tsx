@@ -6,14 +6,8 @@ import { ForgotPassword } from './pages/ForgotPassword';
 import { Login } from './pages/Login';
 import { ResetPassword } from './pages/ResetPassword';
 
-/*
- * Every page behind sign-in is loaded on demand, in its own chunk. Before this,
- * opening /login downloaded the WHOLE app - dashboards, bug editor, admin
- * screens - before the form could appear. The sign-in pages stay in the main
- * bundle so they show at once.
- */
 const page = <K extends string>(load: () => Promise<Record<K, React.ComponentType>>, name: K) =>
-  lazy(() => load().then((m) => ({ default: m[name] })));
+  lazy(() => load().then((loadedModule) => ({ default: loadedModule[name] })));
 const AdvancedSearch = page(() => import('./pages/AdvancedSearch'), 'AdvancedSearch');
 const BugDetail = page(() => import('./pages/BugDetail'), 'BugDetail');
 const BugList = page(() => import('./pages/BugList'), 'BugList');
@@ -34,7 +28,6 @@ const Teams = page(() => import('./pages/admin/Teams'), 'Teams');
 const Users = page(() => import('./pages/admin/Users'), 'Users');
 const Workflow = page(() => import('./pages/admin/Workflow'), 'Workflow');
 
-/** Shown in the content area while a page's code arrives; the app shell stays put. */
 function PageLoading() {
   return (
     <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Loading">
@@ -43,7 +36,6 @@ function PageLoading() {
   );
 }
 
-/** Wraps an element in the authenticated app shell. */
 function Protected({ children }: { children: React.ReactNode }) {
   return (
     <RequireAuth>
@@ -59,15 +51,78 @@ export function App() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
 
-      <Route path="/" element={<Protected><Dashboard /></Protected>} />
-      <Route path="/my-bugs" element={<Protected><MyBugs /></Protected>} />
-      <Route path="/bugs" element={<Protected><BugList /></Protected>} />
-      <Route path="/bugs/new" element={<Protected><CreateBug /></Protected>} />
-      <Route path="/bugs/:id" element={<Protected><BugDetail /></Protected>} />
-      <Route path="/bugs/:id/edit" element={<Protected><EditBug /></Protected>} />
-      <Route path="/search" element={<Protected><AdvancedSearch /></Protected>} />
-      <Route path="/reports" element={<Protected><Reports /></Protected>} />
-      <Route path="/preferences" element={<Protected><Preferences /></Protected>} />
+      <Route
+        path="/"
+        element={
+          <Protected>
+            <Dashboard />
+          </Protected>
+        }
+      />
+      <Route
+        path="/my-bugs"
+        element={
+          <Protected>
+            <MyBugs />
+          </Protected>
+        }
+      />
+      <Route
+        path="/bugs"
+        element={
+          <Protected>
+            <BugList />
+          </Protected>
+        }
+      />
+      <Route
+        path="/bugs/new"
+        element={
+          <Protected>
+            <CreateBug />
+          </Protected>
+        }
+      />
+      <Route
+        path="/bugs/:id"
+        element={
+          <Protected>
+            <BugDetail />
+          </Protected>
+        }
+      />
+      <Route
+        path="/bugs/:id/edit"
+        element={
+          <Protected>
+            <EditBug />
+          </Protected>
+        }
+      />
+      <Route
+        path="/search"
+        element={
+          <Protected>
+            <AdvancedSearch />
+          </Protected>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <Protected>
+            <Reports />
+          </Protected>
+        }
+      />
+      <Route
+        path="/preferences"
+        element={
+          <Protected>
+            <Preferences />
+          </Protected>
+        }
+      />
 
       <Route
         path="/admin/users"
@@ -119,11 +174,46 @@ export function App() {
           </Protected>
         }
       />
-      <Route path="/admin/field-values" element={<Protected><FieldValues /></Protected>} />
-      <Route path="/admin/workflow" element={<Protected><Workflow /></Protected>} />
-      <Route path="/admin/groups" element={<Protected><Groups /></Protected>} />
-      <Route path="/admin/parameters" element={<Protected><Parameters /></Protected>} />
-      <Route path="/admin/sanity-check" element={<Protected><SanityCheck /></Protected>} />
+      <Route
+        path="/admin/field-values"
+        element={
+          <Protected>
+            <FieldValues />
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/workflow"
+        element={
+          <Protected>
+            <Workflow />
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/groups"
+        element={
+          <Protected>
+            <Groups />
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/parameters"
+        element={
+          <Protected>
+            <Parameters />
+          </Protected>
+        }
+      />
+      <Route
+        path="/admin/sanity-check"
+        element={
+          <Protected>
+            <SanityCheck />
+          </Protected>
+        }
+      />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -40,9 +40,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   }, [permissions, navigate]);
 
   const results = useMemo<Command[]>(() => {
-    const q = query.trim();
+    const normalizedQuery = query.trim();
     const dynamic: Command[] = [];
-    const bugId = q.match(/^#?(\d+)$/);
+    const bugId = normalizedQuery.match(/^#?(\d+)$/);
     if (bugId) {
       dynamic.push({
         id: 'goto-bug',
@@ -52,17 +52,23 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         run: () => navigate(`/bugs/${bugId[1]}`),
       });
     }
-    if (q.length > 0 && !bugId) {
+    if (normalizedQuery.length > 0 && !bugId) {
       dynamic.push({
         id: 'search',
-        label: `Search bugs for “${q}”`,
+        label: `Search bugs for “${normalizedQuery}”`,
         hint: 'Search',
         icon: SearchIcon,
-        run: () => navigate(`/bugs?search=${encodeURIComponent(q)}`),
+        run: () => navigate(`/bugs?search=${encodeURIComponent(normalizedQuery)}`),
       });
     }
-    const lower = q.toLowerCase();
-    const filtered = q.length === 0 ? navCommands : navCommands.filter((c) => c.label.toLowerCase().includes(lower) || c.hint?.toLowerCase().includes(lower));
+    const lower = normalizedQuery.toLowerCase();
+    const filtered =
+      normalizedQuery.length === 0
+        ? navCommands
+        : navCommands.filter(
+            (navCommand) =>
+              navCommand.label.toLowerCase().includes(lower) || navCommand.hint?.toLowerCase().includes(lower),
+          );
     return [...dynamic, ...filtered];
   }, [query, navCommands, navigate]);
 
@@ -70,7 +76,6 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     if (open) {
       setQuery('');
       setActive(0);
-      // Focus after the element mounts.
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
@@ -95,7 +100,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     >
       <div
         className="glass-raised w-full max-w-xl overflow-hidden rounded-2xl animate-toast-in"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
@@ -105,18 +110,18 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setActive((a) => Math.min(a + 1, results.length - 1));
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setActive((a) => Math.max(a - 1, 0));
-              } else if (e.key === 'Enter') {
-                e.preventDefault();
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setActive((currentActive) => Math.min(currentActive + 1, results.length - 1));
+              } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setActive((currentActive) => Math.max(currentActive - 1, 0));
+              } else if (event.key === 'Enter') {
+                event.preventDefault();
                 choose(results[active]);
-              } else if (e.key === 'Escape') {
+              } else if (event.key === 'Escape') {
                 onClose();
               }
             }}
@@ -124,7 +129,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             aria-label="Search commands"
             className="w-full bg-transparent py-3.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none"
           />
-          <kbd className="hidden shrink-0 rounded border border-line bg-white px-1.5 py-0.5 text-[0.6667rem] font-medium text-slate-500 sm:block">esc</kbd>
+          <kbd className="hidden shrink-0 rounded border border-line bg-white px-1.5 py-0.5 text-[0.6667rem] font-medium text-slate-500 sm:block">
+            esc
+          </kbd>
         </div>
 
         <ul className="max-h-80 overflow-y-auto p-2" role="listbox">
@@ -140,13 +147,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                     'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
                     i === active
                       ? 'bg-gradient-to-r from-brand-600 to-brand-700 text-white shadow-md ring-1 ring-inset ring-white/20'
-                      : 'text-slate-700 hover:bg-slate-900/[0.04]'
+                      : 'text-slate-700 hover:bg-slate-900/[0.04]',
                   )}
                 >
                   <cmd.icon className={cn('h-4 w-4 shrink-0', i === active ? 'text-white' : 'text-slate-400')} />
                   <span className="flex-1 truncate font-medium">{cmd.label}</span>
                   {cmd.hint && (
-                    <span className={cn('shrink-0 text-xs', i === active ? 'text-white/80' : 'text-slate-400')}>{cmd.hint}</span>
+                    <span className={cn('shrink-0 text-xs', i === active ? 'text-white/80' : 'text-slate-400')}>
+                      {cmd.hint}
+                    </span>
                   )}
                   {i === active && <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-white/80" />}
                 </button>

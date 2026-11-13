@@ -1,23 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
-/**
- * Live updates: keeps one stream open to the backend (GET /api/events) and
- * refreshes what is on screen the moment bugs change - whoever changed them,
- * in this app or in Bugzilla directly (backend/src/events/liveUpdates.event.ts).
- *
- *   "bugs"       -> every bug query: lists, counts, dashboard stats, the open
- *                   bug, its comments and activity. Only queries on screen
- *                   refetch now; the rest are marked stale for next time.
- *   "directory"  -> product, component and people lists.
- *
- * Messages are batched for a moment so a burst (a bulk reassign, a bench run
- * filing twenty bugs) costs one refresh, not twenty. An open bug being edited
- * keeps the user's unsaved changes: the editor rebases onto the new data
- * (lib/useBugEditor.ts). The browser reconnects by itself if the stream drops.
- */
+/** Live updates: keeps one stream open to the backend (GET /api/events) and refreshes what is on screen. */
 export function useLiveUpdates(enabled: boolean): void {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!enabled || typeof EventSource === 'undefined') return;
@@ -27,12 +13,12 @@ export function useLiveUpdates(enabled: boolean): void {
 
     source.addEventListener('bugs', () => {
       clearTimeout(bugsTimer);
-      bugsTimer = setTimeout(() => void qc.invalidateQueries({ queryKey: ['bugs'] }), 300);
+      bugsTimer = setTimeout(() => void queryClient.invalidateQueries({ queryKey: ['bugs'] }), 300);
     });
     source.addEventListener('directory', () => {
       clearTimeout(directoryTimer);
       directoryTimer = setTimeout(() => {
-        for (const key of [['products'], ['admin'], ['meta']]) void qc.invalidateQueries({ queryKey: key });
+        for (const key of [['products'], ['admin'], ['meta']]) void queryClient.invalidateQueries({ queryKey: key });
       }, 300);
     });
 
@@ -41,5 +27,5 @@ export function useLiveUpdates(enabled: boolean): void {
       clearTimeout(directoryTimer);
       source.close();
     };
-  }, [enabled, qc]);
+  }, [enabled, queryClient]);
 }

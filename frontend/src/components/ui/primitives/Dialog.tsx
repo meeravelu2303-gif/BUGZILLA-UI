@@ -14,34 +14,8 @@ import {
 import { cn } from '../../../lib/utils';
 import { modalVariants, overlayVariants } from '../../../lib/motion';
 
-/**
- * Dialog, on Radix, animated with Framer Motion.
- *
- * Radix gives focus trapping, scroll locking, Escape handling and the aria
- * wiring. Framer gives the motion - and getting an EXIT animation out of Radix
- * needs a specific arrangement, which is most of what this file is:
- *
- *   1. Radix unmounts its content the instant `open` goes false, which would
- *      cut any exit animation off before its first frame. `forceMount` stops
- *      that and hands mounting to us.
- *   2. With Radix no longer unmounting, AnimatePresence has to do it - and it
- *      can only see the open state if something tracks it. Hence the context
- *      below, which captures `open` even when the caller left the Dialog
- *      UNCONTROLLED (`<Dialog>` with no props, as the login About panel uses).
- *
- * Without step 2 an uncontrolled dialog would animate in and then vanish
- * instantly on close, which is worse than not animating at all.
- */
-
 const DialogOpenContext = createContext(false);
 
-/**
- * Tracks `open` whether the caller controls it or not.
- *
- * `open` may be undefined (uncontrolled), controlled by a prop, or controlled
- * with an `onOpenChange` the caller also needs - so internal state shadows it
- * and the caller's handler is always still called.
- */
 function Dialog({
   open,
   defaultOpen,
@@ -88,27 +62,10 @@ const DialogContent = forwardRef<
               initial="hidden"
               animate="visible"
               exit="exit"
-              // Slate rather than black: a pure-black scrim over a white page
-              // reads as a dead area, where a tinted one still feels like the
-              // app is underneath.
               className="fixed inset-0 z-50 bg-slate-900/25 backdrop-blur-[2px]"
             />
           </DialogPrimitive.Overlay>
 
-          {/*
-            Centring is done by this flex wrapper, NOT by `left-1/2 top-1/2
-            -translate-x-1/2 -translate-y-1/2` on the panel itself.
-
-            That matters because Framer animates `scale` and `y`, which it
-            applies as an inline `transform` - and an inline transform REPLACES
-            the one Tailwind's translate utilities set. Centring the panel that
-            way would leave every dialog pinned to the middle of its own
-            top-left corner the moment it started animating.
-
-            `pointer-events-none` on the wrapper lets clicks fall through to the
-            overlay behind it, which is what closes the dialog; the panel turns
-            them back on for itself.
-          */}
           <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
             <DialogPrimitive.Content ref={ref} asChild forceMount {...props}>
               <motion.div
@@ -119,9 +76,8 @@ const DialogContent = forwardRef<
                 className={cn(
                   'pointer-events-auto w-full max-w-lg',
                   'rounded-2xl border border-hairline bg-white shadow-md',
-                  // Tall content scrolls inside the dialog instead of pushing it off-screen.
                   'max-h-[calc(100vh-4rem)] overflow-y-auto',
-                  className
+                  className,
                 )}
               >
                 {children}
@@ -130,8 +86,8 @@ const DialogContent = forwardRef<
                     className="focus-ring absolute right-4 top-4 rounded-md p-1 text-slate-400 transition-colors duration-premium ease-premium hover:bg-slate-100 hover:text-slate-700"
                     aria-label="Close"
                   >
-                  <X className="h-4 w-4" />
-                </DialogPrimitive.Close>
+                    <X className="h-4 w-4" />
+                  </DialogPrimitive.Close>
                 )}
               </motion.div>
             </DialogPrimitive.Content>
@@ -150,7 +106,10 @@ function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex flex-col-reverse gap-2 border-t border-hairline px-6 py-4 sm:flex-row sm:justify-end', className)}
+      className={cn(
+        'flex flex-col-reverse gap-2 border-t border-hairline px-6 py-4 sm:flex-row sm:justify-end',
+        className,
+      )}
       {...props}
     />
   );
@@ -180,7 +139,6 @@ const DialogDescription = forwardRef<
 ));
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
-/** Kept exported for callers that render their own overlay. */
 function DialogOverlay({ className, children }: { className?: string; children?: ReactNode }) {
   return <div className={cn('fixed inset-0 z-50 bg-slate-900/25', className)}>{children}</div>;
 }

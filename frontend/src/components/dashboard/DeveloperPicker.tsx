@@ -3,36 +3,23 @@ import { useMemo } from 'react';
 import { useAssignableUsers, useBugStats } from '../../api/hooks';
 import { Select } from '../ui/Field';
 
-/**
- * Whose Developer board to show - for admins and testers.
- *
- * Opens on "All developers": the team-wide backlog, worst first, which is the
- * question a lead opens this tab with. Picking a person narrows every card and
- * the backlog to them. The signed-in admin or tester is not offered - their own
- * assigned work is on My Bugs, and this board is about the developers.
- *
- * Each option carries the person's load (total assigned, and how many are
- * open), read from one stats call rather than one count request per developer.
- *
- * `value` is an email, or '' for everyone.
- */
+/** Whose Developer board to show - for admins and testers. */
 export function DeveloperPicker({ value, onChange }: { value: string; onChange: (email: string) => void }) {
   const { data, isLoading } = useAssignableUsers();
   const { data: stats } = useBugStats({});
   const developers = useMemo(
     () =>
       (data?.users ?? [])
-        // Developers only: admins and testers (who appear in the pool as component owners) are left out.
-        .filter((u) => u.role === 'developer' || u.role === undefined)
+        .filter((user) => user.role === 'developer' || user.role === undefined)
         .slice()
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [data]
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [data],
   );
   const load = (email: string) => {
     const key = email.toLowerCase();
     return { total: stats?.byAssignee?.[key] ?? 0, open: stats?.openByAssignee?.[key] ?? 0 };
   };
-  const selected = developers.find((d) => d.email === value);
+  const selected = developers.find((developer) => developer.email === value);
 
   return (
     <div className="mb-5 flex flex-wrap items-end gap-3">
@@ -41,7 +28,7 @@ export function DeveloperPicker({ value, onChange }: { value: string; onChange: 
           label="Developer"
           value={value}
           disabled={isLoading}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(event) => onChange(event.target.value)}
           hint={
             isLoading
               ? 'Loading developers…'
@@ -51,11 +38,11 @@ export function DeveloperPicker({ value, onChange }: { value: string; onChange: 
           }
         >
           <option value="">All developers</option>
-          {developers.map((d) => {
-            const n = load(d.email);
+          {developers.map((developer) => {
+            const workload = load(developer.email);
             return (
-              <option key={d.email} value={d.email}>
-                {d.name} · {n.open} open
+              <option key={developer.email} value={developer.email}>
+                {developer.name} · {workload.open} open
               </option>
             );
           })}

@@ -3,24 +3,15 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../lib/utils';
 
-/**
- * "Back" for pages reached from somewhere else (filing, search, reports).
- *
- * Goes to the previous page when this tab has one - so a tester who came from
- * the QA board lands back on the QA board, filters intact - and to the given
- * route when the page was opened directly (a bookmark, a pasted link), where
- * browser-back would leave the app entirely.
- */
-/**
- * Goes exactly where its label says (`to`). It used to step back in the
- * browser history instead, so "Back to dashboard" opened whatever page came
- * before - All Bugs, if that is where you came from.
- */
+/** "Back" for pages reached from somewhere else (filing, search, reports). */
 export function BackLink({ to, label = 'Back', className }: { to: string; label?: string; className?: string }) {
   return (
     <Link
       to={to}
-      className={cn('focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-900', className)}
+      className={cn(
+        'focus-ring inline-flex items-center gap-1.5 rounded text-sm text-slate-600 hover:text-slate-900',
+        className,
+      )}
     >
       <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> {label}
     </Link>
@@ -32,10 +23,7 @@ export interface Crumb {
   to?: string;
 }
 
-/**
- * The one page header. Every page uses it, so titles sit at the same size and
- * position everywhere and actions always live in the same corner.
- */
+/** The one page header. */
 export function PageHeader({
   title,
   description,
@@ -49,12 +37,9 @@ export function PageHeader({
   title: ReactNode;
   description?: ReactNode;
   crumbs?: Crumb[];
-  /** A Back link above the title, for pages reached from another screen. `to` is the fallback route. */
   back?: { to: string; label?: string };
   actions?: ReactNode;
-  /** A glyph in a soft brand tile beside the title - for top-level pages. */
   icon?: LucideIcon;
-  /** A small label above the title (e.g. a section name). */
   eyebrow?: ReactNode;
   className?: string;
 }) {
@@ -63,14 +48,14 @@ export function PageHeader({
       {back && <BackLink to={back.to} label={back.label} className="mb-3" />}
       {crumbs && crumbs.length > 0 && (
         <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1.5 text-xs text-slate-500">
-          {crumbs.map((c, i) => (
-            <span key={`${c.label}-${i}`} className="flex items-center gap-1.5">
-              {c.to ? (
-                <Link to={c.to} className="focus-ring rounded font-medium hover:text-brand-700">
-                  {c.label}
+          {crumbs.map((crumb, i) => (
+            <span key={`${crumb.label}-${i}`} className="flex items-center gap-1.5">
+              {crumb.to ? (
+                <Link to={crumb.to} className="focus-ring rounded font-medium hover:text-brand-700">
+                  {crumb.label}
                 </Link>
               ) : (
-                <span className="font-medium text-slate-700">{c.label}</span>
+                <span className="font-medium text-slate-700">{crumb.label}</span>
               )}
               {i < crumbs.length - 1 && <ChevronRight className="h-3 w-3 text-slate-400" aria-hidden />}
             </span>
@@ -85,7 +70,11 @@ export function PageHeader({
             </span>
           )}
           <div className="min-w-0">
-            {eyebrow && <p className="mb-1 text-[0.7333rem] font-semibold uppercase tracking-[0.14em] text-brand-700">{eyebrow}</p>}
+            {eyebrow && (
+              <p className="mb-1 text-[0.7333rem] font-semibold uppercase tracking-[0.14em] text-brand-700">
+                {eyebrow}
+              </p>
+            )}
             <h1 className="text-[1.65rem] font-semibold leading-tight tracking-tight text-slate-900">{title}</h1>
             {description && <p className="mt-1 text-sm text-slate-600">{description}</p>}
           </div>
@@ -107,5 +96,11 @@ export function PageContainer({
   className?: string;
 }) {
   const widths = { narrow: 'max-w-[900px]', medium: 'max-w-[1200px]', wide: 'max-w-[1400px]', full: 'max-w-[1600px]' };
-  return <div className={cn('mx-auto animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10 lg:py-8', widths[width], className)}>{children}</div>;
+  return (
+    <div
+      className={cn('mx-auto animate-page-in px-4 py-6 sm:px-6 lg:px-8 2xl:px-10 lg:py-8', widths[width], className)}
+    >
+      {children}
+    </div>
+  );
 }

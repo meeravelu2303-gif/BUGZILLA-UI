@@ -15,19 +15,10 @@ function readCollapsed(): Record<string, boolean> {
 function writeCollapsed(id: string, collapsed: boolean) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...readCollapsed(), [id]: collapsed }));
-  } catch {
-    // Private window or blocked storage: the section still works, it just won't be remembered.
-  }
+  } catch {}
 }
 
-/**
- * One collapsible group of fields in the bug editor. Open/closed is remembered
- * per section across bugs, so someone who never uses time tracking folds it
- * away once instead of scrolling past it on every bug.
- *
- * A section with unsaved changes shows a count, and cannot be folded shut
- * while it does - hiding a pending edit is how it gets saved by surprise.
- */
+/** One collapsible group of fields in the bug editor. */
 export function EditSection({
   id,
   title,
@@ -42,7 +33,6 @@ export function EditSection({
   icon: LucideIcon;
   changes?: number;
   defaultOpen?: boolean;
-  /** Shown beside the title while collapsed, so a folded section still says something. */
   summary?: ReactNode;
   children: ReactNode;
 }) {
@@ -76,7 +66,12 @@ export function EditSection({
           )}
           {!isOpen && summary && <span className="ml-auto truncate pl-2 text-xs text-slate-500">{summary}</span>}
           <ChevronDown
-            className={cn('h-4 w-4 shrink-0 text-slate-400 transition-transform', !isOpen && '-rotate-90', isOpen && 'ml-auto', changes > 0 && 'opacity-30')}
+            className={cn(
+              'h-4 w-4 shrink-0 text-slate-400 transition-transform',
+              !isOpen && '-rotate-90',
+              isOpen && 'ml-auto',
+              changes > 0 && 'opacity-30',
+            )}
             aria-hidden
           />
         </button>
@@ -96,8 +91,9 @@ export function Changed({ when, children, className }: { when: boolean; children
     <div
       className={cn(
         'relative transition-[padding]',
-        when && 'pl-3 before:absolute before:inset-y-0.5 before:left-0 before:w-[3px] before:rounded-full before:bg-brand-500',
-        className
+        when &&
+          'pl-3 before:absolute before:inset-y-0.5 before:left-0 before:w-[3px] before:rounded-full before:bg-brand-500',
+        className,
       )}
     >
       {children}

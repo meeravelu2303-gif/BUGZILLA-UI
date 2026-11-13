@@ -10,17 +10,35 @@ interface FieldGroup {
   key: string;
   title: string;
   cgiField: string;
-  values: (m: BugMeta) => string[];
+  values: (bugMeta: BugMeta) => string[];
   tone?: (value: string) => Tone;
 }
 
 const FIELDS: FieldGroup[] = [
-  { key: 'status', title: 'Status', cgiField: 'bug_status', values: (m) => m.statuses, tone: (v) => STATUS_TONE[v] ?? 'slate' },
-  { key: 'resolution', title: 'Resolution', cgiField: 'resolution', values: (m) => m.resolutions },
-  { key: 'severity', title: 'Severity', cgiField: 'bug_severity', values: (m) => m.severities, tone: (v) => SEVERITY_TONE[v] ?? 'slate' },
-  { key: 'priority', title: 'Priority', cgiField: 'priority', values: (m) => m.priorities, tone: (v) => PRIORITY_TONE_MAP[v] ?? 'slate' },
-  { key: 'op_sys', title: 'Operating System', cgiField: 'op_sys', values: (m) => m.opSystems },
-  { key: 'platform', title: 'Platform', cgiField: 'rep_platform', values: (m) => m.platforms },
+  {
+    key: 'status',
+    title: 'Status',
+    cgiField: 'bug_status',
+    values: (bugMeta) => bugMeta.statuses,
+    tone: (value) => STATUS_TONE[value] ?? 'slate',
+  },
+  { key: 'resolution', title: 'Resolution', cgiField: 'resolution', values: (bugMeta) => bugMeta.resolutions },
+  {
+    key: 'severity',
+    title: 'Severity',
+    cgiField: 'bug_severity',
+    values: (bugMeta) => bugMeta.severities,
+    tone: (value) => SEVERITY_TONE[value] ?? 'slate',
+  },
+  {
+    key: 'priority',
+    title: 'Priority',
+    cgiField: 'priority',
+    values: (bugMeta) => bugMeta.priorities,
+    tone: (value) => PRIORITY_TONE_MAP[value] ?? 'slate',
+  },
+  { key: 'op_sys', title: 'Operating System', cgiField: 'op_sys', values: (bugMeta) => bugMeta.opSystems },
+  { key: 'platform', title: 'Platform', cgiField: 'rep_platform', values: (bugMeta) => bugMeta.platforms },
 ];
 
 export function FieldValues() {
@@ -44,7 +62,9 @@ export function FieldValues() {
                 <CardTitle className="flex items-center gap-2">
                   <Tags className="h-4 w-4 text-brand-600" />
                   {field.title}
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-500">{values.length}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-500">
+                    {values.length}
+                  </span>
                 </CardTitle>
                 {webUrl && (
                   <a
@@ -64,9 +84,9 @@ export function FieldValues() {
                   <p className="text-sm text-slate-500">No values.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {values.map((v) => (
-                      <Pill key={v} tone={field.tone ? field.tone(v) : 'slate'}>
-                        {v.replace('_', ' ')}
+                    {values.map((value) => (
+                      <Pill key={value} tone={field.tone ? field.tone(value) : 'slate'}>
+                        {value.replace('_', ' ')}
                       </Pill>
                     ))}
                   </div>

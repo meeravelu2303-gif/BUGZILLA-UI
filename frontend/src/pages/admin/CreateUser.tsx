@@ -19,11 +19,7 @@ export function CreateUser() {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
-  // On by default: the person learns they have an account, and chooses their
-  // own password, without the admin passing one around.
   const [sendWelcome, setSendWelcome] = useState(true);
-  // Developer is the safest default: the narrowest capability set, so an
-  // unchanged form never quietly creates someone who can manage users.
   const [role, setRole] = useState<Role>('developer');
   const [products, setProducts] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -33,15 +29,13 @@ export function CreateUser() {
     const next: Record<string, string> = {};
     if (!email.trim()) next.email = 'Email is required';
     if (password ? password.length < 6 : !sendWelcome) next.password = 'Password must be at least 6 characters long';
-    // An account with no product sees an empty bug list and cannot be assigned
-    // anything - almost certainly a slip rather than an intention.
     if (products.length === 0) next.products = 'Select at least one product this person works on';
     setErrors(next);
     return Object.keys(next).length === 0;
   }
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
     setSubmitError(null);
     if (!validate()) return;
 
@@ -54,9 +48,6 @@ export function CreateUser() {
         role,
         products,
       });
-      // Surfaced rather than swallowed: a product with no matching Bugzilla
-      // group grants nothing, and the admin should know before they assume the
-      // account is fully set up.
       if (result.skippedGroups?.length) {
         toast({
           variant: 'error',
@@ -86,7 +77,9 @@ export function CreateUser() {
     <div className="mx-auto max-w-xl px-8 py-8">
       <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight text-slate-900">New user</h1>
-        <p className="mt-1 text-sm text-slate-600">Creates the account and, if you choose, emails them how to sign in.</p>
+        <p className="mt-1 text-sm text-slate-600">
+          Creates the account and, if you choose, emails them how to sign in.
+        </p>
       </div>
 
       <form onSubmit={onSubmit}>
@@ -99,83 +92,76 @@ export function CreateUser() {
               label="Email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               error={errors.email}
               placeholder="name@example.com"
               required
               autoFocus
             />
-            <Input label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Optional" />
+            <Input
+              label="Full name"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Optional"
+            />
 
-            {/* ------------------------------------------------------ role -- */}
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-sm font-medium text-slate-700">Role</legend>
               <p className="mb-1 text-xs text-slate-500">
                 Decides what this person can do. Products below decide what they can see.
               </p>
-              {ROLES.map((r) => (
+              {ROLES.map((roleItem) => (
                 <label
-                  key={r}
+                  key={roleItem}
                   className={cn(
                     'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
-                    role === r ? 'border-brand-500 bg-brand-50/50' : 'border-hairline hover:bg-slate-50'
+                    role === roleItem ? 'border-brand-500 bg-brand-50/50' : 'border-hairline hover:bg-slate-50',
                   )}
                 >
                   <input
                     type="radio"
                     name="role"
-                    value={r}
-                    checked={role === r}
-                    onChange={() => setRole(r)}
-                    /*
-                     * The wrapping <label> contains BOTH the role name and its
-                     * description, so the implicit accessible name became
-                     * "Administrator Everything a tester can do…" - burying the
-                     * actual choice, and leaving two options indistinguishable
-                     * to anything matching on name.
-                     *
-                     * `aria-label` overrides that implicit name with just the
-                     * role; `aria-describedby` re-attaches the sentence as the
-                     * supporting detail it actually is. Both are needed -
-                     * describedby alone does not displace the label text.
-                     */
-                    aria-label={ROLE_LABELS[r]}
-                    aria-describedby={`role-${r}-desc`}
+                    value={roleItem}
+                    checked={role === roleItem}
+                    onChange={() => setRole(roleItem)}
+                    aria-label={ROLE_LABELS[roleItem]}
+                    aria-describedby={`role-${roleItem}-desc`}
                     className="mt-0.5 h-4 w-4 text-brand-600 focus-ring"
                   />
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-slate-800">{ROLE_LABELS[r]}</span>
-                    <span id={`role-${r}-desc`} className="block text-xs leading-relaxed text-slate-500">
-                      {ROLE_DESCRIPTIONS[r]}
+                    <span className="block text-sm font-medium text-slate-800">{ROLE_LABELS[roleItem]}</span>
+                    <span id={`role-${roleItem}-desc`} className="block text-xs leading-relaxed text-slate-500">
+                      {ROLE_DESCRIPTIONS[roleItem]}
                     </span>
                   </span>
                 </label>
               ))}
             </fieldset>
 
-            {/* -------------------------------------------------- products -- */}
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-sm font-medium text-slate-700">Product access</legend>
               <p className="mb-1 text-xs text-slate-500">
-                Which products' bugs this person can see and be assigned. Testers usually need every
-                product; a developer normally needs only their own.
+                Which products' bugs this person can see and be assigned. Testers usually need every product; a
+                developer normally needs only their own.
               </p>
-              {(productsData?.products ?? []).map((p) => (
+              {(productsData?.products ?? []).map((product) => (
                 <label
-                  key={p.name}
+                  key={product.name}
                   className="flex cursor-pointer items-center gap-3 rounded-lg border border-hairline p-3 text-sm transition-colors hover:bg-slate-50"
                 >
                   <input
                     type="checkbox"
-                    checked={products.includes(p.name)}
+                    checked={products.includes(product.name)}
                     onChange={() =>
-                      setProducts((prev) =>
-                        prev.includes(p.name) ? prev.filter((x) => x !== p.name) : [...prev, p.name]
+                      setProducts((previous) =>
+                        previous.includes(product.name)
+                          ? previous.filter((x) => x !== product.name)
+                          : [...previous, product.name],
                       )
                     }
                     className="h-4 w-4 rounded border-line text-brand-600 focus-ring"
                   />
-                  <span className="text-slate-800">{p.name}</span>
+                  <span className="text-slate-800">{product.name}</span>
                 </label>
               ))}
               {errors.products && <p className="text-xs text-rose-600">{errors.products}</p>}
@@ -185,7 +171,7 @@ export function CreateUser() {
               <input
                 type="checkbox"
                 checked={sendWelcome}
-                onChange={(e) => setSendWelcome(e.target.checked)}
+                onChange={(event) => setSendWelcome(event.target.checked)}
                 aria-describedby="send-welcome-desc"
                 className="mt-0.5 h-4 w-4 rounded border-line text-brand-600 focus-ring"
               />
@@ -201,7 +187,7 @@ export function CreateUser() {
             <PasswordInput
               label={sendWelcome ? 'Password (optional)' : 'Password'}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               error={errors.password}
               hint={
                 sendWelcome
@@ -212,7 +198,10 @@ export function CreateUser() {
             />
 
             {submitError && (
-              <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-inset ring-rose-200">
+              <p
+                role="alert"
+                className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-inset ring-rose-200"
+              >
                 {submitError}
               </p>
             )}

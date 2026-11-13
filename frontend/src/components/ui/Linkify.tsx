@@ -1,27 +1,17 @@
 import { Fragment } from 'react';
 
-/**
- * Web addresses in free text: http(s)://... and www.... Only these two forms
- * become links - never javascript:, data: or anything else a comment might
- * contain - so a link can only ever open a normal web page.
- */
 const URL_PATTERN = /\b(?:https?:\/\/|www\.)[^\s<>"'`]+/gi;
 
-/**
- * Punctuation that ends a sentence rather than the address: "see
- * https://x.com/a." links https://x.com/a. A closing bracket is kept when the
- * address itself opened one, as in Wikipedia-style ".../Foo_(bar)".
- */
 function trimTrailing(url: string): string {
   let end = url.length;
   while (end > 0) {
-    const ch = url[end - 1];
-    if ('.,;:!?\'"'.includes(ch)) {
+    const lastCharacter = url[end - 1];
+    if ('.,;:!?\'"'.includes(lastCharacter)) {
       end--;
-    } else if (ch === ')' || ch === ']' || ch === '}') {
-      const open = { ')': '(', ']': '[', '}': '{' }[ch]!;
+    } else if (lastCharacter === ')' || lastCharacter === ']' || lastCharacter === '}') {
+      const open = { ')': '(', ']': '[', '}': '{' }[lastCharacter]!;
       const body = url.slice(0, end);
-      if (body.split(open).length - 1 >= body.split(ch).length - 1) break;
+      if (body.split(open).length - 1 >= body.split(lastCharacter).length - 1) break;
       end--;
     } else {
       break;
@@ -30,11 +20,7 @@ function trimTrailing(url: string): string {
   return url.slice(0, end);
 }
 
-/**
- * Text with every web address turned into a clickable link (blue, opens in a
- * new tab). Line breaks and spacing are left to the parent, which keeps its
- * `whitespace-pre-wrap`.
- */
+/** Text with every web address turned into a clickable link (blue, opens in a new tab). */
 export function Linkify({ text }: { text: string }) {
   const parts: Array<string | { url: string; href: string }> = [];
   let last = 0;
@@ -63,7 +49,7 @@ export function Linkify({ text }: { text: string }) {
           >
             {part.url}
           </a>
-        )
+        ),
       )}
     </>
   );

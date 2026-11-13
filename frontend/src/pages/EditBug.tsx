@@ -4,7 +4,16 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { useAssignableUsers, useBug, useMeta, useMe, useProducts, useUpdateBug, useUpdateReport } from '../api/hooks';
 import { AttachmentList } from '../components/bugs/AttachmentList';
-import { BugKindPicker, CurlField, LEVEL_DOT, MONO, Section, Segmented, TickGroup, UiPlatformPicker } from '../components/bugs/BugFormParts';
+import {
+  BugKindPicker,
+  CurlField,
+  LEVEL_DOT,
+  MONO,
+  Section,
+  Segmented,
+  TickGroup,
+  UiPlatformPicker,
+} from '../components/bugs/BugFormParts';
 import { ClassificationPicker } from '../components/bugs/ClassificationPicker';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -30,25 +39,29 @@ import {
   type UiPlatform,
 } from '../lib/bugTemplate';
 import { lastListView } from '../lib/lastListView';
-import { getField, parseReport, serializeReport, setField, syncCategoryLine, type ReportDoc, type Segment } from '../lib/reportDoc';
+import {
+  getField,
+  parseReport,
+  serializeReport,
+  setField,
+  syncCategoryLine,
+  type ReportDoc,
+  type Segment,
+} from '../lib/reportDoc';
 import { assigneeLabel } from '../lib/roles';
 import { uploadAttachment } from '../lib/uploadAttachment';
 import { useBugEditor } from '../lib/useBugEditor';
 import { bugDisplayId, cn, formatBytes, subcomponentName } from '../lib/utils';
 import type { BugDetailResponse, BugMeta, Product } from '../types';
 
-/** Each attachment goes up as its own request, as raw bytes; Bugzilla's own cap is 50 MB a file. */
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
-/** The `[KP-…]` / `[MT-…]` tag at the start of a summary: kept as it is, so the bug still groups with its test. */
 const TAG = /^\s*\[(?:KP|MT)-[^\]]+\]\s*/;
 
 let pasteCount = 0;
-const pastedStamp = () => `${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}-${++pasteCount}`;
+const pastedStamp = () =>
+  `${new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '-')}-${++pasteCount}`;
 
-// ------------------------------------------------------------ the report as form fields
-
-/** The New bug form's report fields, read from (and written back into) the bug's report text. */
 interface ReportForm {
   kind: BugKind;
   method: string;
@@ -79,15 +92,15 @@ const SEG = {
   response: /^response body/i,
   environment: /^environment$/i,
 };
-/** Sections that close a report: a section added by editing goes before them. */
 const FOOTER = /^(owner|environment|run date|filed by|tested by|evidence attached)\b/i;
 
-const segIndex = (doc: ReportDoc, re: RegExp) => doc.findIndex((s) => !s.meta && s.heading !== null && re.test(s.heading));
-const segBody = (doc: ReportDoc, re: RegExp) => {
-  const i = segIndex(doc, re);
+const segIndex = (doc: ReportDoc, pattern: RegExp) =>
+  doc.findIndex((segment) => !segment.meta && segment.heading !== null && pattern.test(segment.heading));
+const segBody = (doc: ReportDoc, pattern: RegExp) => {
+  const i = segIndex(doc, pattern);
   return i === -1 ? '' : doc[i].body;
 };
-const given = (s: string) => (s.trim() === NOT_GIVEN ? '' : s);
+const given = (value: string) => (value.trim() === NOT_GIVEN ? '' : value);
 
 function readForm(doc: ReportDoc, product: string): ReportForm {
   const endpoint = getField(doc, 'endpoint').trim();
@@ -107,10 +120,10 @@ function readForm(doc: ReportDoc, product: string): ReportForm {
     browsers: segBody(doc, SEG.browsers)
       .replace(/\.$/, '')
       .split(/\s*,\s*/)
-      .filter((b) => (BUG_BROWSERS as readonly string[]).includes(b)),
+      .filter((value) => (BUG_BROWSERS as readonly string[]).includes(value)),
     devices: devicePart
       .split(/\s*,\s*/)
-      .map((d) => BUG_DEVICES.find((k) => DEVICE_LABELS[k].toLowerCase() === d.toLowerCase()) ?? '')
+      .map((value) => BUG_DEVICES.find((k) => DEVICE_LABELS[k].toLowerCase() === value.toLowerCase()) ?? '')
       .filter(Boolean),
     classification: getField(doc, 'classification'),
     summary: getField(doc, 'summary'),
@@ -128,10 +141,9 @@ function readForm(doc: ReportDoc, product: string): ReportForm {
   };
 }
 
-/** Sets a section found by `re` (adding it before the footer if missing); an empty value removes it. */
-function setSeg(doc: ReportDoc, re: RegExp, heading: string, body: string, renameTo?: string): ReportDoc {
-  const next = doc.map((s) => ({ ...s }));
-  const i = segIndex(next, re);
+function setSeg(doc: ReportDoc, pattern: RegExp, heading: string, body: string, renameTo?: string): ReportDoc {
+  const next = doc.map((segmentItem) => ({ ...segmentItem }));
+  const i = segIndex(next, pattern);
   if (i !== -1) {
     next[i].body = body;
     if (renameTo) next[i].heading = renameTo;
@@ -139,63 +151,91 @@ function setSeg(doc: ReportDoc, re: RegExp, heading: string, body: string, renam
   }
   if (!body.trim()) return next;
   const segment: Segment = { heading: renameTo ?? heading, body, meta: false };
-  const footer = next.findIndex((s) => !s.meta && s.heading !== null && FOOTER.test(s.heading));
+  const footer = next.findIndex(
+    (candidate) => !candidate.meta && candidate.heading !== null && FOOTER.test(candidate.heading),
+  );
   next.splice(footer === -1 ? next.length : footer, 0, segment);
   return next;
 }
 
-/**
- * The report text after the edits: only what the person changed is written,
- * everything else - and every section this form does not show - stays exactly
- * as it was.
- */
-function writeForm(doc: ReportDoc, before: ReportForm, f: ReportForm): ReportDoc {
-  let d = doc;
-  const changed = (k: keyof ReportForm) => JSON.stringify(f[k]) !== JSON.stringify(before[k]);
-  for (const k of ['classification', 'summary', 'preconditions', 'steps', 'expected', 'actual', 'whyItMatters', 'howToFix'] as const) {
-    if (changed(k)) d = setField(d, k, f[k]);
+function writeForm(doc: ReportDoc, before: ReportForm, form: ReportForm): ReportDoc {
+  let segments = doc;
+  const changed = (k: keyof ReportForm) => JSON.stringify(form[k]) !== JSON.stringify(before[k]);
+  for (const k of [
+    'classification',
+    'summary',
+    'preconditions',
+    'steps',
+    'expected',
+    'actual',
+    'whyItMatters',
+    'howToFix',
+  ] as const) {
+    if (changed(k)) segments = setField(segments, k, form[k]);
   }
-  const endpointOf = (x: ReportForm) => (x.kind === 'api' ? `${x.method} ${x.path.trim()}` : x.page.trim() || '(not applicable)');
-  if (endpointOf(f) !== endpointOf(before)) d = setField(d, 'endpoint', endpointOf(f));
+  const endpointOf = (x: ReportForm) =>
+    x.kind === 'api' ? `${x.method} ${x.path.trim()}` : x.page.trim() || '(not applicable)';
+  if (endpointOf(form) !== endpointOf(before)) segments = setField(segments, 'endpoint', endpointOf(form));
 
   const platformOf = (x: ReportForm) =>
-    x.kind !== 'ui' ? '' : x.uiPlatform === 'mobile' ? `Mobile app${x.devices.length ? ` - ${x.devices.map((v) => DEVICE_LABELS[v] ?? v).join(', ')}` : ''}.` : 'Web app.';
-  const browsersOf = (x: ReportForm) => (x.kind === 'ui' && x.uiPlatform === 'web' && x.browsers.length ? `${x.browsers.join(', ')}.` : '');
-  if (platformOf(f) !== platformOf(before)) d = setSeg(d, SEG.platform, 'Platform', platformOf(f));
-  if (browsersOf(f) !== browsersOf(before)) d = setSeg(d, SEG.browsers, 'Browsers affected', browsersOf(f));
+    x.kind !== 'ui'
+      ? ''
+      : x.uiPlatform === 'mobile'
+        ? `Mobile app${x.devices.length ? ` - ${x.devices.map((device) => DEVICE_LABELS[device] ?? device).join(', ')}` : ''}.`
+        : 'Web app.';
+  const browsersOf = (x: ReportForm) =>
+    x.kind === 'ui' && x.uiPlatform === 'web' && x.browsers.length ? `${x.browsers.join(', ')}.` : '';
+  if (platformOf(form) !== platformOf(before)) segments = setSeg(segments, SEG.platform, 'Platform', platformOf(form));
+  if (browsersOf(form) !== browsersOf(before))
+    segments = setSeg(segments, SEG.browsers, 'Browsers affected', browsersOf(form));
 
-  const api = f.kind === 'api';
-  if (changed('curl') || (!api && before.curl)) d = setField(d, 'curl', api ? f.curl : '');
+  const api = form.kind === 'api';
+  if (changed('curl') || (!api && before.curl)) segments = setField(segments, 'curl', api ? form.curl : '');
   if (changed('correlationId') || (!api && before.correlationId)) {
-    d = setSeg(d, SEG.correlation, 'Correlation ID (search the application logs for it)', api ? f.correlationId.trim() : '');
+    segments = setSeg(
+      segments,
+      SEG.correlation,
+      'Correlation ID (search the application logs for it)',
+      api ? form.correlationId.trim() : '',
+    );
   }
   if (changed('responseBody') || changed('responseStatus') || (!api && before.responseBody)) {
-    d = setSeg(d, SEG.response, 'Response body', api ? f.responseBody.trim() : '', `Response body (HTTP ${f.responseStatus.trim() || '?'})`);
+    segments = setSeg(
+      segments,
+      SEG.response,
+      'Response body',
+      api ? form.responseBody.trim() : '',
+      `Response body (HTTP ${form.responseStatus.trim() || '?'})`,
+    );
   }
-  if (changed('environment')) d = setSeg(d, SEG.environment, 'Environment', f.environment.trim());
-  return d;
+  if (changed('environment')) segments = setSeg(segments, SEG.environment, 'Environment', form.environment.trim());
+  return segments;
 }
 
-/** The New bug form's rules, for the fields this form shows. */
-function validate(f: ReportForm, title: string, product: string, component: string, stepsNeeded: boolean) {
-  const e: Record<string, string> = {};
-  if (!product) e.product = 'Select a product.';
-  if (!component) e.component = 'Select a component.';
-  if (title.trim().length < 10) e.title = 'Describe the problem in at least 10 characters.';
-  if (!f.classification.trim()) e.classification = 'Pick or type a classification, e.g. response.status-code.';
-  if (f.summary.trim().length < 20) e.summary = 'Explain what goes wrong in a sentence or two.';
-  if (stepsNeeded && !f.steps.trim()) e.steps = 'Critical and High severity bugs need the steps that reproduce them.';
-  if (!f.environment.trim()) e.environment = 'Name the environment it was seen on.';
-  if (f.kind === 'api') {
-    if (!/^\/\S*$/.test(f.path.trim())) e.path = 'Enter the endpoint path, starting with "/" (e.g. /v2/kmail/inbox/).';
-    if (!/^\s*curl\s/i.test(f.curl)) e.curl = 'Paste a curl command that reproduces it (Generate fills a starting one).';
-    if (f.responseStatus.trim() && !/^[1-5]\d\d$/.test(f.responseStatus.trim())) e.responseStatus = 'A 3-digit HTTP status, e.g. 500.';
-  } else if (f.uiPlatform === 'mobile') {
-    if (f.devices.length === 0) e.devices = 'Tick Android, iOS or both.';
-  } else if (f.browsers.length === 0) {
-    e.browsers = 'Tick every browser you saw it in.';
+function validate(reportForm: ReportForm, title: string, product: string, component: string, stepsNeeded: boolean) {
+  const errors: Record<string, string> = {};
+  if (!product) errors.product = 'Select a product.';
+  if (!component) errors.component = 'Select a component.';
+  if (title.trim().length < 10) errors.title = 'Describe the problem in at least 10 characters.';
+  if (!reportForm.classification.trim())
+    errors.classification = 'Pick or type a classification, e.g. response.status-code.';
+  if (reportForm.summary.trim().length < 20) errors.summary = 'Explain what goes wrong in a sentence or two.';
+  if (stepsNeeded && !reportForm.steps.trim())
+    errors.steps = 'Critical and High severity bugs need the steps that reproduce them.';
+  if (!reportForm.environment.trim()) errors.environment = 'Name the environment it was seen on.';
+  if (reportForm.kind === 'api') {
+    if (!/^\/\S*$/.test(reportForm.path.trim()))
+      errors.path = 'Enter the endpoint path, starting with "/" (e.g. /v2/kmail/inbox/).';
+    if (!/^\s*curl\s/i.test(reportForm.curl))
+      errors.curl = 'Paste a curl command that reproduces it (Generate fills a starting one).';
+    if (reportForm.responseStatus.trim() && !/^[1-5]\d\d$/.test(reportForm.responseStatus.trim()))
+      errors.responseStatus = 'A 3-digit HTTP status, e.g. 500.';
+  } else if (reportForm.uiPlatform === 'mobile') {
+    if (reportForm.devices.length === 0) errors.devices = 'Tick Android, iOS or both.';
+  } else if (reportForm.browsers.length === 0) {
+    errors.browsers = 'Tick every browser you saw it in.';
   }
-  return e;
+  return errors;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -213,7 +253,6 @@ const FIELD_LABELS: Record<string, string> = {
   environment: 'Environment',
 };
 
-/** Scrolls to a field and puts the cursor in it, so fixing it is one keystroke away. */
 function focusField(key: string) {
   const wrap = document.querySelector<HTMLElement>(`[data-field="${key}"]`);
   if (!wrap) return;
@@ -221,14 +260,7 @@ function focusField(key: string) {
   wrap.querySelector<HTMLElement>('input:not([type=hidden]), textarea, select, button')?.focus({ preventScroll: true });
 }
 
-// ------------------------------------------------------------ page
-
-/**
- * The whole bug in the New bug form: the same sections, fields and required
- * marks, filled in from the bug. One Save writes the fields (one Bugzilla
- * update), then the report (a new report revision - the old text stays in the
- * history), then uploads any new files.
- */
+/** The whole bug in the New bug form: the same sections, fields and required marks, filled in from the bug. */
 export function EditBug() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, isError, error } = useBug(Number(id));
@@ -236,7 +268,9 @@ export function EditBug() {
   const { data: productsData } = useProducts();
   const { data: me } = useMe();
 
-  const shell = (body: React.ReactNode) => <div className="mx-auto max-w-[96rem] px-4 py-6 sm:px-6 lg:px-8">{body}</div>;
+  const shell = (body: React.ReactNode) => (
+    <div className="mx-auto max-w-[96rem] px-4 py-6 sm:px-6 lg:px-8">{body}</div>
+  );
   if (isLoading) {
     return shell(
       <>
@@ -245,19 +279,48 @@ export function EditBug() {
           <Skeleton className="h-64" />
           <Skeleton className="h-96" />
         </div>
-      </>
+      </>,
     );
   }
   if (isError || !data) {
-    return shell(<EmptyState icon={AlertCircle} title="Couldn't load this bug" description={error instanceof ApiError ? error.message : 'Something went wrong loading this bug.'} />);
+    return shell(
+      <EmptyState
+        icon={AlertCircle}
+        title="Couldn't load this bug"
+        description={error instanceof ApiError ? error.message : 'Something went wrong loading this bug.'}
+      />,
+    );
   }
   if (data.bug.isDeleted) {
-    return shell(<EmptyState icon={AlertCircle} title="This bug is deleted" description="Restore it from the bug page before editing it." />);
+    return shell(
+      <EmptyState
+        icon={AlertCircle}
+        title="This bug is deleted"
+        description="Restore it from the bug page before editing it."
+      />,
+    );
   }
-  return <EditBugForm data={data} meta={meta} products={productsData?.products} canTriage={me?.user.permissions.canTriage ?? false} />;
+  return (
+    <EditBugForm
+      data={data}
+      meta={meta}
+      products={productsData?.products}
+      canTriage={me?.user.permissions.canTriage ?? false}
+    />
+  );
 }
 
-function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailResponse; meta?: BugMeta; products?: Product[]; canTriage: boolean }) {
+function EditBugForm({
+  data,
+  meta,
+  products,
+  canTriage,
+}: {
+  data: BugDetailResponse;
+  meta?: BugMeta;
+  products?: Product[];
+  canTriage: boolean;
+}) {
   const { bug, attachments } = data;
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -266,51 +329,81 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
   const updateBug = useUpdateBug(bug.id);
   const updateReport = useUpdateReport(bug.id);
 
-  // ---- title: the tag stays, only the words after it are edited
   const tag = (TAG.exec(bug.summary)?.[0] ?? '').trim();
   const title = draft.summary.replace(TAG, '');
   const setTitle = (next: string) => set('summary', tag ? `${tag} ${next}` : next);
 
-  // ---- report fields, read once from the report as the page opened
   const originalText = bug.description ?? '';
   const originalDoc = useMemo(() => parseReport(originalText), [originalText]);
   const [initialForm] = useState(() => readForm(originalDoc, bug.product));
   const [form, setForm] = useState<ReportForm>(initialForm);
-  const put = <K extends keyof ReportForm>(key: K, value: ReportForm[K]) => setForm((f) => ({ ...f, [key]: value }));
-  const toggle = (key: 'browsers' | 'devices', v: string) =>
-    setForm((f) => ({ ...f, [key]: f[key].includes(v) ? f[key].filter((x) => x !== v) : [...f[key], v] }));
+  const put = <K extends keyof ReportForm>(key: K, value: ReportForm[K]) =>
+    setForm((currentForm) => ({ ...currentForm, [key]: value }));
+  const toggle = (key: 'browsers' | 'devices', value: string) =>
+    setForm((currentForm) => ({
+      ...currentForm,
+      [key]: currentForm[key].includes(value)
+        ? currentForm[key].filter((x) => x !== value)
+        : [...currentForm[key], value],
+    }));
   const originalCategory = bug.triage?.category ?? 'Unclassified';
   const [category, setCategory] = useState<string>(originalCategory);
   const baseRevisions = useRef<number | undefined>(bug.reportHistory?.revisions ?? 0);
 
-  // ---- severity / priority, as on New bug
-  const levelOf = (severity: string) => (Object.keys(SEVERITY_LEVELS) as SeverityLevel[]).find((l) => SEVERITY_LEVELS[l].severity === severity);
+  const levelOf = (severity: string) =>
+    (Object.keys(SEVERITY_LEVELS) as SeverityLevel[]).find(
+      (severityLevel) => SEVERITY_LEVELS[severityLevel].severity === severity,
+    );
   const level = levelOf(draft.severity);
   const stepsNeeded = level ? stepsRequired(level) : draft.severity === 'blocker';
   const severityOptions = [
-    ...(Object.keys(SEVERITY_LEVELS) as SeverityLevel[]).map((l) => ({ value: SEVERITY_LEVELS[l].severity as string, label: l[0] + l.slice(1).toLowerCase(), dot: LEVEL_DOT[l] })),
+    ...(Object.keys(SEVERITY_LEVELS) as SeverityLevel[]).map((severityLevel) => ({
+      value: SEVERITY_LEVELS[severityLevel].severity as string,
+      label: severityLevel[0] + severityLevel.slice(1).toLowerCase(),
+      dot: LEVEL_DOT[severityLevel],
+    })),
     ...(level ? [] : [{ value: draft.severity, label: draft.severity[0]?.toUpperCase() + draft.severity.slice(1) }]),
   ];
   const priorityOptions = [
-    ...PRIORITY_OPTIONS.map((p) => ({ value: p.value as string, label: p.label as string })),
-    ...(PRIORITY_OPTIONS.some((p) => p.value === draft.priority) ? [] : [{ value: draft.priority, label: draft.priority }]),
+    ...PRIORITY_OPTIONS.map((priorityOption) => ({
+      value: priorityOption.value as string,
+      label: priorityOption.label as string,
+    })),
+    ...(PRIORITY_OPTIONS.some((priorityOption) => priorityOption.value === draft.priority)
+      ? []
+      : [{ value: draft.priority, label: draft.priority }]),
   ];
 
-  // ---- the report text Save would write
   const doc = useMemo(() => {
-    let d = writeForm(originalDoc, initialForm, form);
-    if (category !== originalCategory) d = syncCategoryLine(d, category);
+    let segments = writeForm(originalDoc, initialForm, form);
+    if (category !== originalCategory) segments = syncCategoryLine(segments, category);
     if (editor.isDirty('severity') || editor.isDirty('priority')) {
-      d = d.map((s) => (s.meta && s.heading?.toLowerCase() === 'severity' ? { ...s, body: `${draft.severity} / Priority: ${draft.priority}` } : s));
+      segments = segments.map((segment) =>
+        segment.meta && segment.heading?.toLowerCase() === 'severity'
+          ? { ...segment, body: `${draft.severity} / Priority: ${draft.priority}` }
+          : segment,
+      );
     }
-    if (editor.isDirty('component')) d = d.map((s) => (s.meta && s.heading?.toLowerCase() === 'module' ? { ...s, body: draft.component } : s));
-    return d;
-  }, [originalDoc, initialForm, form, category, originalCategory, editor, draft.severity, draft.priority, draft.component]);
+    if (editor.isDirty('component'))
+      segments = segments.map((segment) =>
+        segment.meta && segment.heading?.toLowerCase() === 'module' ? { ...segment, body: draft.component } : segment,
+      );
+    return segments;
+  }, [
+    originalDoc,
+    initialForm,
+    form,
+    category,
+    originalCategory,
+    editor,
+    draft.severity,
+    draft.priority,
+    draft.component,
+  ]);
   const text = serializeReport(doc);
   const reportChanged = text.trim() !== serializeReport(originalDoc).trim();
   const categoryChanged = category !== originalCategory;
 
-  // ---- new evidence, uploaded after the save
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState('');
   const [dragging, setDragging] = useState(false);
@@ -318,37 +411,52 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
   function addFiles(list: FileList | File[] | null) {
     if (!list) return;
     const incoming = Array.from(list);
-    const tooBig = incoming.filter((f) => f.size > MAX_FILE_BYTES);
-    setFileError(tooBig.length ? `${tooBig.map((f) => f.name).join(', ')} ${tooBig.length === 1 ? 'is' : 'are'} over 50 MB.` : '');
-    setFiles((prev) => [...prev, ...incoming.filter((f) => f.size <= MAX_FILE_BYTES && !prev.some((p) => p.name === f.name && p.size === f.size))]);
+    const tooBig = incoming.filter((file) => file.size > MAX_FILE_BYTES);
+    setFileError(
+      tooBig.length
+        ? `${tooBig.map((file) => file.name).join(', ')} ${tooBig.length === 1 ? 'is' : 'are'} over 50 MB.`
+        : '',
+    );
+    setFiles((previous) => [
+      ...previous,
+      ...incoming.filter(
+        (file) =>
+          file.size <= MAX_FILE_BYTES &&
+          !previous.some((fileItem) => fileItem.name === file.name && fileItem.size === file.size),
+      ),
+    ]);
   }
   useEffect(() => {
-    function onPaste(e: ClipboardEvent) {
-      const pasted = Array.from(e.clipboardData?.files ?? []);
+    function onPaste(event: ClipboardEvent) {
+      const pasted = Array.from(event.clipboardData?.files ?? []);
       if (!pasted.length) return;
-      e.preventDefault();
+      event.preventDefault();
       addFiles(
-        pasted.map((f) => {
-          const image = /^image\.(png|jpe?g|gif|webp)$/i.exec(f.name);
-          return image ? new File([f], `screenshot-${pastedStamp()}.${image[1].toLowerCase()}`, { type: f.type }) : f;
-        })
+        pasted.map((file) => {
+          const image = /^image\.(png|jpe?g|gif|webp)$/i.exec(file.name);
+          return image
+            ? new File([file], `screenshot-${pastedStamp()}.${image[1].toLowerCase()}`, { type: file.type })
+            : file;
+        }),
       );
     }
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
   }, []);
 
-  // ---- options
-  const product = products?.find((p) => p.name === draft.product);
-  const component = product?.components.find((c) => c.name === draft.component);
-  const subOptions = (component?.subcomponents ?? []).filter((sc) => sc.isActive || sc.value === draft.subcomponent);
+  const product = products?.find((productItem) => productItem.name === draft.product);
+  const component = product?.components.find((productComponent) => productComponent.name === draft.component);
+  const subcomponentOptions = (component?.subcomponents ?? []).filter(
+    (subcomponent) => subcomponent.isActive || subcomponent.value === draft.subcomponent,
+  );
   const { data: assignable } = useAssignableUsers(draft.product || undefined);
-  const ownerSet = new Set((assignable?.owners ?? []).map((e) => e.toLowerCase()));
-  const ownerUsers = (assignable?.users ?? []).filter((u) => ownerSet.has(u.email.toLowerCase()));
-  const otherUsers = (assignable?.users ?? []).filter((u) => !ownerSet.has(u.email.toLowerCase()));
-  const assigneeKnown = (assignable?.users ?? []).some((u) => u.email.toLowerCase() === draft.assignedTo.toLowerCase());
+  const ownerSet = new Set((assignable?.owners ?? []).map((owner) => owner.toLowerCase()));
+  const ownerUsers = (assignable?.users ?? []).filter((user) => ownerSet.has(user.email.toLowerCase()));
+  const otherUsers = (assignable?.users ?? []).filter((user) => !ownerSet.has(user.email.toLowerCase()));
+  const assigneeKnown = (assignable?.users ?? []).some(
+    (user) => user.email.toLowerCase() === draft.assignedTo.toLowerCase(),
+  );
 
-  // ---- validation, shown after the first Save, as on New bug
   const [showErrors, setShowErrors] = useState(false);
   const allErrors = validate(form, title, draft.product, draft.component, stepsNeeded);
   const errors = showErrors ? allErrors : {};
@@ -361,19 +469,18 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Leaving with unsaved edits asks first (reload / closing the tab).
   useEffect(() => {
     if (!dirty || saving) return;
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [dirty, saving]);
 
-  async function onSubmit(e?: FormEvent) {
-    e?.preventDefault();
+  async function onSubmit(event?: FormEvent) {
+    event?.preventDefault();
     setSubmitError(null);
     setShowErrors(true);
     if (missingKeys.length) {
@@ -392,8 +499,6 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
     setSaving(true);
     const done: string[] = [];
     try {
-      // Fields first: the report save adds a comment, which would make this
-      // update's "last changed" check see a change that is our own.
       if (fieldsChanged) {
         try {
           await updateBug.mutateAsync(editor.buildPayload());
@@ -436,15 +541,20 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
       const attached = files.length - failed.length;
       if (attached) done.push(`${attached} file${attached === 1 ? '' : 's'}`);
       if (failed.length) {
-        setFiles((prev) => prev.filter((f) => failed.includes(f.name)));
-        toast({ variant: 'error', title: `${failed.length} file${failed.length === 1 ? '' : 's'} could not be attached`, description: `${failed.join(', ')} - try again.` });
+        setFiles((previous) => previous.filter((file) => failed.includes(file.name)));
+        toast({
+          variant: 'error',
+          title: `${failed.length} file${failed.length === 1 ? '' : 's'} could not be attached`,
+          description: `${failed.join(', ')} - try again.`,
+        });
         return;
       }
       toast({ variant: 'success', title: `${bugDisplayId(bug)} updated`, description: `Saved: ${done.join(', ')}.` });
-      // Back to the list the reader came from, as after any save on the bug page.
       navigate(lastListView());
     } catch (err) {
-      setSubmitError(`${done.length ? `Saved ${done.join(' and ')}, but then: ` : ''}${err instanceof ApiError ? err.message : 'Could not save. Please try again.'}`);
+      setSubmitError(
+        `${done.length ? `Saved ${done.join(' and ')}, but then: ` : ''}${err instanceof ApiError ? err.message : 'Could not save. Please try again.'}`,
+      );
     } finally {
       setSaving(false);
       setUploading(null);
@@ -468,8 +578,17 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
         <Section step={1} title="Where" subtitle="Product, module, and who picks it up.">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div data-field="product" data-invalid={invalid('product')}>
-              <Select label="Product" value={draft.product} onChange={(e) => set('product', e.target.value)} error={errors.product} required>
-                {withCurrent((products ?? []).map((p) => p.name), draft.product).map((name) => (
+              <Select
+                label="Product"
+                value={draft.product}
+                onChange={(event) => set('product', event.target.value)}
+                error={errors.product}
+                required
+              >
+                {withCurrent(
+                  (products ?? []).map((productItem) => productItem.name),
+                  draft.product,
+                ).map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
@@ -481,65 +600,90 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
                 label="Component (module)"
                 placeholder="Select a component"
                 value={draft.component}
-                onChange={(e) => set('component', e.target.value)}
+                onChange={(event) => set('component', event.target.value)}
                 error={errors.component ?? editor.errors.component}
                 required
               >
-                {withCurrent(product?.components.filter((c) => c.isActive !== false).map((c) => c.name) ?? [], draft.component).map((name) => (
+                {withCurrent(
+                  product?.components
+                    .filter((productComponent) => productComponent.isActive !== false)
+                    .map((productComponent) => productComponent.name) ?? [],
+                  draft.component,
+                ).map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
                 ))}
               </Select>
             </div>
-            {(subOptions.length > 0 || draft.subcomponent) && (
-              <Select label="Sub-component" value={draft.subcomponent} onChange={(e) => set('subcomponent', e.target.value)} hint={`Narrows the bug within ${draft.component}. Optional.`}>
+            {(subcomponentOptions.length > 0 || draft.subcomponent) && (
+              <Select
+                label="Sub-component"
+                value={draft.subcomponent}
+                onChange={(event) => set('subcomponent', event.target.value)}
+                hint={`Narrows the bug within ${draft.component}. Optional.`}
+              >
                 <option value="">None</option>
-                {subOptions.map((sc) => (
-                  <option key={sc.id} value={sc.value}>
-                    {sc.name}
+                {subcomponentOptions.map((subcomponentOption) => (
+                  <option key={subcomponentOption.id} value={subcomponentOption.value}>
+                    {subcomponentOption.name}
                   </option>
                 ))}
-                {draft.subcomponent && !subOptions.some((sc) => sc.value === draft.subcomponent) && (
-                  <option value={draft.subcomponent}>{subcomponentName(draft.subcomponent)}</option>
-                )}
+                {draft.subcomponent &&
+                  !subcomponentOptions.some(
+                    (subcomponentOption) => subcomponentOption.value === draft.subcomponent,
+                  ) && <option value={draft.subcomponent}>{subcomponentName(draft.subcomponent)}</option>}
               </Select>
             )}
             <Select
               label="Assign to"
               value={draft.assignedTo}
-              onChange={(e) => set('assignedTo', e.target.value)}
+              onChange={(event) => set('assignedTo', event.target.value)}
               disabled={editor.lockAssignee}
-              hint={editor.lockAssignee ? `${bug.status} bugs keep their assignee - reopen it to hand it on.` : undefined}
+              hint={
+                editor.lockAssignee ? `${bug.status} bugs keep their assignee - reopen it to hand it on.` : undefined
+              }
             >
-              {!assigneeKnown && draft.assignedTo && <option value={draft.assignedTo}>{bug.assignedTo?.name || draft.assignedTo}</option>}
+              {!assigneeKnown && draft.assignedTo && (
+                <option value={draft.assignedTo}>{bug.assignedTo?.name || draft.assignedTo}</option>
+              )}
               {ownerUsers.length > 0 && (
                 <optgroup label={`Owns ${draft.product}`}>
-                  {ownerUsers.map((u) => (
-                    <option key={u.email} value={u.email}>
-                      {assigneeLabel(u)}
+                  {ownerUsers.map((ownerUser) => (
+                    <option key={ownerUser.email} value={ownerUser.email}>
+                      {assigneeLabel(ownerUser)}
                     </option>
                   ))}
                 </optgroup>
               )}
               {otherUsers.length > 0 && (
                 <optgroup label="Other engineers">
-                  {otherUsers.map((u) => (
-                    <option key={u.email} value={u.email}>
-                      {assigneeLabel(u)}
+                  {otherUsers.map((otherUser) => (
+                    <option key={otherUser.email} value={otherUser.email}>
+                      {assigneeLabel(otherUser)}
                     </option>
                   ))}
                 </optgroup>
               )}
             </Select>
           </div>
-          <BugKindPicker value={form.kind} onChange={(v) => put('kind', v)} hint="Change it if this bug is the other kind." />
+          <BugKindPicker
+            value={form.kind}
+            onChange={(value) => put('kind', value)}
+            hint="Change it if this bug is the other kind."
+          />
           {product && (product.versions.length > 1 || editor.errors.version) && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Select label="Version" placeholder="Select a version" value={draft.version} onChange={(e) => set('version', e.target.value)} error={editor.errors.version}>
-                {withCurrent(product.versions, draft.version).map((v) => (
-                  <option key={v} value={v}>
-                    {v}
+              <Select
+                label="Version"
+                placeholder="Select a version"
+                value={draft.version}
+                onChange={(event) => set('version', event.target.value)}
+                error={editor.errors.version}
+              >
+                {withCurrent(product.versions, draft.version).map((value) => (
+                  <option key={value} value={value}>
+                    {value}
                   </option>
                 ))}
               </Select>
@@ -547,36 +691,54 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
           )}
         </Section>
 
-        <Section step={2} title="The defect" subtitle="How it is titled, tagged and prioritised - the same fields the bench sets.">
+        <Section
+          step={2}
+          title="The defect"
+          subtitle="How it is titled, tagged and prioritised - the same fields the bench sets."
+        >
           {form.kind === 'api' ? (
-            <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3" data-field="path" data-invalid={invalid('path')}>
-              <Select label="Method" value={form.method} onChange={(e) => put('method', e.target.value)}>
-                {withCurrent([...HTTP_METHODS], form.method).map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+            <div
+              className="grid grid-cols-[110px_minmax(0,1fr)] gap-3"
+              data-field="path"
+              data-invalid={invalid('path')}
+            >
+              <Select label="Method" value={form.method} onChange={(event) => put('method', event.target.value)}>
+                {withCurrent([...HTTP_METHODS], form.method).map((value) => (
+                  <option key={value} value={value}>
+                    {value}
                   </option>
                 ))}
               </Select>
-              <Input label="Endpoint" required value={form.path} onChange={(e) => put('path', e.target.value.trim())} placeholder="/v2/kmail/inboxMails/" className={MONO} error={errors.path} />
+              <Input
+                label="Endpoint"
+                required
+                value={form.path}
+                onChange={(event) => put('path', event.target.value.trim())}
+                placeholder="/v2/kmail/inboxMails/"
+                className={MONO}
+                error={errors.path}
+              />
             </div>
           ) : (
             <>
-              <UiPlatformPicker value={form.uiPlatform} onChange={(v) => put('uiPlatform', v)} />
+              <UiPlatformPicker value={form.uiPlatform} onChange={(value) => put('uiPlatform', value)} />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input
                   label={form.uiPlatform === 'mobile' ? 'Screen' : 'Page / screen'}
                   value={form.page}
-                  onChange={(e) => put('page', e.target.value)}
-                  placeholder={form.uiPlatform === 'mobile' ? 'Inbox, Write Mail, Settings…' : '/kmail/inbox or Write Mail'}
+                  onChange={(event) => put('page', event.target.value)}
+                  placeholder={
+                    form.uiPlatform === 'mobile' ? 'Inbox, Write Mail, Settings…' : '/kmail/inbox or Write Mail'
+                  }
                   hint="Where in the app it happens."
                 />
                 {form.uiPlatform === 'mobile' ? (
                   <TickGroup
                     id="devices"
                     label="Devices affected"
-                    options={BUG_DEVICES.map((d) => ({ value: d, label: DEVICE_LABELS[d] }))}
+                    options={BUG_DEVICES.map((bugDevice) => ({ value: bugDevice, label: DEVICE_LABELS[bugDevice] }))}
                     selected={form.devices}
-                    onToggle={(v) => toggle('devices', v)}
+                    onToggle={(value) => toggle('devices', value)}
                     error={errors.devices}
                     hint="Tick every device platform it happens on."
                   />
@@ -584,9 +746,9 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
                   <TickGroup
                     id="browsers"
                     label="Browsers affected"
-                    options={BUG_BROWSERS.map((b) => ({ value: b, label: b }))}
+                    options={BUG_BROWSERS.map((bugBrowser) => ({ value: bugBrowser, label: bugBrowser }))}
                     selected={form.browsers}
-                    onToggle={(v) => toggle('browsers', v)}
+                    onToggle={(value) => toggle('browsers', value)}
                     error={errors.browsers}
                     hint="Tick every browser it happens in."
                   />
@@ -600,7 +762,7 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
               label="Title"
               required
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(event) => setTitle(event.target.value)}
               error={errors.title ?? editor.errors.summary}
               hint={tag ? `Saved as: ${tag} ${title.trim()}` : undefined}
               maxLength={240}
@@ -608,10 +770,10 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
-              {withCurrent([...BUG_CATEGORIES], category).map((c) => (
-                <option key={c} value={c}>
-                  {c}
+            <Select label="Category" value={category} onChange={(event) => setCategory(event.target.value)}>
+              {withCurrent([...BUG_CATEGORIES], category).map((value) => (
+                <option key={value} value={value}>
+                  {value}
                 </option>
               ))}
             </Select>
@@ -621,7 +783,7 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
                 label="Classification"
                 required
                 value={form.classification}
-                onChange={(v) => put('classification', v)}
+                onChange={(value) => put('classification', value)}
                 options={classificationOptions(form.kind)}
                 placeholder={form.kind === 'api' ? 'response.status-code' : 'ui.content'}
                 error={errors.classification}
@@ -632,66 +794,117 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
           <Segmented
             label="Severity"
             value={draft.severity}
-            onChange={(v) => set('severity', v)}
+            onChange={(value) => set('severity', value)}
             options={severityOptions}
             hint={level ? `${SEVERITY_LEVELS[level].hint}.` : undefined}
           />
           <Segmented
             label="Priority"
             value={draft.priority}
-            onChange={(v) => set('priority', v)}
+            onChange={(value) => set('priority', value)}
             options={priorityOptions}
-            hint={PRIORITY_OPTIONS.find((p) => p.value === draft.priority)?.hint}
+            hint={PRIORITY_OPTIONS.find((priorityOption) => priorityOption.value === draft.priority)?.hint}
           />
         </Section>
 
-        <Section step={3} title="Report" subtitle="What a developer needs to understand and reproduce it without asking.">
+        <Section
+          step={3}
+          title="Report"
+          subtitle="What a developer needs to understand and reproduce it without asking."
+        >
           <div data-field="summary" data-invalid={invalid('summary')}>
             <Textarea
               label="Summary"
               required
               value={form.summary}
-              onChange={(e) => put('summary', e.target.value)}
+              onChange={(event) => put('summary', event.target.value)}
               error={errors.summary}
               rows={3}
               placeholder="In plain words: what you did, what went wrong, and who it affects."
             />
           </div>
-          <Textarea label="Preconditions" value={form.preconditions} onChange={(e) => put('preconditions', e.target.value)} rows={2} placeholder="What has to be true first - account, data, settings." />
+          <Textarea
+            label="Preconditions"
+            value={form.preconditions}
+            onChange={(event) => put('preconditions', event.target.value)}
+            rows={2}
+            placeholder="What has to be true first - account, data, settings."
+          />
           <div data-field="steps" data-invalid={invalid('steps')}>
             <Textarea
               label="Steps to reproduce"
               required={stepsNeeded}
               value={form.steps}
-              onChange={(e) => put('steps', e.target.value)}
+              onChange={(event) => put('steps', event.target.value)}
               error={errors.steps}
               rows={4}
               placeholder={'1. Sign in as …\n2. Open …\n3. Click …'}
             />
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Textarea label="Expected" value={form.expected} onChange={(e) => put('expected', e.target.value)} rows={3} />
-            <Textarea label="Actual" value={form.actual} onChange={(e) => put('actual', e.target.value)} rows={3} />
+            <Textarea
+              label="Expected"
+              value={form.expected}
+              onChange={(event) => put('expected', event.target.value)}
+              rows={3}
+            />
+            <Textarea
+              label="Actual"
+              value={form.actual}
+              onChange={(event) => put('actual', event.target.value)}
+              rows={3}
+            />
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Textarea label="Why it matters" value={form.whyItMatters} onChange={(e) => put('whyItMatters', e.target.value)} rows={2} placeholder="User or business impact." />
-            <Textarea label="How to fix" value={form.howToFix} onChange={(e) => put('howToFix', e.target.value)} rows={2} placeholder="A suggested fix, if you know one." />
+            <Textarea
+              label="Why it matters"
+              value={form.whyItMatters}
+              onChange={(event) => put('whyItMatters', event.target.value)}
+              rows={2}
+              placeholder="User or business impact."
+            />
+            <Textarea
+              label="How to fix"
+              value={form.howToFix}
+              onChange={(event) => put('howToFix', event.target.value)}
+              rows={2}
+              placeholder="A suggested fix, if you know one."
+            />
           </div>
         </Section>
 
         {form.kind === 'api' && (
           <Section step={4} title="Reproduce" subtitle="A runnable command and the response it returned.">
-            <CurlField value={form.curl} onChange={(v) => put('curl', v)} onGenerate={() => put('curl', curlTemplate(form.method, form.path))} error={errors.curl} />
+            <CurlField
+              value={form.curl}
+              onChange={(value) => put('curl', value)}
+              onGenerate={() => put('curl', curlTemplate(form.method, form.path))}
+              error={errors.curl}
+            />
             <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
               <div data-field="responseStatus" data-invalid={invalid('responseStatus')}>
-                <Input label="HTTP status" value={form.responseStatus} onChange={(e) => put('responseStatus', e.target.value.trim())} inputMode="numeric" maxLength={3} placeholder="500" error={errors.responseStatus} />
+                <Input
+                  label="HTTP status"
+                  value={form.responseStatus}
+                  onChange={(event) => put('responseStatus', event.target.value.trim())}
+                  inputMode="numeric"
+                  maxLength={3}
+                  placeholder="500"
+                  error={errors.responseStatus}
+                />
               </div>
-              <Input label="Correlation ID" value={form.correlationId} onChange={(e) => put('correlationId', e.target.value)} placeholder="Optional - from the X-Correlation-ID header" className={MONO} />
+              <Input
+                label="Correlation ID"
+                value={form.correlationId}
+                onChange={(event) => put('correlationId', event.target.value)}
+                placeholder="Optional - from the X-Correlation-ID header"
+                className={MONO}
+              />
             </div>
             <Textarea
               label="Response body"
               value={form.responseBody}
-              onChange={(e) => put('responseBody', e.target.value)}
+              onChange={(event) => put('responseBody', event.target.value)}
               rows={3}
               spellCheck={false}
               className={MONO}
@@ -700,61 +913,85 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
           </Section>
         )}
 
-        <Section step={form.kind === 'api' ? 5 : 4} title="Context & evidence" subtitle="Where it was seen, and the proof - screenshots, videos, logs.">
+        <Section
+          step={form.kind === 'api' ? 5 : 4}
+          title="Context & evidence"
+          subtitle="Where it was seen, and the proof - screenshots, videos, logs."
+        >
           <div data-field="environment" data-invalid={invalid('environment')}>
-            <Input label="Environment" required value={form.environment} onChange={(e) => put('environment', e.target.value)} error={errors.environment} />
+            <Input
+              label="Environment"
+              required
+              value={form.environment}
+              onChange={(event) => put('environment', event.target.value)}
+              error={errors.environment}
+            />
           </div>
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium text-slate-700">Evidence</span>
             {attachments.length > 0 && (
               <div className="overflow-hidden rounded-xl ring-1 ring-inset ring-hairline">
-                <AttachmentList bugId={bug.id} attachments={attachments} privateAllowed={meta?.features.privateComments} />
+                <AttachmentList
+                  bugId={bug.id}
+                  attachments={attachments}
+                  privateAllowed={meta?.features.privateComments}
+                />
               </div>
             )}
             <label
-              onDragOver={(e) => {
-                e.preventDefault();
+              onDragOver={(event) => {
+                event.preventDefault();
                 setDragging(true);
               }}
               onDragLeave={() => setDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
+              onDrop={(event) => {
+                event.preventDefault();
                 setDragging(false);
-                addFiles(e.dataTransfer.files);
+                addFiles(event.dataTransfer.files);
               }}
               className={cn(
                 'focus-within:ring-brand-600 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-4 py-5 text-center text-sm text-slate-600 transition-colors hover:border-brand-500 hover:bg-white/70',
-                dragging ? 'border-brand-500 bg-brand-50' : 'border-line bg-white/50'
+                dragging ? 'border-brand-500 bg-brand-50' : 'border-line bg-white/50',
               )}
             >
               <Paperclip className="h-4 w-4 text-slate-500" aria-hidden />
               <span>
                 <span className="font-medium text-brand-700">Choose files</span>, drop them here, or paste with{' '}
-                <kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">Ctrl</kbd>+
-                <kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">V</kbd>
+                <kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">
+                  Ctrl
+                </kbd>
+                +<kbd className="rounded border border-slate-300 bg-white px-1 font-mono text-xs text-slate-700">V</kbd>
               </span>
               <span className="text-xs text-slate-500">Screenshot, video, HAR or log - up to 50 MB each</span>
               <input
                 type="file"
                 multiple
                 className="sr-only"
-                onChange={(e) => {
-                  addFiles(e.target.files);
-                  e.target.value = '';
+                onChange={(event) => {
+                  addFiles(event.target.files);
+                  event.target.value = '';
                 }}
               />
             </label>
             {fileError && <p className="text-xs text-rose-600">{fileError}</p>}
             {files.length > 0 && (
               <ul className="flex flex-col gap-1.5">
-                {files.map((f) => (
-                  <li key={f.name} className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-sm ring-1 ring-inset ring-white/60">
+                {files.map((file) => (
+                  <li
+                    key={file.name}
+                    className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-sm ring-1 ring-inset ring-white/60"
+                  >
                     <span className="flex min-w-0 items-center gap-2">
                       <FileText className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
-                      <span className="truncate text-slate-800">{f.name}</span>
-                      <span className="shrink-0 text-xs text-slate-500">{formatBytes(f.size)}</span>
+                      <span className="truncate text-slate-800">{file.name}</span>
+                      <span className="shrink-0 text-xs text-slate-500">{formatBytes(file.size)}</span>
                     </span>
-                    <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((prev) => prev.filter((p) => p !== f))} className="focus-ring rounded p-0.5 text-slate-500 hover:text-rose-600">
+                    <button
+                      type="button"
+                      aria-label={`Remove ${file.name}`}
+                      onClick={() => setFiles((previous) => previous.filter((fileItem) => fileItem !== file))}
+                      className="focus-ring rounded p-0.5 text-slate-500 hover:text-rose-600"
+                    >
                       <X className="h-4 w-4" />
                     </button>
                   </li>
@@ -790,12 +1027,14 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
         )}
 
         {submitError && (
-          <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-inset ring-rose-200">
+          <p
+            role="alert"
+            className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-inset ring-rose-200"
+          >
             {submitError}
           </p>
         )}
 
-        {/* Sticky, so Save is always in reach on a long bug. */}
         <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-3 rounded-xl bg-white/85 px-4 py-3 shadow-card ring-1 ring-inset ring-white/80 backdrop-blur-xl">
           {showErrors && missingKeys.length > 0 && (
             <div role="alert" className="mr-auto flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-rose-700">
@@ -827,7 +1066,6 @@ function EditBugForm({ data, meta, products, canTriage }: { data: BugDetailRespo
   );
 }
 
-/** The options, plus the current value if it is no longer among them, so a select never shows blank. */
 function withCurrent(options: string[], current: string): string[] {
   return current && !options.includes(current) ? [current, ...options] : options;
 }
