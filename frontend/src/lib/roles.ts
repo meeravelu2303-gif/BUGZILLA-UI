@@ -4,7 +4,7 @@ import type { Tone } from '../components/ui/Pill';
 /**
  * Roles, read back from the Bugzilla groups an account holds.
  *
- * Mirrors backend/src/lib/roles.ts exactly - including its ORDERING, which is
+ * Mirrors backend/src/services/roles.service.ts exactly - including its ORDERING, which is
  * load-bearing: an admin also holds `canconfirm`, so testing for that first
  * would report every admin as a tester.
  *

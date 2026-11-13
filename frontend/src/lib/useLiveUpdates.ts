@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 /**
  * Live updates: keeps one stream open to the backend (GET /api/events) and
  * refreshes what is on screen the moment bugs change - whoever changed them,
- * in this app or in Bugzilla directly (backend lib/liveUpdates.ts).
+ * in this app or in Bugzilla directly (backend/src/events/liveUpdates.event.ts).
  *
  *   "bugs"       -> every bug query: lists, counts, dashboard stats, the open
  *                   bug, its comments and activity. Only queries on screen

@@ -83,7 +83,7 @@ sub bugs_info {
   return map { $bug{$_} } grep { $bug{$_} } @_;
 }
 
-# Severity and priority as the Bug Tracker app shows them (backend/src/lib/classification.ts).
+# Severity and priority as the Bug Tracker app shows them (backend/src/services/classification.service.ts).
 my %SEVERITY = (blocker => 'Critical', critical => 'Critical', major => 'Major', normal => 'Minor', minor => 'Minor',
                 trivial => 'Trivial', enhancement => 'Enhancement');
 my %PRIORITY = (Highest => 'P0', High => 'P1', Normal => 'P2', Low => 'P3', Lowest => 'P3', '---' => '-');

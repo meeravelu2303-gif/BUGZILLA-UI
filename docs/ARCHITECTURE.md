@@ -55,7 +55,7 @@ behavior.
 export), `express`, `express-session`, `zod`. No `mysql`, `mysql2`, `pg`, `sqlite3`, an ORM,
 or any other database driver is installed or imported by the BFF or the web app. Every
 read, create, update, and comment goes through Bugzilla's REST API exclusively (see
-`backend/src/lib/bugzillaClient.ts` and `backend/src/lib/bugzillaAuth.ts`).
+`backend/src/clients/bugzilla.client.ts` and `backend/src/clients/bugzillaAuth.client.ts`).
 
 The Perl code under [`bugzilla/`](../bugzilla/) is different by design: extensions run
 *inside* Bugzilla, and the setup, admin and migration scripts are run from `C:\Bugzilla`
@@ -164,7 +164,7 @@ Bugzilla instance, real admin and non-admin accounts):
      "enterable" — so a freshly created product (which has no components yet) would
      have been invisible on the very page meant to let you add its first component.
      Fixed with a dedicated `GET /api/admin/products` backed by `product_accessible`
-     instead (see `backend/src/routes/adminProducts.ts`).
+     instead (see `backend/src/controllers/adminProducts.controller.ts`).
   3. `useLogout`'s `queryClient.clear()` didn't reliably resolve `RequireAuth`'s
      reactive redirect after logout (a known sharp edge of `.clear()` vs. mounted
      query observers) — the app would sit on a stale, data-less shell indefinitely.

@@ -226,7 +226,7 @@ export function AdminDashboard() {
 
         {/*
           Active sessions are deliberately absent rather than faked.
-          backend/src/lib/sessionRegistry.ts tracks them, but no route exposes
+          backend/src/services/sessionRegistry.service.ts tracks them, but no route exposes
           that registry - `GET /api/auth/me` returns only the current user. The
           panel would need a new read-only BFF endpoint, which is a backend
           change rather than a UI one.

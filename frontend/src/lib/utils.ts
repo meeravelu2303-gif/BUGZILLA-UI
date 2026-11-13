@@ -70,7 +70,7 @@ export function bugDisplayId(bug: { id: number }): string {
 /**
  * A sub-component's display name from its stored value: `Login [42]` -> `Login`.
  * Bugzilla stores the owning component's id in the value to keep it unique
- * (backend lib/subcomponents.ts); people only ever see the name. '' for none.
+ * (backend/src/services/subcomponents.service.ts); people only ever see the name. '' for none.
  */
 export function subcomponentName(value: string | undefined | null): string {
   if (!value || value === '---') return '';

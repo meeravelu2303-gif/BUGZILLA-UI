@@ -24,7 +24,7 @@ if (!dataFile || !outDir) {
 const data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
 fs.mkdirSync(outDir, { recursive: true });
 
-// The app's palette (backend/src/lib/bugExport.ts).
+// The app's palette (backend/src/services/bugExport.service.ts).
 const BRAND = 'FF0D6875';
 const BRAND_PALE = 'FFE6F3F4';
 const ZEBRA = 'FFF8FAFC';

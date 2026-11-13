@@ -9,7 +9,7 @@
  *   - a line-anchored description: `Classification:` … `Expected:` / `Actual:` … `curl:` …
  *     `Owner:` / `Environment:` / `Run date:` / `Filed by:`
  *
- * The labels are the anchors DescriptionReport, the Excel export (backend/src/lib/defectReport.ts)
+ * The labels are the anchors DescriptionReport, the Excel export (backend/src/services/defectReport.service.ts)
  * and the bench's own dedupe all read, so they are spelled exactly as the bench spells them - one
  * space after the colon, no padding. Renaming one here silently blanks a column somewhere else.
  *

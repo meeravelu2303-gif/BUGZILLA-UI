@@ -45,7 +45,7 @@ Bugzilla 5.2 cannot grant "may move bugs into product X" without "may see every 
 
 ### BFF password-reset endpoints (added 2026-10-17)
 
-Bugzilla 5.2 has **no WebService method** for forgotten passwords; the only implementation is the HTML flow behind `token.cgi` (`a=reqpw` → emailed token → `a=cfmpw` / `a=chgpw`). The BFF drives it with form POSTs (nothing in query strings) and reads the outcome from the page `<title>` - the one stable marker Bugzilla's templates set per message/error (`backend/src/lib/passwordReset.ts` quotes each title it keys on). Outbound mail must be on (`setup-smtp.pl`); the link in the email points at this app once `setup-password-reset.pl` has installed the custom mail template.
+Bugzilla 5.2 has **no WebService method** for forgotten passwords; the only implementation is the HTML flow behind `token.cgi` (`a=reqpw` → emailed token → `a=cfmpw` / `a=chgpw`). The BFF drives it with form POSTs (nothing in query strings) and reads the outcome from the page `<title>` - the one stable marker Bugzilla's templates set per message/error (`backend/src/services/passwordReset.service.ts` quotes each title it keys on). Outbound mail must be on (`setup-smtp.pl`); the link in the email points at this app once `setup-password-reset.pl` has installed the custom mail template.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
@@ -423,7 +423,7 @@ P2 — and is resolved by its paired priority (`minor`+`Low` → Trivial,
 `minor`+`Normal` → Minor). Severity and priority pair 1:1 in the data, which is
 what makes this exact.
 
-**All of this lives in `backend/src/lib/classification.ts`.** Parsing and
+**All of this lives in `backend/src/services/classification.service.ts`.** Parsing and
 filtering both read from it; no classification string literal belongs anywhere
 else.
 

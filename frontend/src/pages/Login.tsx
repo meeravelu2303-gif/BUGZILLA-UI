@@ -436,7 +436,7 @@ export function Login() {
 
           {/*
             Accurate as written: the BFF keeps sessions server-side (an opaque
-            signed cookie, never the Bugzilla token - see lib/sessionStore.ts),
+            signed cookie, never the Bugzilla token - see backend/src/clients/session.store.ts),
             and every route is gated by the caller's Bugzilla groups.
           */}
           <p className={cn('mt-5 text-center text-xs', THEME.muted)}>

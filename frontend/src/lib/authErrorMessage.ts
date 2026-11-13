@@ -17,7 +17,7 @@ import { ApiError } from '../api/client';
  * Address literals, in case one ever reaches the browser.
  *
  * The backend scrubs these at the source (see `scrubNetworkDetail` in
- * backend/src/lib/errors.ts), and Bugzilla's IP-bearing lockout string is
+ * backend/src/helpers/errors.helper.ts), and Bugzilla's IP-bearing lockout string is
  * rewritten there wholesale. This is the second layer: a browser that is still
  * talking to an older backend, or a future upstream message nobody anticipated,
  * must not put an IP in front of the user just because the server forgot to.

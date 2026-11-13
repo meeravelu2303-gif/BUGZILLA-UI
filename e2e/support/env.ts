@@ -82,11 +82,11 @@ export function uniqueLogin(prefix = 'rl'): string {
   return `${prefix}-${randomUUID()}@e2e.invalid`;
 }
 
-/** Matches the backend's own constants (backend/src/lib/loginRateLimit.ts). */
+/** Matches the backend's own constants (backend/src/services/loginRateLimit.service.ts). */
 export const RATE_LIMIT = {
   maxFailures: 10,
   lockoutSeconds: 300,
 };
 
-/** Matches MAX_SESSIONS_PER_USER in backend/src/lib/sessionRegistry.ts. */
+/** Matches MAX_SESSIONS_PER_USER in backend/src/services/sessionRegistry.service.ts. */
 export const MAX_SESSIONS = 3;

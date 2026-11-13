@@ -9,7 +9,7 @@
 # A reporter is office staff who FILE and follow bugs but neither develop nor
 # test: no `canconfirm` (no triage), and the app leaves them out of every
 # assignee list. The group is a plain marker (not a bug group, no regexp);
-# the app's role model (backend/src/lib/roles.ts) reads it as role "reporter".
+# the app's role model (backend/src/services/roles.service.ts) reads it as role "reporter".
 # Membership changes go through Bugzilla::User->set_groups, so profiles_activity
 # records them. Re-running changes nothing.
 

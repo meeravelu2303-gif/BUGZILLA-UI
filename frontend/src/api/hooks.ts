@@ -609,7 +609,7 @@ export function useAdminGroups() {
   });
 }
 
-/** Sub-components (backend lib/subcomponents.ts). Adding follows the add-component rule; edit and delete are admin-only. */
+/** Sub-components (backend/src/services/subcomponents.service.ts). Adding follows the add-component rule; edit and delete are admin-only. */
 export function useCreateSubcomponent(productId: number) {
   const qc = useQueryClient();
   return useMutation({

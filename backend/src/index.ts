@@ -3,21 +3,13 @@ import cors from 'cors';
 import express from 'express';
 import { createServer } from 'node:http';
 import session from 'express-session';
-import { loadEnv, SESSION_COOKIE_NAME, trustProxySetting } from './config/env';
-import { rpcCall } from './lib/bugzillaClient';
-import { getBugSnapshot } from './lib/bugSnapshot';
-import { eventsRouter, startChangeWatcher } from './lib/liveUpdates';
-import { createSessionStore } from './lib/sessionStore';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler';
-import { adminMetaRouter } from './routes/adminMeta';
-import { adminProductsRouter } from './routes/adminProducts';
-import { adminTeamsRouter } from './routes/adminTeams';
-import { adminUsersRouter } from './routes/adminUsers';
-import { authRouter } from './routes/auth';
-import { bugsRouter } from './routes/bugs';
-import { metaRouter } from './routes/meta';
-import { productsRouter } from './routes/products';
-import { proofRouter } from './routes/proof';
+import { loadEnv, SESSION_COOKIE_NAME, trustProxySetting } from './config/app.config';
+import { rpcCall } from './clients/bugzilla.client';
+import { getBugSnapshot } from './services/bugSnapshot.service';
+import { startChangeWatcher } from './events/liveUpdates.event';
+import { createSessionStore } from './clients/session.store';
+import { errorHandler, notFoundHandler } from './middleware/error.middleware';
+import { mountRoutes } from './routes';
 
 const env = loadEnv();
 const startedAt = Date.now();
@@ -57,7 +49,7 @@ async function main(): Promise<void> {
   app.use(express.json());
 
   /*
-   * Sessions live server-side (lib/sessionStore.ts); the cookie carries only an
+   * Sessions live server-side (clients/session.store.ts); the cookie carries only an
    * opaque signed session id - never the user's Bugzilla token. With the file or
    * Redis store a restart keeps everyone signed in.
    */
@@ -104,17 +96,7 @@ async function main(): Promise<void> {
     res.set('Cache-Control', 'no-store').json(body);
   });
 
-  app.use('/api/auth', authRouter(env));
-  app.use('/api/events', eventsRouter(env));
-  app.use('/api/bugs', bugsRouter(env));
-  app.use('/api/products', productsRouter(env));
-  app.use('/api/meta', metaRouter(env));
-  // No login on purpose: opened from links in an exported sheet; every link is signed and expires.
-  app.use('/api/proof', proofRouter(env));
-  app.use('/api/admin/users', adminUsersRouter(env));
-  app.use('/api/admin/products', adminProductsRouter(env));
-  app.use('/api/admin/meta', adminMetaRouter(env));
-  app.use('/api/admin/teams', adminTeamsRouter(env));
+  mountRoutes(app, env);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

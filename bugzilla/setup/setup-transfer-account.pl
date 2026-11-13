@@ -9,7 +9,7 @@
 #
 # Why a separate account. A KPost UI tester cannot move a bug into KPost API in
 # Bugzilla without joining the KPost API group, which would show them every API
-# bug. The Bug Tracker BFF does the move for them (backend/src/lib/productTransfer.ts),
+# bug. The Bug Tracker BFF does the move for them (backend/src/services/productTransfer.service.ts),
 # after checking on THEIR token that they may. The move itself needs an account
 # that can enter both products - and if that is an admin's personal key, every
 # transfer is recorded in Bugzilla's history as that admin, with full admin rights

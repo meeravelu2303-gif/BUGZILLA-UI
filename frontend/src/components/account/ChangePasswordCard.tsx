@@ -30,7 +30,7 @@ function Rule({ met, children }: { met: boolean; children: React.ReactNode }) {
  *
  * Asks for the current password even though the user is already signed in:
  * a session left open on a shared machine must not be enough to take over the
- * account. Bugzilla checks it (see backend lib/changePassword.ts).
+ * account. Bugzilla checks it (see backend/src/services/changePassword.service.ts).
  *
  * This device stays signed in afterwards; every other one is signed out,
  * which the success message says, so a colleague's "why was I logged out?"

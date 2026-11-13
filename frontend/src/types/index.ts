@@ -297,7 +297,7 @@ export interface UpdateProductInput {
   isActive?: boolean;
 }
 
-/** A second level under a component (backend lib/subcomponents.ts). */
+/** A second level under a component (backend/src/services/subcomponents.service.ts). */
 export interface Subcomponent {
   id: number;
   /** Stored value, `<name> [<component id>]` - what bugs and filters carry. */
@@ -527,7 +527,7 @@ export interface UpdateAttachmentInput {
   comment?: string;
 }
 
-// ---- Two-axis classification (mirrors backend/src/lib/classification.ts) ----
+// ---- Two-axis classification (mirrors backend/src/services/classification.service.ts) ----
 
 export const SEVERITIES = ['Critical', 'Major', 'Minor', 'Trivial', 'Unclassified'] as const;
 export type Severity = (typeof SEVERITIES)[number];
@@ -695,7 +695,7 @@ export interface BugFilters {
 /* ------------------------------------------------------------------ roles */
 
 /**
- * Account roles, mirroring backend/src/lib/roles.ts.
+ * Account roles, mirroring backend/src/services/roles.service.ts.
  *
  * Duplicated rather than imported because the two builds are separate TypeScript
  * projects with no shared package; the backend is the authority and validates
@@ -721,7 +721,7 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
 
 /**
  * Best-fit role for an account, read back from the groups it holds.
- * Mirrors roleFromGroups in backend/src/lib/roles.ts.
+ * Mirrors roleFromGroups in backend/src/services/roles.service.ts.
  */
 export function roleFromGroups(groups: string[]): Role {
   const held = new Set(groups);
@@ -735,7 +735,7 @@ export function roleFromGroups(groups: string[]): Role {
 
 /* ------------------------------------------------------------------ activity */
 
-/** One recorded change (backend lib/bugActivity.ts). */
+/** One recorded change (backend/src/services/bugActivity.service.ts). */
 export type ActivityChangeKind = 'status' | 'resolution' | 'assignee' | 'placement' | 'priority' | 'people' | 'text' | 'link' | 'visibility' | 'other';
 
 export interface ActivityChange {

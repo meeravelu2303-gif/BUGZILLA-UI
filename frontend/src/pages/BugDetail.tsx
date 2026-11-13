@@ -124,7 +124,7 @@ function BugDetailView({
   const [addingFiles, setAddingFiles] = useState(false);
   const isDeleted = Boolean(bug.isDeleted);
   /*
-   * Offered on the same terms the server enforces (lib/productTransfer.ts), so
+   * Offered on the same terms the server enforces (backend/src/services/productTransfer.service.ts), so
    * the button never leads to a refusal: an open bug, its assignee or a tester,
    * Any other active product is a destination, including ones the user has no
    * access to - a developer hands bugs to other teams (the server lists them).

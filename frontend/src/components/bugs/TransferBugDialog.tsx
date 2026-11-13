@@ -9,7 +9,7 @@ import { RequiredMark, Select } from '../ui/Field';
 
 /**
  * Hand a bug to another team's product - for someone who cannot open that
- * product themselves (backend lib/productTransfer.ts does the move).
+ * product themselves (backend/src/services/productTransfer.service.ts does the move).
  *
  * Says up front what will happen to visibility, because it is the surprising
  * part: the bug leaves this product, and the person keeps seeing it only

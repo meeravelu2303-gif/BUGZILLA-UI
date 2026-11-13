@@ -44,7 +44,7 @@ export function QaDashboard({ reporter, mine = false }: { reporter?: string; min
    *
    * It is Bugzilla's "nobody has judged this yet" status, and it can never
    * occur on this instance: Bug.pm confirms a bug outright for anyone holding
-   * `editbugs`, and every role in backend/src/lib/roles.ts grants it. The
+   * `editbugs`, and every role in backend/src/services/roles.service.ts grants it. The
    * status exists and is enabled on every product, but no account can trigger
    * it - so a tile counting it was pinned at 0 permanently.
    *

@@ -6,7 +6,7 @@ import type { Permissions } from '../types';
  * Which dashboard a person sees.
  *
  * Bugzilla has no concept of a "role" - it has groups, and the BFF already
- * reduces those to three capability flags (schemas/common.ts). So the role is
+ * reduces those to three capability flags (backend/src/dto/common.dto.ts). So the role is
  * DERIVED from permissions rather than stored anywhere, which means it cannot
  * drift out of step with what the server will actually allow. A dashboard that
  * claimed a role the backend disagreed with would offer actions that then fail.
@@ -15,7 +15,7 @@ import type { Permissions } from '../types';
  *   qa         canTriage                            (canconfirm - confirms and triages)
  *   developer  everything else                      (editbugs - the baseline)
  *
- * Mirrors backend/src/lib/roles.ts `roleFromGroups`, including its ordering:
+ * Mirrors backend/src/services/roles.service.ts `roleFromGroups`, including its ordering:
  * widest first, because an admin also holds canTriage and testing for that
  * first would report every admin as QA.
  */

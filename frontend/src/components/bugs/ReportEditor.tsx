@@ -94,7 +94,7 @@ function FieldEditor({
  * Edits the WHOLE bug report - classification, category, endpoint, summary,
  * steps, curl, expected/actual, response body, how to fix, and any other
  * section - as named fields, as raw text, or previewed exactly as the bug page
- * will show it. Saved as a report revision (see backend lib/reportRevision.ts).
+ * will show it. Saved as a report revision (see backend/src/services/reportRevision.service.ts).
  */
 export function ReportEditor({ bug, onClose }: { bug: Bug; onClose: () => void }) {
   const originalText = bug.description ?? '';
