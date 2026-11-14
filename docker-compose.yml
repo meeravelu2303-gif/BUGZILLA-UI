@@ -1,0 +1,104 @@
+# The whole Bug Tracker in containers:
+#   web       nginx: the React app, and /api forwarded to bff           (published on WEB_PORT)
+#   bff       Node.js backend-for-frontend                              (internal)
+#   bugzilla  Bugzilla 5.2 + this repo's extensions                     (published on BUGZILLA_PORT)
+#   db        MariaDB 10.11 - Bugzilla's database                       (internal)
+#   redis     session store for the BFF                                 (internal)
+#
+# Settings: copy .env.docker.example to .env and fill it in. Start: docker compose up -d --build
+# Full guide: docs/DOCKER.md
+name: bugtracker
+
+services:
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: bugs
+      MARIADB_USER: bugs
+      MARIADB_PASSWORD: ${BZ_DB_PASSWORD:?Set BZ_DB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+    # Same settings as the Windows server's my.ini (attachments, search, character set).
+    command:
+      - --max-allowed-packet=512M
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --ft-min-word-len=2
+      - --innodb-ft-min-token-size=2
+      - --sql-mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION
+      - --lower-case-table-names=1
+    volumes:
+      - db-data:/var/lib/mysql
+      # On the FIRST start only, any .sql / .sql.gz here is loaded into `bugs` (your backup dump).
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  bugzilla:
+    build: ./bugzilla
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BZ_DB_HOST: db
+      BZ_DB_PORT: '3306'
+      BZ_DB_NAME: bugs
+      BZ_DB_USER: bugs
+      BZ_DB_PASS: ${BZ_DB_PASSWORD}
+      BZ_URLBASE: ${BUGZILLA_PUBLIC_URL:?Set BUGZILLA_PUBLIC_URL in .env}/
+      BZ_APP_URL: ${APP_PUBLIC_URL:?Set APP_PUBLIC_URL in .env}
+      BZ_SITE_WIDE_SECRET: ${BZ_SITE_WIDE_SECRET:-}
+      BZ_ADMIN_EMAIL: ${BZ_ADMIN_EMAIL:-}
+      BZ_ADMIN_PASSWORD: ${BZ_ADMIN_PASSWORD:-}
+    volumes:
+      - bugzilla-data:/var/www/html/data
+    ports:
+      - '${BUGZILLA_PORT:-8080}:80'
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--save', '60', '1']
+    volumes:
+      - redis-data:/data
+
+  bff:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      - bugzilla
+      - redis
+    environment:
+      PORT: '4000'
+      BUGZILLA_URL: http://bugzilla/rest
+      BUGZILLA_PUBLIC_URL: ${BUGZILLA_PUBLIC_URL}
+      BUGZILLA_API_KEY: ${BUGZILLA_API_KEY:?Set BUGZILLA_API_KEY in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      PROOF_LINK_SECRET: ${PROOF_LINK_SECRET:-}
+      SESSION_STORE: redis
+      REDIS_URL: redis://redis:6379/0
+      TRUST_PROXY: '1'
+      COOKIE_SECURE: auto
+      HSTS: ${HSTS:-false}
+      CORS_ORIGIN: ${APP_PUBLIC_URL:?Set APP_PUBLIC_URL in .env}
+      PUBLIC_APP_URL: ${APP_PUBLIC_URL}
+      PRODUCT_TRANSFER_ROUTES: ${PRODUCT_TRANSFER_ROUTES:-}
+      TRANSFER_API_KEY: ${TRANSFER_API_KEY:-}
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - bff
+    ports:
+      - '${WEB_PORT:-80}:80'
+
+volumes:
+  db-data:
+  bugzilla-data:
+  redis-data:

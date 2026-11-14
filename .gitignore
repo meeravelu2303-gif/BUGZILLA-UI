@@ -30,3 +30,6 @@ desktop.ini
 
 # Microsoft Office lock files (created while a document is open)
 ~$*
+
+# Database dumps for docker compose (docker-entrypoint-initdb.d) - real user data, never commit
+db-init/

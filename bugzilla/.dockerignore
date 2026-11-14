@@ -1,0 +1,6 @@
+# Build context for bugzilla/Dockerfile: extensions, templates, setup, admin and docker/ only.
+migration
+schema
+mail-queue
+*.md
+*.log

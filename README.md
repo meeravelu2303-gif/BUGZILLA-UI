@@ -67,6 +67,8 @@ a server-side session, so Bugzilla's own permissions apply to every request. Det
 ```
 BUGZILLA-UI/
 ├── frontend/                   Web app - React + TypeScript + Vite + Tailwind  (port 5175)
+│   ├── Dockerfile              Image: Vite build, served by nginx
+│   ├── nginx.conf              Serves the app, forwards /api (and the live-updates stream) to the BFF
 │   ├── public/                 Static files served as-is (favicon)
 │   └── src/
 │       ├── api/                Fetch client + React Query hooks (calls /api/* only)
@@ -94,6 +96,8 @@ BUGZILLA-UI/
 │       └── types/              Express type augmentation
 │
 ├── bugzilla/                   Everything that is deployed into, or runs inside, C:\Bugzilla (Perl)
+│   ├── Dockerfile              Image: upstream Bugzilla 5.2 + the extensions and templates below
+│   ├── docker/                 The image's start-up script and Apache config
 │   ├── extensions/             Bugzilla extensions - copy each folder to C:\Bugzilla\extensions
 │   ├── templates/              Template overrides - copy to C:\Bugzilla\template
 │   ├── mail-queue/             Background mail sender + its scheduled-task installer
@@ -113,6 +117,8 @@ BUGZILLA-UI/
 ├── scripts/                    Small build helpers used by npm scripts
 ├── docs/                       Architecture, deployment, API contract, branding, guides, reports
 │
+├── docker-compose.yml          Whole stack in containers: web, bff, bugzilla, db, redis
+├── .env.docker.example         Settings for docker-compose.yml - copy to .env
 ├── package.json                Root scripts that drive both apps (dev / build / typecheck)
 ├── .editorconfig               Shared editor settings
 ├── .gitattributes              Line-ending and binary rules
@@ -160,12 +166,23 @@ Bugzilla-side changes (extensions, templates, setup scripts) are deployed separa
 see [`bugzilla/README.md`](./bugzilla/README.md). Full install and configuration:
 [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
 
+**Docker / cloud:** three images (`frontend/`, `backend/`, `bugzilla/`) plus MariaDB and Redis,
+started together by `docker-compose.yml`:
+
+```bash
+cp .env.docker.example .env        # fill in the settings
+docker compose up -d --build
+```
+
+Moving the live data across (database dump, Bugzilla parameters) is in [`docs/DOCKER.md`](./docs/DOCKER.md).
+
 ## Documentation
 
 | Document | Contents |
 |---|---|
 | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | Request flow, auth model, BFF API surface, design boundaries, scope notes |
 | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) | Install, configure Bugzilla, run, operate |
+| [`docs/DOCKER.md`](./docs/DOCKER.md) | Run the whole stack with Docker Compose; move the live data into it |
 | [`docs/API_CONTRACT.md`](./docs/API_CONTRACT.md) | Live-probed Bugzilla API behaviour and the BFF endpoints |
 | [`docs/BRANDING.md`](./docs/BRANDING.md) | Palette, logo, contrast decisions |
 | [`docs/guides/`](./docs/guides/) | End-user guides (Markdown source + HTML / DOCX / PDF) |

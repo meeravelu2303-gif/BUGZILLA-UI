@@ -1,0 +1,9 @@
+# Build context for frontend/Dockerfile.
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+Dockerfile
+.dockerignore

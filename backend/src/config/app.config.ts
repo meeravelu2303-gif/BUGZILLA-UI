@@ -55,8 +55,13 @@ export function trustProxySetting(value: string): boolean | number | string {
   return normalizedValue;
 }
 
+/** Optional settings with no default: an empty value (`KEY=` in an env file) means "not set". */
+const UNSET_WHEN_EMPTY = ['SESSION_DIR', 'REDIS_URL', 'PROOF_LINK_SECRET', 'BUGZILLA_PUBLIC_URL', 'TRANSFER_API_KEY'];
+
 export function loadEnv(): Env {
-  const parsed = envSchema.safeParse(process.env);
+  const source = { ...process.env };
+  for (const key of UNSET_WHEN_EMPTY) if (source[key] === '') delete source[key];
+  const parsed = envSchema.safeParse(source);
   if (!parsed.success) {
     console.error('Invalid environment configuration:');
     for (const issue of parsed.error.issues) {
